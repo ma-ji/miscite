@@ -8,14 +8,31 @@ It is a calm, typography-led system with subtle surfaces, consistent rounding, a
 ### Colors (light + dark)
 Defined on `:root` with automatic `prefers-color-scheme` and optional manual override.
 Palette is based on Indiana University brand colors (Cream, Crimson, Light/Dark Crimson, Light/Dark Cream, Light/Dark Gray, IU Black).
+Light theme uses the exact semantic mapping requested; dark theme keeps IU Black base with cream/white overlays and crimson actions.
+
+IU palette reference:
+- Crimson: `#990000`
+- Light Crimson: `#F41C40`
+- Dark Crimson: `#6D0808`
+- Cream: `#FFFFFF`
+- Light Cream: `#F8EFE2`
+- Dark Cream: `#F5E3CC`
+- Light Gray: `#EEEEF0`
+- Dark Gray: `#B9C1C6`
+- IU Black: `#072332`
 
 - `--bg`
 - `--surface`
 - `--surface-2`
+- `--control-bg`
+- `--control-bg-disabled`
 - `--text`
 - `--muted`
 - `--border`
+- `--border-soft`
 - `--primary`
+- `--primary-hover`
+- `--primary-active`
 - `--primary-contrast`
 - `--focus`
 - `--focus-ring`
