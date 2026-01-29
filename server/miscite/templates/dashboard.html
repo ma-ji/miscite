@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="ds-section">
+    <div class="ds-grid">
+      <div class="span-8">
+        <p class="eyebrow">Workspace</p>
+        <h1>Dashboard</h1>
+        <p class="lead">
+          Upload a manuscript (PDF or DOCX) and generate a clear, explainable citation report.
+        </p>
+      </div>
+      <div class="span-4">
+        <div class="ds-card ds-card--subtle">
+          <div class="card-content">
+            <div class="ds-stat-grid">
+              <div class="ds-stat">
+                <div class="ds-stat-value">{{ jobs|length }}</div>
+                <div class="ds-stat-label">Recent jobs</div>
+              </div>
+              <div class="ds-stat">
+                <div class="ds-stat-value ds-stat-value--label">{{ subscription_status }}</div>
+                <div class="ds-stat-label">Billing status</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-grid">
+      <div class="span-7">
+        <div class="ds-card">
+          <div class="card-content">
+            <div class="ds-card-header">
+              <h3>Upload</h3>
+              <p class="miscite-muted">
+                Run checks against Crossref/OpenAlex metadata, Retraction Watch, and curated lists.
+              </p>
+            </div>
+            {% if billing_required and not subscription_active %}
+              <div class="ds-alert ds-alert--warning">
+                Subscription required to run analyses. <a href="/billing">Manage billing</a>.
+              </div>
+            {% endif %}
+            <form method="post" action="/upload" enctype="multipart/form-data" class="ds-stack">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <div class="form-field">
+                <label class="form-label" for="file">Manuscript</label>
+                <input
+                  id="file"
+                  type="file"
+                  name="file"
+                  accept=".pdf,.docx"
+                  {{ "disabled" if (billing_required and not subscription_active) else "" }}
+                />
+                <p class="form-help">PDF or DOCX only.</p>
+              </div>
+              <button
+                class="ds-button ds-button--primary"
+                type="submit"
+                {{ "disabled" if (billing_required and not subscription_active) else "" }}
+              >
+                Submit for review
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="span-5">
+        <div class="ds-card">
+          <div class="card-content">
+            <div class="ds-card-header">
+              <h3>Account</h3>
+              <p class="miscite-muted">Signed in with your team workspace.</p>
+            </div>
+            <div class="ds-stack">
+              <div>
+                <span class="ds-badge">Signed in</span>
+                <span class="miscite-mono">{{ current_user.email }}</span>
+              </div>
+              <div class="ds-alert ds-alert--info">
+                Billing status: <span class="miscite-mono">{{ subscription_status }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-action">
+            <a href="/billing">Manage billing</a>
+            <a href="/dashboard">Refresh</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="section-header">
+      <p class="eyebrow">Recent work</p>
+      <h2>Latest analyses</h2>
+      <p class="lead">Your last 25 jobs appear here with status and file name.</p>
+    </div>
+    {% if jobs|length == 0 %}
+      <div class="ds-empty">
+        <h4>No jobs yet</h4>
+        <p class="miscite-muted">Upload a manuscript to generate your first report.</p>
+        <a class="ds-button ds-button--secondary" href="/dashboard">Start an upload</a>
+      </div>
+    {% else %}
+      <div class="ds-card">
+        <div class="card-content">
+          <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
+            <table class="ds-table">
+              <thead>
+                <tr>
+                  <th>Created</th>
+                  <th>File</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for job in jobs %}
+                  <tr>
+                    <td class="miscite-mono">{{ job.created_at }}</td>
+                    <td>{{ job.filename }}</td>
+                    <td class="miscite-mono">{{ job.status }}</td>
+                    <td><a href="/jobs/{{ job.id }}">View</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

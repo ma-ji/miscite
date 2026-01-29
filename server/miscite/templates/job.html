@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="ds-section">
+    <div class="ds-grid">
+      <div class="span-8">
+        <p class="eyebrow">Report</p>
+        <h1>{{ job.filename }}</h1>
+        <p class="lead">
+          Status: <span class="miscite-mono">{{ job.status }}</span>
+        </p>
+        <div class="hero-meta">
+          <span class="ds-pill">Job ID: {{ job.id }}</span>
+          {% if job.error_message %}
+            <span class="ds-pill">Needs attention</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="span-4">
+        <div class="ds-card ds-card--subtle">
+          <div class="card-content">
+            <h3>Quick actions</h3>
+            <p class="miscite-muted">Download or refresh this report.</p>
+            <div class="ds-stack">
+              <a class="ds-button ds-button--secondary" href="/api/jobs/{{ job.id }}">Download JSON</a>
+              <a class="ds-button ds-button--ghost" href="/jobs/{{ job.id }}">Refresh</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% if job.error_message %}
+      <div class="ds-alert ds-alert--error ds-mt-5">
+        {{ job.error_message }}
+      </div>
+    {% endif %}
+  </section>
+
+  {% if report %}
+    {% set severity_counts = namespace(high=0, medium=0, low=0) %}
+    {% for issue in report.issues %}
+      {% set sev = issue.severity|default('medium')|lower %}
+      {% if sev == 'high' %}
+        {% set severity_counts.high = severity_counts.high + 1 %}
+      {% elif sev == 'low' %}
+        {% set severity_counts.low = severity_counts.low + 1 %}
+      {% else %}
+        {% set severity_counts.medium = severity_counts.medium + 1 %}
+      {% endif %}
+    {% endfor %}
+    <section class="ds-section">
+      <div class="ds-grid">
+        <div class="span-4">
+          <div class="ds-card">
+            <div class="card-content">
+              <h3>Summary</h3>
+              <div class="ds-stat-grid">
+                <div class="ds-stat">
+                  <div class="ds-stat-value">{{ report.summary.total_citations }}</div>
+                  <div class="ds-stat-label">Citations parsed</div>
+                </div>
+                <div class="ds-stat">
+                  <div class="ds-stat-value">{{ report.summary.missing_bibliography_refs }}</div>
+                  <div class="ds-stat-label">Missing refs</div>
+                </div>
+                <div class="ds-stat">
+                  <div class="ds-stat-value">{{ report.summary.unresolved_references }}</div>
+                  <div class="ds-stat-label">Unresolved</div>
+                </div>
+                <div class="ds-stat">
+                  <div class="ds-stat-value">{{ report.summary.retracted_references }}</div>
+                  <div class="ds-stat-label">Retractions</div>
+                </div>
+                <div class="ds-stat">
+                  <div class="ds-stat-value">{{ report.summary.predatory_matches }}</div>
+                  <div class="ds-stat-label">Predatory matches</div>
+                </div>
+                <div class="ds-stat">
+                  <div class="ds-stat-value">{{ report.summary.potentially_inappropriate }}</div>
+                  <div class="ds-stat-label">Potential issues</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="span-8">
+          <div class="ds-card">
+            <div class="card-content">
+              <h3>Flags</h3>
+              <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
+              {% if report.issues|length > 0 %}
+                <div class="ds-severity-grid ds-mt-4">
+                  <div class="ds-severity-card ds-severity-card--high">
+                    <div class="ds-severity-count">{{ severity_counts.high }}</div>
+                    <div class="ds-severity-label">High severity</div>
+                  </div>
+                  <div class="ds-severity-card ds-severity-card--medium">
+                    <div class="ds-severity-count">{{ severity_counts.medium }}</div>
+                    <div class="ds-severity-label">Medium severity</div>
+                  </div>
+                  <div class="ds-severity-card ds-severity-card--low">
+                    <div class="ds-severity-count">{{ severity_counts.low }}</div>
+                    <div class="ds-severity-label">Low severity</div>
+                  </div>
+                </div>
+              {% endif %}
+    {% if report.issues|length == 0 %}
+                <div class="ds-empty">
+                  <h4>No issues flagged</h4>
+                  <p class="miscite-muted">This report did not surface any flagged citations.</p>
+                </div>
+              {% else %}
+                <div class="ds-disclosure-list">
+                  {% for issue in report.issues %}
+                    {% set raw_severity = issue.severity|default('medium')|lower %}
+                    {% set severity = raw_severity if raw_severity in ['high', 'medium', 'low'] else 'medium' %}
+                    {% set details = issue.details or {} %}
+                    {% set citation = details.citation or {} %}
+                    {% set resolution = details.resolution or {} %}
+                    {% set issue_label = issue.type %}
+                    {% set issue_description = "" %}
+                    {% set issue_action = "" %}
+                    {% if issue.type == "missing_bibliography_ref" %}
+                      {% set issue_label = "Missing bibliography entry" %}
+                      {% set issue_description = "The in-text citation does not appear in the bibliography list." %}
+                      {% set issue_action = "Add a matching bibliography entry or correct the citation formatting." %}
+                    {% elif issue.type == "unresolved_reference" %}
+                      {% set issue_label = "Unresolved reference" %}
+                      {% set issue_description = "We found the bibliography entry but could not match it to metadata." %}
+                      {% set issue_action = "Verify DOI, title, author, or year in the bibliography entry." %}
+                    {% elif issue.type == "retracted_article" %}
+                      {% set issue_label = "Retracted work cited" %}
+                      {% set issue_description = "This reference matches a retracted record." %}
+                      {% set issue_action = "Consider replacing the reference or clearly noting the retraction context." %}
+                    {% elif issue.type == "predatory_venue_match" %}
+                      {% set issue_label = "Predatory venue match" %}
+                      {% set issue_description = "The journal or publisher matches a predatory venue list." %}
+                      {% set issue_action = "Confirm the venue quality before citing." %}
+                    {% elif issue.type == "potentially_inappropriate" %}
+                      {% set issue_label = "Potentially inappropriate citation" %}
+                      {% set issue_description = "The citation context appears misaligned with the cited work." %}
+                      {% set issue_action = "Review the surrounding text and ensure relevance." %}
+                    {% elif issue.type == "needs_manual_review" %}
+                      {% set issue_label = "Needs manual review" %}
+                      {% set issue_description = "Automated checks could not verify this citation." %}
+                      {% set issue_action = "Review the citation manually for accuracy." %}
+                    {% endif %}
+                    <details class="ds-disclosure ds-disclosure--{{ severity }}">
+                      <summary class="ds-disclosure-summary">
+                        <i class="material-icons ds-disclosure-icon" aria-hidden="true">flag</i>
+                        <span class="ds-severity" aria-label="Severity {{ severity }}">{{ severity }}</span>
+                        <span class="ds-disclosure-type miscite-mono">{{ issue.type }}</span>
+                        <span class="ds-disclosure-title">{{ issue.title }}</span>
+                        <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                      </summary>
+                      <div class="ds-disclosure-body">
+                        <div class="ds-issue-grid">
+                          <div class="ds-issue-summary">
+                            <h4>{{ issue_label }}</h4>
+                            {% if issue_description %}
+                              <p class="miscite-muted">{{ issue_description }}</p>
+                            {% endif %}
+                            {% if issue_action %}
+                              <p class="ds-issue-guidance">{{ issue_action }}</p>
+                            {% endif %}
+                            <dl class="ds-meta">
+                              {% if details.ref_id is defined %}
+                                <dt>Reference ID</dt>
+                                <dd class="miscite-mono">{{ details.ref_id }}</dd>
+                              {% endif %}
+                              {% if citation.raw %}
+                                <dt>In-text citation</dt>
+                                <dd class="miscite-mono">{{ citation.raw }}</dd>
+                              {% endif %}
+                              {% if citation.locator %}
+                                <dt>Locator</dt>
+                                <dd class="miscite-mono">{{ citation.locator }}</dd>
+                              {% endif %}
+                              {% if resolution.title %}
+                                <dt>Title</dt>
+                                <dd>{{ resolution.title }}</dd>
+                              {% endif %}
+                              {% if resolution.doi %}
+                                <dt>DOI</dt>
+                                <dd class="miscite-mono">{{ resolution.doi }}</dd>
+                              {% endif %}
+                              {% if resolution.journal %}
+                                <dt>Journal</dt>
+                                <dd>{{ resolution.journal }}</dd>
+                              {% endif %}
+                              {% if resolution.publisher %}
+                                <dt>Publisher</dt>
+                                <dd>{{ resolution.publisher }}</dd>
+                              {% endif %}
+                              {% if resolution.year %}
+                                <dt>Year</dt>
+                                <dd>{{ resolution.year }}</dd>
+                              {% endif %}
+                              {% if resolution.confidence is defined %}
+                                <dt>Resolution confidence</dt>
+                                <dd>{{ "%.2f"|format(resolution.confidence) }}</dd>
+                              {% endif %}
+                            </dl>
+                            {% if details.retraction %}
+                              <div class="ds-chip-row" aria-label="Retraction sources">
+                                {% for hit in details.retraction %}
+                                  <span class="ds-chip">Retraction source: {{ hit.source }}</span>
+                                {% endfor %}
+                              </div>
+                            {% endif %}
+                            {% if details.match %}
+                              <div class="ds-chip-row" aria-label="Predatory sources">
+                                {% for hit in details.match %}
+                                  <span class="ds-chip">Match source: {{ hit.source }}</span>
+                                {% endfor %}
+                              </div>
+                            {% endif %}
+                            {% if details.nli %}
+                              <div class="ds-chip-row" aria-label="Model signals">
+                                <span class="ds-chip">NLI: {{ details.nli.label }} ({{ "%.2f"|format(details.nli.confidence) }})</span>
+                              </div>
+                            {% elif details.llm %}
+                              <div class="ds-chip-row" aria-label="Model signals">
+                                <span class="ds-chip">LLM: {{ details.llm.label }} ({{ "%.2f"|format(details.llm.confidence) }})</span>
+                              </div>
+                            {% endif %}
+                          </div>
+                          <div class="ds-issue-context">
+                            <h4>Context</h4>
+                            {% if citation.context %}
+                              <p class="ds-quote">{{ citation.context }}</p>
+                            {% else %}
+                              <p class="miscite-muted">No context available for this citation.</p>
+                            {% endif %}
+                            {% if details.raw %}
+                              <p class="ds-issue-caption">Bibliography entry</p>
+                              <p class="ds-quote miscite-mono">{{ details.raw }}</p>
+                            {% endif %}
+                          </div>
+                        </div>
+                        <details class="ds-raw">
+                          <summary>Show raw issue data</summary>
+                          <pre class="miscite-mono pre-wrap">{{ issue|tojson(indent=2) }}</pre>
+                        </details>
+                      </div>
+                    </details>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ds-section">
+      <div class="ds-grid">
+        <div class="span-6">
+          <div class="ds-card">
+            <div class="card-content">
+              <h3>Data sources</h3>
+              <p class="miscite-muted">Sources used for this report.</p>
+              {% if report.data_sources %}
+                <ul class="ds-list ds-mt-4">
+                  {% for source in report.data_sources %}
+                    <li>{{ source }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="miscite-muted">No sources recorded for this run.</p>
+              {% endif %}
+              {% if report.parsing %}
+                <dl class="ds-meta ds-mt-4">
+                  {% if report.parsing.parser_backend %}
+                    <dt>Parser</dt>
+                    <dd>{{ report.parsing.parser_backend }}</dd>
+                  {% endif %}
+                  <dt>LLM parsing</dt>
+                  <dd>{{ "Yes" if report.parsing.llm_parsing_used else "No" }}</dd>
+                </dl>
+              {% endif %}
+              <details class="ds-raw">
+                <summary>Show raw data sources</summary>
+                <pre class="miscite-mono pre-wrap">{{ report.data_sources|tojson(indent=2) }}</pre>
+              </details>
+            </div>
+          </div>
+        </div>
+        <div class="span-6">
+          <div class="ds-card">
+            <div class="card-content">
+              <h3>Methodology</h3>
+              <p class="miscite-muted">How this check was performed.</p>
+              <div class="ds-prose ds-mt-4">
+                {% for line in methodology_md.split("\\n") %}
+                  {% if line.strip() %}
+                    <p>{{ line }}</p>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <details class="ds-raw">
+                <summary>Show raw methodology</summary>
+                <pre class="miscite-mono pre-wrap">{{ methodology_md }}</pre>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  {% else %}
+    <section class="ds-section">
+      <div class="ds-empty">
+        <h4>Report not available yet</h4>
+        <p class="miscite-muted">Refresh in a moment to view the generated summary.</p>
+        <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}">Refresh report</a>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

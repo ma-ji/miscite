@@ -1,0 +1,5 @@
+# Optional features for miscite.
+#
+# - Local NLI: optional GPU/CPU verification path (may require platform-specific torch wheels)
+transformers>=4.40
+torch

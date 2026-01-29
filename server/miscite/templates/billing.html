@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="ds-section">
+    <div class="ds-grid">
+      <div class="span-7">
+        <p class="eyebrow">Billing</p>
+        <h1>Manage subscription</h1>
+        <p class="lead">Keep uploads flowing with an active subscription plan.</p>
+      </div>
+      <div class="span-5">
+        <div class="ds-card ds-card--subtle">
+          <div class="card-content">
+            <h3>Status</h3>
+            <p class="miscite-muted">Current plan state.</p>
+            <div class="ds-alert ds-alert--info">
+              <span class="miscite-mono">{{ subscription_status }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    {% if not billing_enabled %}
+      <div class="ds-alert ds-alert--info">
+        Billing is disabled in this environment.
+      </div>
+    {% else %}
+      <div class="ds-card">
+        <div class="card-content">
+          <h3>Subscription actions</h3>
+          <p class="miscite-muted">
+            Start a subscription to run new analyses or open the customer portal to manage billing.
+          </p>
+          <div class="hero-actions">
+            <form method="post" action="/billing/checkout">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <button class="ds-button ds-button--primary" type="submit">Subscribe</button>
+            </form>
+            {% if can_open_portal %}
+              <form method="post" action="/billing/portal">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="ds-button ds-button--secondary" type="submit">Open customer portal</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

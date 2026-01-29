@@ -1,0 +1,2 @@
+Record ID,Title,Subject,Institution,Journal,Publisher,Country,Author,URLS,ArticleType,RetractionDate,RetractionDOI,RetractionPubMedID,OriginalPaperDate,OriginalPaperDOI,OriginalPaperPubMedID,RetractionNature,Reason,Paywalled,Notes
+1,Example Retracted Paper,Medicine,,Journal of Examples,Example Publisher,USA,,https://retractionwatch.com/,Journal Article,2020-01-01,,,"2019-01-01",10.1234/example.retracted.1,,Retraction,Data fabrication,false,Example row

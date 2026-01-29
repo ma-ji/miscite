@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="hero">
+    <div class="ds-grid">
+      <div class="span-7">
+        <p class="eyebrow">Transparent citation checks</p>
+        <h1>Make every reference defensible in minutes.</h1>
+        <p class="lead">
+          miscite scans manuscripts for missing citations, retractions, and risky venues with
+          explainable signals. Clear steps, clean reports, no black box.
+        </p>
+        <div class="hero-actions">
+          <a class="ds-button ds-button--primary" href="/register">Start a free check</a>
+          <a class="ds-button ds-button--secondary" href="/login">Sign in</a>
+        </div>
+        <div class="hero-meta">
+          <span class="ds-badge">PDF + DOCX</span>
+          <span class="ds-pill">Crossref and OpenAlex</span>
+          <span class="ds-pill">Retraction Watch dataset</span>
+        </div>
+      </div>
+      <div class="span-5">
+        <div class="ds-card">
+          <div class="card-content">
+            <div class="ds-card-header">
+              <p class="eyebrow">Live preview</p>
+              <h3>Manuscript snapshot</h3>
+              <p class="miscite-muted">A quick view of what the report highlights.</p>
+            </div>
+            <div class="ds-stat-grid">
+              <div class="ds-stat">
+                <div class="ds-stat-value">128</div>
+                <div class="ds-stat-label">Citations parsed</div>
+              </div>
+              <div class="ds-stat">
+                <div class="ds-stat-value">7</div>
+                <div class="ds-stat-label">Missing references</div>
+              </div>
+              <div class="ds-stat">
+                <div class="ds-stat-value">2</div>
+                <div class="ds-stat-label">Retraction matches</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-action">
+            <a href="/login">View report layout</a>
+            <span class="miscite-muted">Sample preview</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="ds-section">
+    <div class="section-header">
+      <p class="eyebrow">Features</p>
+      <h2>Designed for clarity from upload to report.</h2>
+      <p class="lead">
+        Every section is structured to help you scan, verify, and act quickly.
+      </p>
+    </div>
+    <div class="ds-grid">
+      <div class="span-4">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Structured flags</h3>
+            <p class="miscite-muted">
+              Surface missing citations, unresolved references, and retracted sources with a
+              single glance.
+            </p>
+            <ul class="ds-list">
+              <li>Issue type and context</li>
+              <li>Traceable data sources</li>
+              <li>Exportable JSON reports</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="span-4">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Fast review loop</h3>
+            <p class="miscite-muted">
+              Run checks in seconds and share clean summaries with collaborators.
+            </p>
+            <ul class="ds-list">
+              <li>Clear status updates</li>
+              <li>Repeatable methodology</li>
+              <li>Consistent formatting</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="span-4">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Built for teams</h3>
+            <p class="miscite-muted">
+              Keep decisions transparent with a calm UI that stays focused on the essentials.
+            </p>
+            <ul class="ds-list">
+              <li>Keyboard friendly</li>
+              <li>Accessible contrast</li>
+              <li>Dark and light themes</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="workflow" class="ds-section">
+    <div class="ds-card ds-card--subtle">
+      <div class="card-content">
+        <div class="ds-grid">
+          <div class="span-6">
+            <p class="eyebrow">Workflow</p>
+            <h2>Search, validate, and move on.</h2>
+            <p class="lead">
+              Use the search row to explore references before you run a full upload.
+            </p>
+          </div>
+          <div class="span-6">
+            <div class="ds-input-row">
+              <div class="form-field">
+                <label for="search" class="form-label">Search references</label>
+                <div class="ds-input-with-icon">
+                  <i class="material-icons" aria-hidden="true">search</i>
+                  <input
+                    id="search"
+                    type="search"
+                    placeholder="Try a DOI, title, or author"
+                    aria-label="Search references"
+                  />
+                </div>
+              </div>
+              <div class="form-field">
+                <label for="source" class="form-label">Source</label>
+                <select id="source">
+                  <option>Crossref</option>
+                  <option>OpenAlex</option>
+                  <option>Retraction Watch</option>
+                </select>
+              </div>
+              <label class="ds-toggle">
+                <input type="checkbox" checked />
+                <span class="ds-toggle-track"></span>
+                <span>Strict matching</span>
+              </label>
+              <button class="ds-button ds-button--primary" type="button">Run check</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="trust" class="ds-section">
+    <div class="section-header">
+      <p class="eyebrow">States</p>
+      <h2>Empty and loading states built in.</h2>
+      <p class="lead">
+        Clear messaging keeps teams aligned, even when there is nothing to show yet.
+      </p>
+    </div>
+    <div class="ds-grid">
+      <div class="span-6">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Empty state</h3>
+            <div class="ds-empty">
+              <h4>No analyses yet</h4>
+              <p class="miscite-muted">
+                Upload a manuscript to generate a citation report.
+              </p>
+              <a class="ds-button ds-button--secondary" href="/register">Start an analysis</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="span-6">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Loading</h3>
+            <div class="ds-skeleton" aria-hidden="true">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line short"></div>
+            </div>
+            <p class="miscite-muted ds-mt-4">
+              Parsing citations and checking sources.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-card ds-card--highlight">
+      <div class="card-content">
+        <div class="ds-grid">
+          <div class="span-8">
+            <h2>Ready to run your first check?</h2>
+            <p class="lead">
+              Upload a PDF or DOCX and get a transparent report you can trust.
+            </p>
+          </div>
+          <div class="span-4 hero-actions">
+            <a class="ds-button ds-button--primary" href="/register">Create account</a>
+            <a class="ds-button ds-button--ghost" href="/login">Sign in</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

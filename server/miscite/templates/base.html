@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "miscite" }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="app-header">
+      <div class="ds-container app-header-inner">
+        {% set path = request.url.path %}
+        <div class="app-brand">
+          <a href="/" class="app-logo">miscite</a>
+          <span class="app-tag">Citation checks</span>
+        </div>
+        <nav class="app-nav" aria-label="Primary">
+          {% if current_user %}
+            {% set on_dashboard = path == "/dashboard" or path.startswith("/jobs") %}
+            {% set on_billing = path.startswith("/billing") %}
+            <a class="app-nav-link" href="/dashboard" {{ "aria-current=page" if on_dashboard else "" }}>
+              Dashboard
+            </a>
+            <a class="app-nav-link" href="/billing" {{ "aria-current=page" if on_billing else "" }}>
+              Billing
+            </a>
+          {% else %}
+            <a class="app-nav-link" href="/#features">Features</a>
+            <a class="app-nav-link" href="/#workflow">Workflow</a>
+            <a class="app-nav-link" href="/#trust">Trust</a>
+          {% endif %}
+        </nav>
+        <div class="app-actions">
+          <button
+            class="ds-button ds-button--ghost ds-theme-toggle"
+            type="button"
+            data-theme-toggle
+            aria-pressed="false"
+          >
+            <i class="material-icons" aria-hidden="true">brightness_6</i>
+            <span class="theme-label">Theme</span>
+          </button>
+          {% if current_user %}
+            <form method="post" action="/logout">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <button class="ds-button ds-button--secondary" type="submit">Logout</button>
+            </form>
+          {% else %}
+            <a class="ds-button ds-button--secondary" href="/login">Sign in</a>
+            <a class="ds-button ds-button--primary" href="/register">Create account</a>
+          {% endif %}
+        </div>
+      </div>
+    </header>
+    <main id="main" class="ds-container ds-main">
+      {% if flash %}
+        <div class="ds-alert ds-alert--{{ flash.level|default('info') }}">
+          {{ flash.message }}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="ds-footer">
+      <div class="ds-container ds-footer-inner">
+        <span class="ds-footer-brand">miscite</span>
+        <span class="ds-footer-meta">Transparent citation checks for modern research teams.</span>
+        <div class="ds-footer-links">
+          <a href="/#features">Features</a>
+          <a href="/#workflow">Workflow</a>
+          <a href="/#trust">Trust</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var toggle = document.querySelector("[data-theme-toggle]");
+        var root = document.documentElement;
+        var storageKey = "miscite-theme";
+
+        var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+        var preferredTheme = function () {
+          return mql && mql.matches ? "dark" : "light";
+        };
+
+        var applyTheme = function (theme) {
+          if (theme === "light" || theme === "dark") {
+            root.setAttribute("data-theme", theme);
+          } else {
+            root.removeAttribute("data-theme");
+          }
+          if (toggle) {
+            var active = root.getAttribute("data-theme") || preferredTheme();
+            toggle.setAttribute("aria-pressed", active === "dark" ? "true" : "false");
+            var label = toggle.querySelector(".theme-label");
+            if (label) {
+              label.textContent = active === "dark" ? "Theme: Dark" : "Theme: Light";
+            }
+          }
+        };
+
+        var stored = null;
+        try {
+          stored = localStorage.getItem(storageKey);
+        } catch (err) {
+          stored = null;
+        }
+        applyTheme(stored);
+
+        if (mql && mql.addEventListener) {
+          mql.addEventListener("change", function () {
+            // Keep following system unless the user explicitly set a theme.
+            if (!root.getAttribute("data-theme")) {
+              applyTheme(null);
+            }
+          });
+        }
+
+        if (toggle) {
+          toggle.addEventListener("click", function () {
+            var active = root.getAttribute("data-theme") || preferredTheme();
+            var next = active === "dark" ? "light" : "dark";
+            try {
+              localStorage.setItem(storageKey, next);
+            } catch (err) {
+              // ignore write errors
+            }
+            applyTheme(next);
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
