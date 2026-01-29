@@ -6,7 +6,7 @@
         <p class="eyebrow">Report</p>
         <h1>{{ job.filename }}</h1>
         <p class="lead">
-          Status: <span class="miscite-mono">{{ job.status }}</span>
+          Status: <span class="miscite-mono" id="job-status-text">{{ job.status }}</span>
         </p>
         <div class="hero-meta">
           <span class="ds-pill">Job ID: {{ job.id }}</span>
@@ -34,6 +34,24 @@
       </div>
     {% endif %}
   </section>
+
+  {% if job.status != "COMPLETED" %}
+    <section class="ds-section" id="job-progress-section" data-job-id="{{ job.id }}">
+      <div class="ds-card">
+        <div class="card-content">
+          <div class="ds-progress-header">
+            <h3>Live progress</h3>
+            <span class="ds-pill" id="job-status-pill">{{ job.status }}</span>
+          </div>
+          <div class="ds-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="2">
+            <div class="ds-progress-fill" id="job-progress-fill" style="width: 2%"></div>
+          </div>
+          <p class="miscite-muted ds-mt-3" id="job-progress-text">Waiting for worker...</p>
+          <ul class="ds-progress-log" id="job-progress-log" aria-live="polite"></ul>
+        </div>
+      </div>
+    </section>
+  {% endif %}
 
   {% if report %}
     {% set severity_counts = namespace(high=0, medium=0, low=0) %}
@@ -315,4 +333,156 @@
       </div>
     </section>
   {% endif %}
+  <script>
+    (function () {
+      var section = document.getElementById("job-progress-section");
+      if (!section) {
+        return;
+      }
+
+      var jobId = section.getAttribute("data-job-id");
+      var statusText = document.getElementById("job-status-text");
+      var statusPill = document.getElementById("job-status-pill");
+      var progressFill = document.getElementById("job-progress-fill");
+      var progressText = document.getElementById("job-progress-text");
+      var progressLog = document.getElementById("job-progress-log");
+
+      var lastEventId = 0;
+      var lastProgress = 2;
+      var terminal = { COMPLETED: true, FAILED: true };
+
+      var setStatus = function (status) {
+        var value = status || "UNKNOWN";
+        if (statusText) {
+          statusText.textContent = value;
+        }
+        if (statusPill) {
+          statusPill.textContent = value;
+        }
+      };
+
+      var setProgress = function (progress, message) {
+        if (typeof progress === "number") {
+          var pct = Math.max(2, Math.min(100, Math.round(progress * 100)));
+          if (pct >= lastProgress) {
+            lastProgress = pct;
+            if (progressFill && progressFill.parentElement) {
+              progressFill.style.width = pct + "%";
+              progressFill.parentElement.setAttribute("aria-valuenow", String(pct));
+            }
+          }
+        }
+        if (message && progressText) {
+          progressText.textContent = message;
+        }
+      };
+
+      var appendLog = function (payload) {
+        if (!progressLog || !payload) {
+          return;
+        }
+        var message = payload.message || payload.stage || "Update";
+        var item = document.createElement("li");
+        item.className = "ds-progress-item";
+        item.textContent = message;
+        progressLog.prepend(item);
+        var maxItems = 8;
+        while (progressLog.children.length > maxItems) {
+          progressLog.removeChild(progressLog.lastChild);
+        }
+      };
+
+      var handleDone = function (status) {
+        if (status === "FAILED") {
+          setProgress(1.0, "Job failed.");
+          return;
+        }
+        setProgress(1.0, "Analysis complete. Refreshing...");
+        setTimeout(function () {
+          window.location.reload();
+        }, 1200);
+      };
+
+      var handleProgress = function (payload) {
+        if (!payload) {
+          return;
+        }
+        if (payload.id && payload.id > lastEventId) {
+          lastEventId = payload.id;
+        }
+        setProgress(payload.progress, payload.message || payload.stage);
+        appendLog(payload);
+      };
+
+      var handleStatus = function (payload) {
+        if (!payload) {
+          return;
+        }
+        setStatus(payload.status);
+        if (terminal[payload.status || ""]) {
+          handleDone(payload.status);
+        }
+      };
+
+      var poll = function () {
+        fetch("/api/jobs/" + jobId + "/events?since_id=" + lastEventId, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        })
+          .then(function (resp) {
+            return resp.ok ? resp.json() : null;
+          })
+          .then(function (data) {
+            if (!data) {
+              return;
+            }
+            if (Array.isArray(data.events)) {
+              data.events.forEach(handleProgress);
+            }
+            handleStatus(data);
+          })
+          .catch(function () {
+            // ignore polling errors
+          });
+      };
+
+      var connect = function () {
+        if (!window.EventSource) {
+          setInterval(poll, 2000);
+          poll();
+          return;
+        }
+        var source = new EventSource("/api/jobs/" + jobId + "/stream");
+        source.addEventListener("progress", function (event) {
+          try {
+            handleProgress(JSON.parse(event.data));
+          } catch (err) {
+            // ignore parse errors
+          }
+        });
+        source.addEventListener("status", function (event) {
+          try {
+            handleStatus(JSON.parse(event.data));
+          } catch (err) {
+            // ignore parse errors
+          }
+        });
+        source.addEventListener("done", function (event) {
+          try {
+            handleDone(JSON.parse(event.data).status);
+          } catch (err) {
+            handleDone("COMPLETED");
+          }
+          source.close();
+        });
+        source.onerror = function () {
+          source.close();
+          setInterval(poll, 2000);
+          poll();
+        };
+      };
+
+      connect();
+    })();
+  </script>
 {% endblock %}

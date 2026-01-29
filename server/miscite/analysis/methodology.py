@@ -19,14 +19,17 @@ def build_methodology_md(
     lines.append("1) **Text extraction**: extract manuscript content from PDF/DOCX using Docling.")
     lines.append("2) **LLM parsing**: extract in-text citations and bibliography entries into structured records.")
     lines.append(
-        "3) **Reference resolution**: link bibliography entries to OpenAlex works (by DOI when available; otherwise search by title/author/year). "
+        "3) **Reference resolution**: attempt to link bibliography entries to OpenAlex, then Crossref, then arXiv. "
+        "Each source prefers DOI/ID lookup when available; otherwise it searches by title/author/year. "
         "For ambiguous search results, a configured LLM may be used to conservatively choose a match (or abstain). "
-        "When a DOI is available, additional metadata may be fetched from Crossref."
+        "Resolution stops after the first matching source."
     )
     lines.append("4) **Objective flags**:")
     lines.append("   - In-text citation missing from bibliography.")
     lines.append("   - Bibliography item unresolved in metadata sources (potentially non-existent / incomplete / non-indexed).")
-    lines.append("   - Retracted works (via OpenAlex retraction flag, plus optional custom retraction API and/or local dataset file).")
+    lines.append(
+        "   - Retracted works (via OpenAlex/Crossref retraction flags when present, plus optional custom retraction API and/or local dataset file)."
+    )
     lines.append("   - Predatory venue matches (via optional custom predatory API and/or local dataset file).")
     lines.append("5) **Potentially inappropriate citations**:")
     lines.append("   - Compute a lightweight relevance heuristic between the citing context and the cited work’s title/abstract (when available).")
@@ -59,6 +62,6 @@ def build_methodology_md(
     lines.append(f"- LLM parse model: `{settings.llm_parse_model}`")
     lines.append(f"- LLM match model: `{settings.llm_match_model}`")
     lines.append(f"- LLM max calls (inappropriate checks): `{settings.llm_max_calls}`")
-    lines.append(f"- LLM max calls (OpenAlex match disambiguation): `{settings.llm_match_max_calls}`")
+    lines.append(f"- LLM max calls (match disambiguation): `{settings.llm_match_max_calls}`")
     lines.append(f"- Billing enabled: `{settings.billing_enabled}`")
     return "\n".join(lines)

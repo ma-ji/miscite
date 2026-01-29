@@ -119,6 +119,20 @@ class PredatoryRecord:
     notes: str
 
 
+@dataclass(frozen=True)
+class PredatoryMatch:
+    record: PredatoryRecord
+    match_type: str  # "issn_exact" | "name_exact" | "name_contains"
+    confidence: float
+
+    def as_dict(self) -> dict:
+        return {
+            "record": self.record.__dict__,
+            "match_type": self.match_type,
+            "confidence": self.confidence,
+        }
+
+
 class PredatoryVenueDataset:
     def __init__(self, csv_path: Path):
         self.csv_path = csv_path
@@ -140,20 +154,59 @@ class PredatoryVenueDataset:
             reader = csv.DictReader(f)
             if not reader.fieldnames:
                 raise RuntimeError("Predatory CSV has no header row.")
+
+            fieldnames = [name.strip() for name in reader.fieldnames if name]
+            lower_map = {name.lower(): name for name in fieldnames}
+
             required = {"name", "type", "issn", "source", "notes"}
-            missing = required.difference(set(reader.fieldnames))
-            if missing:
-                raise RuntimeError(f"Predatory CSV missing required columns: {sorted(missing)}")
-            for row in reader:
-                records.append(
-                    PredatoryRecord(
-                        name=(row.get("name") or "").strip(),
-                        venue_type=(row.get("type") or "").strip().lower(),
-                        issn=(row.get("issn") or "").strip(),
-                        source=(row.get("source") or "").strip(),
-                        notes=(row.get("notes") or "").strip(),
-                    )
+            has_required = required.issubset(lower_map.keys())
+            has_alt = "journal" in lower_map or "publisher" in lower_map
+
+            if not has_required and not has_alt:
+                raise RuntimeError(
+                    "Predatory CSV missing required columns. Expected either "
+                    "name/type/issn/source/notes or journal/publisher/issn/source/notes."
                 )
+
+            for row in reader:
+                if has_required:
+                    records.append(
+                        PredatoryRecord(
+                            name=(row.get(lower_map["name"]) or "").strip(),
+                            venue_type=(row.get(lower_map["type"]) or "").strip().lower(),
+                            issn=(row.get(lower_map.get("issn", "")) or "").strip(),
+                            source=(row.get(lower_map.get("source", "")) or "").strip(),
+                            notes=(row.get(lower_map.get("notes", "")) or "").strip(),
+                        )
+                    )
+                    continue
+
+                journal = (row.get(lower_map.get("journal", "")) or "").strip()
+                publisher = (row.get(lower_map.get("publisher", "")) or "").strip()
+                issn = (row.get(lower_map.get("issn", "")) or "").strip()
+                source = (row.get(lower_map.get("source", "")) or "").strip()
+                notes = (row.get(lower_map.get("notes", "")) or "").strip()
+
+                if journal:
+                    records.append(
+                        PredatoryRecord(
+                            name=journal,
+                            venue_type="journal",
+                            issn=issn,
+                            source=source,
+                            notes=notes,
+                        )
+                    )
+                if publisher:
+                    records.append(
+                        PredatoryRecord(
+                            name=publisher,
+                            venue_type="publisher",
+                            issn=issn,
+                            source=source,
+                            notes=notes,
+                        )
+                    )
         self._records = records
         _PREDATORY_CACHE[self.csv_path] = (mtime, records)
 
@@ -162,7 +215,7 @@ class PredatoryVenueDataset:
         cleaned = "".join(ch.lower() for ch in s.strip() if ch.isalnum() or ch.isspace())
         return " ".join(cleaned.split())
 
-    def match(self, *, journal: str | None, publisher: str | None, issn: str | None) -> PredatoryRecord | None:
+    def match(self, *, journal: str | None, publisher: str | None, issn: str | None) -> PredatoryMatch | None:
         if self._records is None:
             self._load()
         journal_n = self._norm(journal or "")
@@ -172,13 +225,17 @@ class PredatoryVenueDataset:
         for rec in self._records or []:
             if issn_n and rec.issn:
                 if issn_n == rec.issn.replace("-", "").strip().lower():
-                    return rec
+                    return PredatoryMatch(record=rec, match_type="issn_exact", confidence=1.0)
             if rec.venue_type == "journal" and journal_n and rec.name:
                 name_n = self._norm(rec.name)
-                if journal_n == name_n or name_n in journal_n:
-                    return rec
+                if journal_n == name_n:
+                    return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
+                if name_n and name_n in journal_n:
+                    return PredatoryMatch(record=rec, match_type="name_contains", confidence=0.55)
             if rec.venue_type == "publisher" and publisher_n and rec.name:
                 name_n = self._norm(rec.name)
-                if publisher_n == name_n or name_n in publisher_n:
-                    return rec
+                if publisher_n == name_n:
+                    return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
+                if name_n and name_n in publisher_n:
+                    return PredatoryMatch(record=rec, match_type="name_contains", confidence=0.55)
         return None

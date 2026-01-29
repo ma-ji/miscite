@@ -4,7 +4,7 @@ import datetime as dt
 import uuid
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from server.miscite.db import Base
@@ -80,6 +80,17 @@ class AnalysisJob(Base):
     user: Mapped["User"] = relationship(back_populates="jobs")
 
 
+class AnalysisJobEvent(Base):
+    __tablename__ = "analysis_job_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(32), ForeignKey("analysis_jobs.id"), index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC), index=True)
+    stage: Mapped[str] = mapped_column(String(64))
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
 class BillingAccount(Base):
     __tablename__ = "billing_accounts"
 
@@ -93,4 +104,3 @@ class BillingAccount(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
 
     user: Mapped["User"] = relationship(back_populates="billing")
-

@@ -1361,6 +1361,47 @@ pre {
   font-size: var(--text-14);
 }
 
+.ds-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ds-progress-bar {
+  position: relative;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+}
+
+.ds-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  transition: width 0.35s ease;
+}
+
+.ds-progress-log {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.ds-progress-item {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  font-size: var(--text-14);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

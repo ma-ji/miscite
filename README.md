@@ -15,7 +15,7 @@ UI uses a lightweight CSS-variables design system (light/dark) in `server/miscit
 - Upload PDF or DOCX and generate a citation-check report:
   - **Missing bibliography references**: in-text citations not found in the bibliography section.
   - **Unresolved references**: bibliography items not found in metadata sources.
-  - **Retracted articles**: detected via OpenAlex retraction flag (when available), plus optional custom retraction API and/or local dataset file.
+  - **Retracted articles**: detected via OpenAlex/Crossref retraction flags (when available), plus optional custom retraction API and/or local dataset file.
   - **Predatory journals/publishers**: detected via optional custom predatory API and/or local dataset file.
   - **Potentially inappropriate citations**:
     - Heuristic relevance between citing context and the cited work’s title/abstract (when available).
@@ -112,6 +112,7 @@ pip install -r requirements-optional.txt
 - Sources:
   - Crossref metadata: `server/miscite/sources/crossref.py`
   - OpenAlex metadata/retraction flag: `server/miscite/sources/openalex.py`
+  - arXiv metadata: `server/miscite/sources/arxiv.py`
   - Custom APIs: `server/miscite/sources/retraction_api.py`, `server/miscite/sources/predatory_api.py`
   - Local datasets: `server/miscite/sources/datasets.py`
 
@@ -141,16 +142,17 @@ Config values are validated at startup; out-of-range values raise errors. Key bo
 - `MISCITE_WORKER_PROCESSES` (default: `1`) – worker subprocesses inside one `python -m server.worker`
 - `MISCITE_WORKER_POLL_SECONDS` (default: `1.5`) – DB polling interval
 
-### Metadata (Crossref/OpenAlex)
+### Metadata (OpenAlex/Crossref/arXiv)
 
 - `MISCITE_CROSSREF_MAILTO` – recommended by Crossref for polite usage
 - `MISCITE_CROSSREF_USER_AGENT` – recommended to include contact info
 
 ### Retracted papers (sources)
 
-The pipeline aggregates *signals*; any hit flags the reference as retracted.
+The pipeline aggregates *signals*; strong sources (Retraction Watch / custom API) are treated as high-confidence.
+Single-source metadata flags (e.g., OpenAlex/Crossref only) are still flagged, but marked for review.
 
-- OpenAlex: links references to OpenAlex works (DOI first; otherwise search) and uses OpenAlex `is_retracted` when present
+- OpenAlex/Crossref: metadata resolution with retraction flags when present
 - Local dataset (optional): `MISCITE_RETRACTIONWATCH_CSV`
 - Custom API (optional):
   - `MISCITE_RETRACTION_API_ENABLED=true`
@@ -160,7 +162,8 @@ The pipeline aggregates *signals*; any hit flags the reference as retracted.
 
 ### Predatory journals/publishers (sources)
 
-The pipeline aggregates *signals*; any hit flags the venue as predatory.
+The pipeline aggregates *signals*; exact ISSN/name matches or multiple sources are high-confidence.
+Fuzzy name matches are still flagged, but marked for review.
 
 - Local dataset (optional): `MISCITE_PREDATORY_CSV` (columns: `name,type,issn,source,notes`)
 - Auto-sync (optional): Google Sheets lists via `MISCITE_PREDATORY_SYNC_ENABLED=true`
@@ -188,7 +191,7 @@ You can use different LLM models for different tasks:
 
 - `MISCITE_LLM_MODEL`: inappropriate-citation classification
 - `MISCITE_LLM_PARSE_MODEL`: citation/bibliography parsing
-- `MISCITE_LLM_MATCH_MODEL`: OpenAlex match disambiguation
+- `MISCITE_LLM_MATCH_MODEL`: OpenAlex/Crossref/arXiv match disambiguation
 
 #### LLM parsing
 
@@ -203,18 +206,19 @@ Settings:
 
 - `MISCITE_LLM_PARSE_MODEL` (default: `MISCITE_LLM_MODEL`)
 - `MISCITE_LLM_MATCH_MODEL` (default: `MISCITE_LLM_MODEL`)
-- `MISCITE_LLM_MATCH_MAX_CALLS` (default: `50`) – caps per-document LLM calls used for OpenAlex match disambiguation
+- `MISCITE_LLM_MATCH_MAX_CALLS` (default: `50`) – caps per-document LLM calls used for match disambiguation
 - `MISCITE_LLM_BIB_PARSE_MAX_CHARS`, `MISCITE_LLM_BIB_PARSE_MAX_REFS`
 - `MISCITE_LLM_CITATION_PARSE_MAX_CHARS`, `MISCITE_LLM_CITATION_PARSE_MAX_LINES`, `MISCITE_LLM_CITATION_PARSE_MAX_CANDIDATE_CHARS`
 
-#### OpenAlex linking
+#### Reference linking (OpenAlex → Crossref → arXiv)
 
-For each bibliography entry, the pipeline attempts to link it to an OpenAlex work so later checks can use richer metadata:
+For each bibliography entry, the pipeline attempts to link it to a metadata record, in order:
 
-- Prefer DOI lookup when a DOI is available.
-- Otherwise search OpenAlex using title + first author + year (when available), score candidates, and:
-  - accept high-confidence matches automatically
-  - for ambiguous (“fussy”) results, ask the LLM to choose a candidate (or return null)
+1) OpenAlex (DOI first; otherwise search by title + first author + year)
+2) Crossref (DOI first; otherwise search by title + first author + year)
+3) arXiv (ID/DOI first; otherwise search by title + first author + year)
+
+For ambiguous (“fussy”) results, the LLM is used to conservatively choose a candidate (or return null). Resolution stops after the first matching source.
 
 ### Local NLI (optional GPU/CPU)
 

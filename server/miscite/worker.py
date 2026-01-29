@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from server.miscite.analysis.pipeline import analyze_document
 from server.miscite.config import Settings
 from server.miscite.db import get_sessionmaker, init_db
-from server.miscite.models import AnalysisJob, Document, JobStatus
+from server.miscite.models import AnalysisJob, AnalysisJobEvent, Document, JobStatus
 from server.miscite.sources.predatory_sync import sync_predatory_datasets
 from server.miscite.sources.retractionwatch_sync import sync_retractionwatch_dataset
 
@@ -57,8 +57,16 @@ def _process_job(settings: Settings, job_id: str) -> None:
         if not row:
             return
         job, doc = row
+        _record_progress(settings, job_id, "started", "Job started", 0.02)
 
-        report, sources, methodology_md = analyze_document(Path(doc.storage_path), settings=settings)
+        def progress_cb(stage: str, message: str | None, progress: float | None) -> None:
+            _record_progress(settings, job_id, stage, message, progress)
+
+        report, sources, methodology_md = analyze_document(
+            Path(doc.storage_path),
+            settings=settings,
+            progress_cb=progress_cb,
+        )
 
         job.report_json = json.dumps(report, ensure_ascii=False)
         job.sources_json = json.dumps(sources, ensure_ascii=False)
@@ -66,6 +74,7 @@ def _process_job(settings: Settings, job_id: str) -> None:
         job.status = JobStatus.completed.value
         job.finished_at = dt.datetime.now(dt.UTC)
         db.commit()
+        _record_progress(settings, job_id, "completed", "Report ready", 1.0)
     except Exception as e:
         try:
             row = _load_job(db, job_id)
@@ -75,9 +84,35 @@ def _process_job(settings: Settings, job_id: str) -> None:
                 job.error_message = str(e)
                 job.finished_at = dt.datetime.now(dt.UTC)
                 db.commit()
+                _record_progress(settings, job_id, "failed", str(e), 1.0)
         except Exception:
             db.rollback()
         raise
+    finally:
+        db.close()
+
+
+def _record_progress(
+    settings: Settings,
+    job_id: str,
+    stage: str,
+    message: str | None = None,
+    progress: float | None = None,
+) -> None:
+    SessionLocal = get_sessionmaker(settings)
+    db = SessionLocal()
+    try:
+        db.add(
+            AnalysisJobEvent(
+                job_id=job_id,
+                stage=stage,
+                message=message,
+                progress=progress,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
     finally:
         db.close()
 

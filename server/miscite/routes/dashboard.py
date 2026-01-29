@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from server.miscite.config import Settings
-from server.miscite.db import db_session
-from server.miscite.models import AnalysisJob, BillingAccount, Document, JobStatus, User
+from server.miscite.db import db_session, get_sessionmaker
+from server.miscite.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
 from server.miscite.security import require_csrf, require_user
 from server.miscite.storage import save_upload
 from server.miscite.web import template_context, templates
@@ -196,3 +197,92 @@ def job_api(
         "methodology_md": job.methodology_md,
     }
     return payload
+
+
+def _event_payload(event: AnalysisJobEvent) -> dict:
+    return {
+        "id": event.id,
+        "stage": event.stage,
+        "message": event.message,
+        "progress": event.progress,
+        "created_at": event.created_at.isoformat(),
+    }
+
+
+@router.get("/api/jobs/{job_id}/events")
+def job_events(
+    request: Request,
+    job_id: str,
+    since_id: int = Query(0, ge=0),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+
+    job = db.scalar(select(AnalysisJob).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id))
+    if not job:
+        raise HTTPException(status_code=404)
+
+    rows = db.execute(
+        select(AnalysisJobEvent)
+        .where(AnalysisJobEvent.job_id == job_id, AnalysisJobEvent.id > since_id)
+        .order_by(AnalysisJobEvent.id)
+    ).scalars().all()
+
+    return {
+        "status": job.status,
+        "error_message": job.error_message,
+        "events": [_event_payload(ev) for ev in rows],
+    }
+
+
+@router.get("/api/jobs/{job_id}/stream")
+async def job_stream(
+    request: Request,
+    job_id: str,
+    user: User = Depends(require_user),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    SessionLocal = get_sessionmaker(settings)
+
+    with SessionLocal() as db:
+        job_exists = db.scalar(select(AnalysisJob.id).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id))
+        if not job_exists:
+            raise HTTPException(status_code=404)
+
+    async def event_stream():
+        last_id = 0
+        terminal = {JobStatus.completed.value, JobStatus.failed.value}
+        while True:
+            if await request.is_disconnected():
+                break
+
+            with SessionLocal() as db:
+                rows = db.execute(
+                    select(AnalysisJobEvent)
+                    .where(AnalysisJobEvent.job_id == job_id, AnalysisJobEvent.id > last_id)
+                    .order_by(AnalysisJobEvent.id)
+                ).scalars().all()
+                for ev in rows:
+                    payload = json.dumps(_event_payload(ev), ensure_ascii=False)
+                    yield f"event: progress\ndata: {payload}\n\n"
+                if rows:
+                    last_id = rows[-1].id
+
+                job = db.get(AnalysisJob, job_id)
+                if job:
+                    status_payload = json.dumps(
+                        {"status": job.status, "error_message": job.error_message},
+                        ensure_ascii=False,
+                    )
+                    yield f"event: status\ndata: {status_payload}\n\n"
+                    if job.status in terminal:
+                        done_payload = json.dumps({"status": job.status}, ensure_ascii=False)
+                        yield f"event: done\ndata: {done_payload}\n\n"
+                        break
+
+            await asyncio.sleep(1.0)
+
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
