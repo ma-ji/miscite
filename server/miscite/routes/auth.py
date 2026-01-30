@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from server.miscite.config import Settings
 from server.miscite.db import db_session
 from server.miscite.models import User
+from server.miscite.rate_limit import enforce_rate_limit
 from server.miscite.security import (
     clear_csrf_cookie,
     clear_session_cookie,
@@ -39,6 +40,13 @@ def login_action(
     db: Session = Depends(db_session),
 ):
     settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="login",
+        limit=settings.rate_limit_login,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     normalized_email = email.strip().lower()
     user = db.scalar(select(User).where(User.email == normalized_email))
     if user is None or not verify_password(password, user.password_hash):
@@ -72,6 +80,23 @@ def register_action(
     db: Session = Depends(db_session),
 ):
     settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="register",
+        limit=settings.rate_limit_register,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    if settings.maintenance_mode:
+        return templates.TemplateResponse(
+            "register.html",
+            template_context(
+                request,
+                title="Register",
+                flash={"level": "amber", "message": settings.maintenance_message},
+            ),
+            status_code=503,
+        )
     normalized_email = email.strip().lower()
 
     existing = db.scalar(select(User).where(User.email == normalized_email))
@@ -113,4 +138,3 @@ def logout_action(
     clear_session_cookie(response)
     clear_csrf_cookie(response)
     return response
-

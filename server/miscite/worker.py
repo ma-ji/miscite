@@ -6,8 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from sqlalchemy import select
-from sqlalchemy import update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from server.miscite.analysis.pipeline import analyze_document
@@ -32,7 +31,13 @@ def _claim_next_job(db: Session) -> str | None:
     result = db.execute(
         update(AnalysisJob)
         .where(AnalysisJob.id == job_id, AnalysisJob.status == JobStatus.pending.value)
-        .values(status=JobStatus.running.value, started_at=now, error_message=None)
+        .values(
+            status=JobStatus.running.value,
+            started_at=now,
+            last_heartbeat_at=now,
+            attempts=AnalysisJob.attempts + 1,
+            error_message=None,
+        )
     )
     if result.rowcount == 1:
         return job_id
@@ -102,6 +107,7 @@ def _record_progress(
     SessionLocal = get_sessionmaker(settings)
     db = SessionLocal()
     try:
+        now = dt.datetime.now(dt.UTC)
         db.add(
             AnalysisJobEvent(
                 job_id=job_id,
@@ -110,7 +116,49 @@ def _record_progress(
                 progress=progress,
             )
         )
+        db.execute(
+            update(AnalysisJob)
+            .where(AnalysisJob.id == job_id)
+            .values(last_heartbeat_at=now)
+        )
         db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _reap_stale_jobs(settings: Settings) -> None:
+    SessionLocal = get_sessionmaker(settings)
+    db = SessionLocal()
+    try:
+        cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=settings.job_stale_seconds)
+        stale = (
+            db.execute(
+                select(AnalysisJob)
+                .where(
+                    AnalysisJob.status == JobStatus.running.value,
+                    or_(AnalysisJob.last_heartbeat_at.is_(None), AnalysisJob.last_heartbeat_at < cutoff),
+                )
+                .order_by(AnalysisJob.started_at)
+            )
+            .scalars()
+            .all()
+        )
+        for job in stale:
+            if settings.job_stale_action == "requeue" and job.attempts < settings.job_max_attempts:
+                job.status = JobStatus.pending.value
+                job.error_message = "Job re-queued after stale worker heartbeat."
+                job.started_at = None
+                job.finished_at = None
+                job.last_heartbeat_at = None
+            else:
+                job.status = JobStatus.failed.value
+                job.error_message = "Job failed due to stale worker heartbeat."
+                job.finished_at = dt.datetime.now(dt.UTC)
+            db.add(job)
+        if stale:
+            db.commit()
     except Exception:
         db.rollback()
     finally:
@@ -140,6 +188,8 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
             log.info("Predatory lists synced: %s", result.target_csv)
         next_pred_sync_at = time.time() + 3600.0
 
+    next_reap_at = time.time() + float(settings.job_reap_interval_seconds)
+
     SessionLocal = get_sessionmaker(settings)
     log.info("Worker started (process_index=%s, db=%s)", process_index, settings.db_url)
 
@@ -155,6 +205,10 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
             if result.updated:
                 log.info("Predatory lists synced: %s", result.target_csv)
             next_pred_sync_at = time.time() + 3600.0
+
+        if time.time() >= next_reap_at:
+            _reap_stale_jobs(settings)
+            next_reap_at = time.time() + float(settings.job_reap_interval_seconds)
 
         db = SessionLocal()
         try:

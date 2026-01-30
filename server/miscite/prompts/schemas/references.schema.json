@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["references", "notes"],
+  "properties": {
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "raw", "ref_number", "doi", "year", "first_author", "csl"],
+        "properties": {
+          "id": {"type": "string"},
+          "raw": {"type": "string"},
+          "ref_number": {"type": ["integer", "null"]},
+          "doi": {"type": ["string", "null"]},
+          "year": {"type": ["integer", "null"]},
+          "first_author": {"type": ["string", "null"]},
+          "csl": {"type": ["object", "null"]}
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

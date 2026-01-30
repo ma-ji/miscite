@@ -1,0 +1,28 @@
+You will receive groups of papers with short ids.
+
+Return JSON with keys:
+- overview: short paragraph
+- sections: array of objects with keys {title, bullets}
+  - title: string
+  - bullets: array of short strings
+
+Rules:
+- Use plain language.
+- Do NOT repeat full reference details; only cite papers using [R#] markers.
+- Start each bullet with the [R#] marker.
+- Make bullets concrete: where to add (intro / literature review / methods / discussion) and what to do.
+- For each group below, write one bullet per item in that group.
+- Do not put raw newline characters inside strings.
+
+PAPER EXCERPT:
+$excerpt
+
+GROUP KEY MEANINGS:
+- highly_connected: important works to consider adding or strengthening
+- bibliographic_coupling: works that cite many of the same references as the paper
+- bridge_papers: works that can help connect ideas across subtopics
+- core_papers: core background that should be clearly positioned
+- tangential_citations: citations in the paper that may need justification or removal
+
+GROUPS:
+$groups_payload

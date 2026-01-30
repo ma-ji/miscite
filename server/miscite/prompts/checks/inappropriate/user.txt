@@ -1,0 +1,20 @@
+Assess whether the citation is appropriate, given only metadata.
+
+Return JSON with keys:
+- label: one of ["appropriate","inappropriate","uncertain"]
+- confidence: number 0..1
+- rationale: string
+- evidence: array of short strings (quote or paraphrase from metadata)
+
+CITING SENTENCE:
+$context
+
+REFERENCE ENTRY (raw):
+$ref_raw
+
+RESOLVED DOI: $doi
+TITLE: $title
+YEAR: $year
+JOURNAL: $journal
+ABSTRACT:
+$abstract

@@ -1,0 +1,74 @@
+version: 1
+prompts:
+  - id: parsing.citations
+    stage: parsing
+    purpose: Extract in-text citations from manuscript text.
+    system: parsing/citations/system.txt
+    user: parsing/citations/user.txt
+    inputs:
+      - text
+    output_schema: schemas/citations.schema.json
+  - id: parsing.references
+    stage: parsing
+    purpose: Extract bibliography entries into structured fields.
+    system: parsing/references/system.txt
+    user: parsing/references/user.txt
+    inputs:
+      - text
+      - max_refs
+    output_schema: schemas/references.schema.json
+  - id: parsing.ref_section
+    stage: parsing
+    purpose: Locate the References/Bibliography section verbatim.
+    system: parsing/ref_section/system.txt
+    user: parsing/ref_section/user.txt
+    inputs:
+      - text
+    output_schema: schemas/ref_section.schema.json
+  - id: matching.candidate
+    stage: matching
+    purpose: Select the best candidate record for a reference.
+    system: matching/candidate/system.txt
+    user: matching/candidate/user.txt
+    inputs:
+      - source_label
+      - ref_raw
+      - title
+      - first_author
+      - year
+      - doi
+      - candidates
+    output_schema: schemas/match_candidate.schema.json
+  - id: checks.inappropriate
+    stage: checks
+    purpose: Classify citation appropriateness based on metadata.
+    system: checks/inappropriate/system.txt
+    user: checks/inappropriate/user.txt
+    inputs:
+      - context
+      - ref_raw
+      - doi
+      - title
+      - year
+      - journal
+      - abstract
+    output_schema: schemas/inappropriate.schema.json
+  - id: deep_analysis.key_refs
+    stage: deep_analysis
+    purpose: Select key references central to the manuscript.
+    system: deep_analysis/key_refs/system.txt
+    user: deep_analysis/key_refs/user.txt
+    inputs:
+      - key_ref_target
+      - excerpt
+      - items
+    output_schema: schemas/deep_key_refs.schema.json
+  - id: deep_analysis.suggestions
+    stage: deep_analysis
+    purpose: Provide literature review strengthening suggestions.
+    system: deep_analysis/suggestions/system.txt
+    user: deep_analysis/suggestions/user.txt
+    inputs:
+      - excerpt
+      - groups_payload
+    output_schema: schemas/deep_suggestions.schema.json

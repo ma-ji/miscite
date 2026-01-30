@@ -1,0 +1,11 @@
+Select key references from the manuscript bibliography.
+
+Return JSON with keys:
+- key_ref_ids: array of EXACTLY $key_ref_target strings (ref_id values)
+- notes: short string
+
+PAPER EXCERPT:
+$excerpt
+
+CANDIDATE REFERENCES (one per line):
+$items

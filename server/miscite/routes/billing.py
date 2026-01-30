@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from server.miscite.config import Settings
 from server.miscite.db import db_session
 from server.miscite.models import BillingAccount, User
+from server.miscite.rate_limit import enforce_rate_limit
 from server.miscite.security import require_csrf, require_user
 from server.miscite.web import template_context, templates
 
@@ -74,10 +75,19 @@ def billing_checkout(
 ):
     request.state.user = user
     settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="billing-checkout",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     require_csrf(request, csrf_token)
 
     if not settings.billing_enabled:
         raise HTTPException(status_code=400, detail="Billing disabled")
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
     if not (settings.stripe_secret_key and settings.stripe_price_id):
         raise HTTPException(status_code=500, detail="Stripe not configured")
 
@@ -104,10 +114,19 @@ def billing_portal(
 ):
     request.state.user = user
     settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="billing-portal",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     require_csrf(request, csrf_token)
 
     if not settings.billing_enabled:
         raise HTTPException(status_code=400, detail="Billing disabled")
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
     if not settings.stripe_secret_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
 

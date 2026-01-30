@@ -12,6 +12,7 @@ from server.miscite.analysis.citation_parsing import CitationInstance, Reference
 from server.miscite.analysis.normalize import normalize_doi
 from server.miscite.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
+from server.miscite.prompts import get_prompt, render_prompt
 from server.miscite.sources.openalex import OpenAlexClient
 
 
@@ -151,20 +152,12 @@ def run_deep_analysis(
             excerpt = excerpt[: settings.deep_analysis_paper_excerpt_max_chars] + "…"
 
         payload = llm_client.chat_json(
-            system=(
-                "You help an academic author improve a manuscript's literature review. "
-                "Pick the references that are most central to the study (theory, methods, main evidence). "
-                "Avoid picking tangential or generic references unless they are truly central. "
-                "Return ONLY valid JSON."
-            ),
-            user=(
-                "Select key references from the manuscript bibliography.\n\n"
-                "Return JSON with keys:\n"
-                f"- key_ref_ids: array of EXACTLY {key_ref_target} strings (ref_id values)\n"
-                "- notes: short string\n\n"
-                f"PAPER EXCERPT:\n{excerpt}\n\n"
-                "CANDIDATE REFERENCES (one per line):\n"
-                + "\n".join(items)
+            system=get_prompt("deep_analysis/key_refs/system"),
+            user=render_prompt(
+                "deep_analysis/key_refs/user",
+                key_ref_target=key_ref_target,
+                excerpt=excerpt,
+                items="\n".join(items),
             ),
         )
 
@@ -1367,34 +1360,11 @@ def _build_suggestions(
 
     try:
         llm_out = llm_client.chat_json(
-            system=(
-                "You help an academic author strengthen citations and the literature review. "
-                "Write user-friendly, actionable advice with plain language. "
-                "Do NOT mention network analysis, centrality, or other technical terms. "
-                "Return ONLY valid JSON."
-            ),
-            user=(
-                "You will receive groups of papers with short ids.\n\n"
-                "Return JSON with keys:\n"
-                "- overview: short paragraph\n"
-                "- sections: array of objects with keys {title, bullets}\n"
-                "  - title: string\n"
-                "  - bullets: array of short strings\n\n"
-                "Rules:\n"
-                "- Use plain language.\n"
-                "- Do NOT repeat full reference details; only cite papers using [R#] markers.\n"
-                "- Start each bullet with the [R#] marker.\n"
-                "- Make bullets concrete: where to add (intro / literature review / methods / discussion) and what to do.\n"
-                "- For each group below, write one bullet per item in that group.\n"
-                "- Do not put raw newline characters inside strings.\n\n"
-                f"PAPER EXCERPT:\n{excerpt}\n\n"
-                "GROUP KEY MEANINGS:\n"
-                "- highly_connected: important works to consider adding or strengthening\n"
-                "- bibliographic_coupling: works that cite many of the same references as the paper\n"
-                "- bridge_papers: works that can help connect ideas across subtopics\n"
-                "- core_papers: core background that should be clearly positioned\n"
-                "- tangential_citations: citations in the paper that may need justification or removal\n\n"
-                f"GROUPS:\n{groups_payload}\n"
+            system=get_prompt("deep_analysis/suggestions/system"),
+            user=render_prompt(
+                "deep_analysis/suggestions/user",
+                excerpt=excerpt,
+                groups_payload=groups_payload,
             ),
         )
     except Exception as e:

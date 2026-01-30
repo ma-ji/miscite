@@ -1,0 +1,24 @@
+Pick the best matching record for this reference, or null.
+
+Return JSON with keys:
+- best_id: string|null (must be one of the candidate ids)
+- confidence: number 0..1
+- rationale: string
+
+REFERENCE_RAW:
+$ref_raw
+
+REFERENCE_TITLE:
+$title
+
+REFERENCE_FIRST_AUTHOR:
+$first_author
+
+REFERENCE_YEAR:
+$year
+
+REFERENCE_DOI:
+$doi
+
+CANDIDATES:
+$candidates

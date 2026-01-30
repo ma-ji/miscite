@@ -1,0 +1,9 @@
+Identify the References/Bibliography section in the document and return it verbatim.
+
+Return JSON with keys:
+- references_text: string|null (verbatim section text)
+- confidence: number 0..1
+- notes: array of strings
+
+DOCUMENT TEXT:
+$text

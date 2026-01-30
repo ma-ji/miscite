@@ -16,7 +16,8 @@ def build_methodology_md(
     lines.append("This report is designed to be *traceable* and *transparent*.")
     lines.append("")
     lines.append("## Pipeline")
-    lines.append("1) **Text extraction**: extract manuscript content from PDF/DOCX using Docling.")
+    backend_label = "Docling" if settings.text_extract_backend == "docling" else "MarkItDown"
+    lines.append(f"1) **Text extraction**: extract manuscript content using {backend_label}.")
     lines.append("2) **LLM parsing**: extract in-text citations and bibliography entries into structured records.")
     lines.append(
         "3) **Reference resolution**: attempt to link bibliography entries to OpenAlex, then Crossref, then arXiv. "
@@ -58,6 +59,8 @@ def build_methodology_md(
     )
     lines.append("")
     lines.append("## Configuration snapshot")
+    lines.append(f"- Text extraction backend: `{settings.text_extract_backend}`")
+    lines.append(f"- Accelerator: `{settings.accelerator}`")
     lines.append(f"- LLM model: `{settings.llm_model}`")
     lines.append(f"- LLM parse model: `{settings.llm_parse_model}`")
     lines.append(f"- LLM match model: `{settings.llm_match_model}`")

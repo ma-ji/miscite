@@ -25,15 +25,16 @@ from server.miscite.analysis.normalize import (
     normalize_author_year_locator,
     normalize_doi,
 )
+from server.miscite.analysis.text_extract import extract_text
 from server.miscite.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
+from server.miscite.prompts import get_prompt, render_prompt
 from server.miscite.sources.arxiv import ArxivClient
 from server.miscite.sources.crossref import CrossrefClient
 from server.miscite.sources.datasets import PredatoryVenueDataset, RetractionWatchDataset
 from server.miscite.sources.openalex import OpenAlexClient
 from server.miscite.sources.predatory_api import PredatoryApiClient
 from server.miscite.sources.retraction_api import RetractionApiClient
-from server.miscite.analysis.text_extract import extract_text
 
 
 @dataclass(frozen=True)
@@ -391,6 +392,8 @@ def _token_overlap_score(a: str, b: str) -> float:
 
 ProgressCallback = Callable[[str, str | None, float | None], None]
 
+_INAPPROPRIATE_SYSTEM = get_prompt("checks/inappropriate/system")
+
 
 def analyze_document(
     path: Path,
@@ -419,9 +422,14 @@ def analyze_document(
         last_stage = stage
         progress_cb(stage, message, progress)
 
-    parser_backend_used = "docling"
+    parser_backend_used = settings.text_extract_backend
     _progress("extract", f"Extracting text from {path.name}", 0.03)
-    text = extract_text(path)
+    text = extract_text(
+        path,
+        backend=settings.text_extract_backend,
+        timeout_seconds=settings.text_extract_timeout_seconds,
+        use_subprocess=settings.text_extract_subprocess,
+    )
     _progress("extract", "Text extracted", 0.08)
     if not settings.openrouter_api_key:
         raise RuntimeError("OPENROUTER_API_KEY is required for LLM-based citation/bibliography parsing.")
@@ -587,7 +595,7 @@ def analyze_document(
 
     local_nli = None
     if settings.enable_local_nli:
-        local_nli = LocalNliModel(settings.local_nli_model)
+        local_nli = LocalNliModel(settings.local_nli_model, accelerator=settings.accelerator)
         used_sources.append({"name": "Local NLI model", "detail": settings.local_nli_model})
 
     resolution_cache: dict[str, ResolvedWork] = {}
@@ -635,22 +643,15 @@ def analyze_document(
             match_llm_calls += 1
 
             payload = llm_match_client.chat_json(
-                system=(
-                    f"You link bibliography references to {source_label} records. "
-                    "Return ONLY JSON. Be conservative: if unsure, return null."
-                ),
-                user=(
-                    "Pick the best matching record for this reference, or null.\n\n"
-                    "Return JSON with keys:\n"
-                    "- best_id: string|null (must be one of the candidate ids)\n"
-                    "- confidence: number 0..1\n"
-                    "- rationale: string\n\n"
-                    f"REFERENCE_RAW:\n{ref.raw}\n\n"
-                    f"REFERENCE_TITLE:\n{title}\n\n"
-                    f"REFERENCE_FIRST_AUTHOR:\n{first_author}\n\n"
-                    f"REFERENCE_YEAR:\n{year}\n\n"
-                    f"REFERENCE_DOI:\n{doi}\n\n"
-                    f"CANDIDATES:\n{candidates}\n"
+                system=render_prompt("matching/candidate/system", source_label=source_label),
+                user=render_prompt(
+                    "matching/candidate/user",
+                    ref_raw=ref.raw,
+                    title=title,
+                    first_author=first_author,
+                    year=year,
+                    doi=doi,
+                    candidates=candidates,
                 ),
             )
             best_id = payload.get("best_id")
@@ -1196,11 +1197,7 @@ def analyze_document(
         llm_used = True
 
         verdict = llm_client.chat_json(
-            system=(
-                "You are an academic citation checker. "
-                "You must be conservative: if metadata is insufficient, respond 'uncertain'. "
-                "Return ONLY valid JSON."
-            ),
+            system=_INAPPROPRIATE_SYSTEM,
             user=_build_inappropriate_prompt(cit, ref, work),
         )
 
@@ -1312,18 +1309,13 @@ def _build_inappropriate_prompt(cit: CitationInstance, ref: ReferenceEntry, work
     abstract = (work.abstract or "").strip()
     if len(abstract) > 1500:
         abstract = abstract[:1500] + "…"
-    return (
-        "Assess whether the citation is appropriate, given only metadata.\n\n"
-        "Return JSON with keys:\n"
-        "- label: one of [\"appropriate\",\"inappropriate\",\"uncertain\"]\n"
-        "- confidence: number 0..1\n"
-        "- rationale: string\n"
-        "- evidence: array of short strings (quote or paraphrase from metadata)\n\n"
-        f"CITING SENTENCE:\n{cit.context}\n\n"
-        f"REFERENCE ENTRY (raw):\n{ref.raw}\n\n"
-        f"RESOLVED DOI: {work.doi}\n"
-        f"TITLE: {work.title}\n"
-        f"YEAR: {work.year}\n"
-        f"JOURNAL: {work.journal}\n"
-        f"ABSTRACT:\n{abstract}\n"
+    return render_prompt(
+        "checks/inappropriate/user",
+        context=cit.context,
+        ref_raw=ref.raw,
+        doi=work.doi,
+        title=work.title,
+        year=work.year,
+        journal=work.journal,
+        abstract=abstract,
     )

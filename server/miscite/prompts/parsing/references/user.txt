@@ -1,0 +1,19 @@
+Extract bibliography entries into a standard JSON format.
+
+Return a JSON object with keys:
+- references: array of objects, in the same order as the input.
+  Each object must contain:
+  - id: string (stable within this response; prefer the numeric reference number as a string if present)
+  - raw: string (verbatim as much as possible)
+  - ref_number: integer|null
+  - doi: string|null (bare DOI only, lowercase, no URL)
+  - year: integer|null
+  - first_author: string|null (family name only)
+  - csl: object|null (CSL-JSON item; include DOI as 'DOI' if known)
+- notes: array of strings
+
+Do not return more than $max_refs references.
+If unsure, keep fields null.
+
+REFERENCES TEXT:
+$text

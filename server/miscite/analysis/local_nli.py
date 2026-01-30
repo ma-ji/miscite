@@ -11,7 +11,7 @@ class NliVerdict:
 
 
 class LocalNliModel:
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, *, accelerator: str):
         try:
             import torch  # type: ignore
             from transformers import AutoModelForSequenceClassification, AutoTokenizer  # type: ignore
@@ -24,7 +24,15 @@ class LocalNliModel:
         self._tokenizer = AutoTokenizer.from_pretrained(model_name)
         self._model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if accelerator == "cpu":
+            device = "cpu"
+        elif accelerator == "gpu":
+            if not torch.cuda.is_available():
+                raise RuntimeError("GPU accelerator requested but torch.cuda.is_available() is false.")
+            device = "cuda"
+        else:
+            raise ValueError(f"Unsupported accelerator: {accelerator!r}")
+
         self._device = device
         self._model.to(device)
         self._model.eval()

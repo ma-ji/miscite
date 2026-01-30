@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from server.miscite.analysis.citation_parsing import CitationInstance, ReferenceEntry
 from server.miscite.analysis.normalize import normalize_doi
 from server.miscite.llm.openrouter import OpenRouterClient
+from server.miscite.prompts import get_prompt, render_prompt
 
 
 @dataclass(frozen=True)
@@ -228,74 +229,22 @@ def _looks_like_citation_line(line: str) -> bool:
     return False
 
 
-_SYSTEM_REFERENCES = (
-    "You extract bibliographic references from an academic References/Bibliography section. "
-    "You MUST be conservative and MUST NOT invent data. "
-    "Return ONLY valid JSON, no markdown."
-)
+_SYSTEM_REFERENCES = get_prompt("parsing/references/system")
 
 
 def _references_prompt(text: str, *, max_refs: int) -> str:
-    return (
-        "Extract bibliography entries into a standard JSON format.\n\n"
-        "Return a JSON object with keys:\n"
-        "- references: array of objects, in the same order as the input.\n"
-        "  Each object must contain:\n"
-        "  - id: string (stable within this response; prefer the numeric reference number as a string if present)\n"
-        "  - raw: string (verbatim as much as possible)\n"
-        "  - ref_number: integer|null\n"
-        "  - doi: string|null (bare DOI only, lowercase, no URL)\n"
-        "  - year: integer|null\n"
-        "  - first_author: string|null (family name only)\n"
-        "  - csl: object|null (CSL-JSON item; include DOI as 'DOI' if known)\n"
-        "- notes: array of strings\n\n"
-        f"Do not return more than {max_refs} references.\n"
-        "If unsure, keep fields null.\n\n"
-        "REFERENCES TEXT:\n"
-        + text
-    )
+    return render_prompt("parsing/references/user", text=text, max_refs=max_refs)
 
 
-_SYSTEM_CITATIONS = (
-    "You extract in-text citations from academic prose. "
-    "You MUST be conservative and MUST NOT invent citations. "
-    "Return ONLY valid JSON, no markdown."
-)
+_SYSTEM_CITATIONS = get_prompt("parsing/citations/system")
 
 
-_SYSTEM_REF_SECTION = (
-    "You extract the References/Bibliography section from an academic manuscript. "
-    "You MUST return the references section verbatim (do not paraphrase). "
-    "If you cannot find a references section, return null. "
-    "Return ONLY valid JSON, no markdown."
-)
+_SYSTEM_REF_SECTION = get_prompt("parsing/ref_section/system")
 
 
 def _references_section_prompt(text: str) -> str:
-    return (
-        "Identify the References/Bibliography section in the document and return it verbatim.\n\n"
-        "Return JSON with keys:\n"
-        "- references_text: string|null (verbatim section text)\n"
-        "- confidence: number 0..1\n"
-        "- notes: array of strings\n\n"
-        "DOCUMENT TEXT:\n"
-        + text
-    )
+    return render_prompt("parsing/ref_section/user", text=text)
 
 
 def _citations_prompt(text: str) -> str:
-    return (
-        "Extract in-text citations.\n\n"
-        "Return a JSON object with keys:\n"
-        "- citations: array of objects with fields:\n"
-        "  - kind: 'numeric' or 'author_year'\n"
-        "  - raw: the exact citation marker text (e.g., '[12]' or '(Smith, 2020)')\n"
-        "  - locator:\n"
-        "    - for numeric: the referenced number as a string (e.g., '12')\n"
-        "    - for author_year: '<family>-<year>' lowercased (e.g., 'smith-2020')\n"
-        "  - context: the surrounding sentence (or line) where the citation occurs\n"
-        "- notes: array of strings\n\n"
-        "Do not invent missing author names. If you cannot derive a locator, omit that citation.\n\n"
-        "TEXT:\n"
-        + text
-    )
+    return render_prompt("parsing/citations/user", text=text)

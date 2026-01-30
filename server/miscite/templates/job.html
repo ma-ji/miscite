@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+  {% set has_error = job.error_message or job.has_error %}
   <section class="ds-section">
     <div class="ds-grid">
       <div class="span-8">
@@ -17,7 +18,7 @@
           {% else %}
             <span class="ds-pill">Job ID: {{ job.id }}</span>
           {% endif %}
-          {% if job.error_message %}
+          {% if has_error %}
             <span class="ds-pill">Needs attention</span>
           {% endif %}
         </div>
@@ -52,13 +53,23 @@
                     <p class="miscite-muted">Copy and share this token. It is shown once.</p>
                     <p class="ds-quote miscite-mono">{{ access_token }}</p>
                   {% elif job.access_token_hint %}
-                    <p class="miscite-muted">
-                      Active token ending in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
-                    </p>
-                    <form method="post" action="/jobs/{{ job.id }}/access-token">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                      <button class="ds-button ds-button--ghost ds-button--sm" type="submit">Rotate token</button>
-                    </form>
+                    {% if job.access_token_expired %}
+                      <p class="miscite-muted">
+                        Access token expired. Generate a new token to share this report.
+                      </p>
+                      <form method="post" action="/jobs/{{ job.id }}/access-token">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button class="ds-button ds-button--secondary ds-button--sm" type="submit">Generate token</button>
+                      </form>
+                    {% else %}
+                      <p class="miscite-muted">
+                        Active token ending in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
+                      </p>
+                      <form method="post" action="/jobs/{{ job.id }}/access-token">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button class="ds-button ds-button--ghost ds-button--sm" type="submit">Rotate token</button>
+                      </form>
+                    {% endif %}
                   {% else %}
                     <p class="miscite-muted">Generate a token to share this report externally.</p>
                     <form method="post" action="/jobs/{{ job.id }}/access-token">
@@ -79,9 +90,13 @@
         {% endif %}
       </div>
     </div>
-    {% if job.error_message %}
+    {% if job.error_message and not public_view %}
       <div class="ds-alert ds-alert--error ds-mt-5">
         {{ job.error_message }}
+      </div>
+    {% elif public_view and has_error %}
+      <div class="ds-alert ds-alert--error ds-mt-5">
+        This analysis encountered an error. Please ask the report owner to retry.
       </div>
     {% endif %}
   </section>
@@ -401,14 +416,34 @@
 	                                {{ ref.apa_base }}
 	                              </div>
 	                              <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
-	                                {% if ref.doi %}
-	                                  <a class="ds-chip miscite-mono" href="https://doi.org/{{ ref.doi }}">DOI: {{ ref.doi }}</a>
-	                                {% elif ref.official_url %}
-	                                  <a class="ds-chip miscite-mono" href="{{ ref.official_url }}">URL: {{ ref.official_url }}</a>
-	                                {% endif %}
-	                                {% if ref.oa_pdf_url %}
-	                                  <a class="ds-chip" href="{{ ref.oa_pdf_url }}">Open PDF</a>
-	                                {% endif %}
+                                {% if ref.doi %}
+                                  <a
+                                    class="ds-chip miscite-mono"
+                                    href="https://doi.org/{{ ref.doi }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    DOI: {{ ref.doi }}
+                                  </a>
+                                {% else %}
+                                  {% set safe_url = ref.official_url|safe_url %}
+                                  {% if safe_url %}
+                                    <a
+                                      class="ds-chip miscite-mono"
+                                      href="{{ safe_url }}"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      URL: {{ safe_url }}
+                                    </a>
+                                  {% endif %}
+                                {% endif %}
+                                {% set safe_pdf = ref.oa_pdf_url|safe_url %}
+                                {% if safe_pdf %}
+                                  <a class="ds-chip" href="{{ safe_pdf }}" target="_blank" rel="noopener noreferrer">
+                                    Open PDF
+                                  </a>
+                                {% endif %}
 	                                {% if ref.in_paper %}
 	                                  <span class="ds-chip">Already cited</span>
 	                                {% endif %}
@@ -485,7 +520,7 @@
     </section>
   {% endif %}
   {% if not public_view %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function () {
         var section = document.getElementById("job-progress-section");
         if (!section) {

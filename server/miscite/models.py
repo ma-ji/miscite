@@ -70,6 +70,8 @@ class AnalysisJob(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
     started_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    last_heartbeat_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     report_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -78,6 +80,7 @@ class AnalysisJob(Base):
     worker_version: Mapped[str] = mapped_column(String(32), default="0.1")
     access_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     access_token_hint: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    access_token_expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="jobs")
 

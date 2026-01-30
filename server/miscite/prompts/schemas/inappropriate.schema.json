@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["label", "confidence", "rationale", "evidence"],
+  "properties": {
+    "label": {"type": "string", "enum": ["appropriate", "inappropriate", "uncertain"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "rationale": {"type": "string"},
+    "evidence": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

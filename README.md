@@ -126,9 +126,22 @@ Copy `.env.example` to `.env` and edit. Key settings:
 - `MISCITE_DB_URL` (default: `sqlite:///./data/miscite.db`)
 - `MISCITE_STORAGE_DIR` (default: `./data/uploads`)
 - `MISCITE_MAX_UPLOAD_MB` (default: `50`)
+- `MISCITE_MAX_BODY_MB` (default: `55`)
+- `MISCITE_MAX_UNPACKED_MB` (default: `250`)
 - `MISCITE_SESSION_DAYS` (default: `14`)
 - `MISCITE_LOG_LEVEL` (default: `INFO`)
 - `MISCITE_API_TIMEOUT_SECONDS` (default: `20`)
+- `MISCITE_TEXT_EXTRACT_BACKEND` (default: `markitdown`, options: `markitdown|docling`)
+- `MISCITE_TEXT_EXTRACT_TIMEOUT_SECONDS` (default: `120`)
+- `MISCITE_TEXT_EXTRACT_SUBPROCESS` (default: `true`)
+- `MISCITE_ACCELERATOR` (default: `cpu`, options: `cpu|gpu`)
+- `MISCITE_COOKIE_SECURE` (default: `false`)
+- `MISCITE_TRUST_PROXY` (default: `false`)
+- `MISCITE_RELOAD` (default: `false`) – enables autoreload for `python -m server.main`
+
+Notes:
+- `markitdown` supports multiple file types; use `docling` if you prefer its PDF/DOCX pipeline.
+- `gpu` uses CUDA via torch (local NLI only).
 
 Config values are validated at startup; out-of-range values raise errors. Key bounds:
 
@@ -138,10 +151,46 @@ Config values are validated at startup; out-of-range values raise errors. Key bo
 - `MISCITE_LLM_MATCH_MAX_CALLS`: 0–200
 - LLM parse sizes: 1,000–500,000 chars (refs/citations)
 
+### Ops controls (maintenance, load shedding, tokens)
+
+- `MISCITE_MAINTENANCE_MODE` (default: `false`) – disables uploads/rotations/billing writes, keeps read-only access
+- `MISCITE_MAINTENANCE_MESSAGE` – banner text shown in the UI
+- `MISCITE_LOAD_SHED_MODE` (default: `false`) – disables deep analysis and clamps LLM call budgets
+- `MISCITE_ACCESS_TOKEN_DAYS` (default: `30`) – report access tokens expire after this many days
+- `MISCITE_EXPOSE_SENSITIVE_REPORT_FIELDS` (default: `false`) – expose full data source details + configuration snapshots in `/api/jobs/{id}`
+
+### Rate limiting
+
+- `MISCITE_RATE_LIMIT_ENABLED` (default: `true`)
+- `MISCITE_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
+- `MISCITE_RATE_LIMIT_LOGIN`, `MISCITE_RATE_LIMIT_REGISTER`, `MISCITE_RATE_LIMIT_UPLOAD`
+- `MISCITE_RATE_LIMIT_REPORT_ACCESS`, `MISCITE_RATE_LIMIT_EVENTS`, `MISCITE_RATE_LIMIT_STREAM`, `MISCITE_RATE_LIMIT_API`
+
+### Job health
+
+- `MISCITE_JOB_STALE_SECONDS` (default: `3600`)
+- `MISCITE_JOB_STALE_ACTION` (default: `fail`, options: `fail|requeue`)
+- `MISCITE_JOB_MAX_ATTEMPTS` (default: `2`)
+- `MISCITE_JOB_REAP_INTERVAL_SECONDS` (default: `60`)
+
+### Upload scanning (optional)
+
+- `MISCITE_UPLOAD_SCAN_ENABLED` (default: `false`)
+- `MISCITE_UPLOAD_SCAN_COMMAND` (example: `clamdscan --no-summary {path}`)
+- `MISCITE_UPLOAD_SCAN_TIMEOUT_SECONDS` (default: `45`)
+
 ### Parallelism
 
 - `MISCITE_WORKER_PROCESSES` (default: `1`) – worker subprocesses inside one `python -m server.worker`
 - `MISCITE_WORKER_POLL_SECONDS` (default: `1.5`) – DB polling interval
+
+### CLI overrides
+
+`python -m server.main` and `python -m server.worker` accept:
+
+- `--blank-db` – use a blank sqlite DB at `./data/miscite-blank.db`
+- `--text-backend {markitdown,docling}`
+- `--accelerator {cpu,gpu}`
 
 ### Metadata (OpenAlex/Crossref/arXiv)
 
@@ -364,6 +413,12 @@ If billing is enabled, uploads require an active/trialing subscription.
 - Passwords are stored as PBKDF2-SHA256 (salted).
 - Auth uses an HTTPOnly session cookie plus a separate CSRF cookie for POST actions.
 - For production, set `MISCITE_COOKIE_SECURE=true` and serve behind HTTPS.
+- Consider enabling upload scanning (e.g., ClamAV) in production.
+
+## Health endpoints
+
+- `/healthz` – liveness (always `ok` if process is up)
+- `/readyz` – readiness (checks DB, datasets, and required API keys)
 
 ## Extending the platform
 
@@ -372,7 +427,7 @@ Common extension points:
 - Add new source clients in `server/miscite/sources/` and include them in `server/miscite/analysis/pipeline.py`.
 - Add new issue types by appending to `issues` in the pipeline (keeps report schema stable).
 - Improve parsing:
-  - PDF text extraction quality varies widely; installing `pymupdf` (`fitz`) often helps.
+  - PDF text extraction quality varies widely; `markitdown[all]` improves coverage across formats.
   - Citation formats vary; update `server/miscite/analysis/citation_parsing.py` for your domain.
 
 ## Zotero helper (separate)

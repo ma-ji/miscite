@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import multiprocessing as mp
 
 from dotenv import load_dotenv
 
+from server.miscite.cli import add_runtime_args, apply_runtime_overrides
 from server.miscite.config import Settings
 from server.miscite.worker import run_worker_loop
 
@@ -14,7 +16,12 @@ def _run_single(process_index: int) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run miscite worker process.")
+    add_runtime_args(parser)
+    args = parser.parse_args()
+
     load_dotenv()
+    apply_runtime_overrides(args)
     settings = Settings.from_env()
 
     processes = max(1, settings.worker_processes)
@@ -35,4 +42,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

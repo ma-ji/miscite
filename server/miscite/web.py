@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -12,6 +13,7 @@ templates = Jinja2Templates(directory="server/miscite/templates")
 
 
 _DEEP_CITE_RE = re.compile(r"\[R(?P<num>\d{1,4})\]")
+_SAFE_URL_SCHEMES = {"http", "https"}
 
 
 def deep_cite_links(text: str | None) -> Markup:
@@ -32,11 +34,33 @@ def deep_cite_links(text: str | None) -> Markup:
 templates.env.filters["da_cite"] = deep_cite_links
 
 
+def safe_url(value: str | None) -> str:
+    if not value:
+        return ""
+    url = str(value).strip()
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return ""
+    if parsed.scheme.lower() in _SAFE_URL_SCHEMES and parsed.netloc:
+        return url
+    return ""
+
+
+templates.env.filters["safe_url"] = safe_url
+
+
 def template_context(request: Request, **extra):
+    settings = request.app.state.settings
     return {
         "request": request,
         "current_user": getattr(request.state, "user", None),
         "csrf_token": get_csrf_cookie(request) or "",
         "record_estimate": "250M+",
+        "csp_nonce": getattr(request.state, "csp_nonce", ""),
+        "maintenance_mode": settings.maintenance_mode,
+        "maintenance_message": settings.maintenance_message,
         **extra,
     }

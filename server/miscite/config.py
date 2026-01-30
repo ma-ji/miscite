@@ -62,9 +62,15 @@ class Settings:
     db_url: str
     storage_dir: Path
     max_upload_mb: int
+    max_body_mb: int
+    max_unpacked_mb: int
     session_days: int
 
     log_level: str
+    text_extract_backend: str
+    text_extract_timeout_seconds: float
+    text_extract_subprocess: bool
+    accelerator: str
 
     crossref_mailto: str
     crossref_user_agent: str
@@ -141,15 +147,51 @@ class Settings:
     worker_processes: int
 
     cookie_secure: bool
+    trust_proxy: bool
+    maintenance_mode: bool
+    maintenance_message: str
+    load_shed_mode: bool
+    access_token_days: int
+    expose_sensitive_report_fields: bool
+
+    rate_limit_enabled: bool
+    rate_limit_window_seconds: int
+    rate_limit_login: int
+    rate_limit_register: int
+    rate_limit_upload: int
+    rate_limit_report_access: int
+    rate_limit_events: int
+    rate_limit_stream: int
+    rate_limit_api: int
+
+    job_stale_seconds: int
+    job_stale_action: str
+    job_max_attempts: int
+    job_reap_interval_seconds: int
+
+    upload_scan_enabled: bool
+    upload_scan_command: str
+    upload_scan_timeout_seconds: float
 
     @classmethod
     def from_env(cls) -> "Settings":
         db_url = _env_str("MISCITE_DB_URL", "sqlite:///./data/miscite.db")
         storage_dir = Path(_env_str("MISCITE_STORAGE_DIR", "./data/uploads"))
         max_upload_mb = _env_int("MISCITE_MAX_UPLOAD_MB", 50, min_value=1, max_value=2000)
+        max_body_mb = _env_int("MISCITE_MAX_BODY_MB", max_upload_mb + 5, min_value=1, max_value=4000)
+        max_unpacked_mb = _env_int("MISCITE_MAX_UNPACKED_MB", max(200, max_upload_mb * 5), min_value=10, max_value=20000)
         session_days = _env_int("MISCITE_SESSION_DAYS", 14, min_value=1, max_value=3650)
 
         log_level = _env_str("MISCITE_LOG_LEVEL", "INFO")
+        text_extract_backend = _env_str("MISCITE_TEXT_EXTRACT_BACKEND", "markitdown").lower()
+        if text_extract_backend not in {"markitdown", "docling"}:
+            raise ValueError("MISCITE_TEXT_EXTRACT_BACKEND must be 'markitdown' or 'docling'.")
+        text_extract_timeout_seconds = _env_float("MISCITE_TEXT_EXTRACT_TIMEOUT_SECONDS", 120.0, min_value=10.0, max_value=1200.0)
+        text_extract_subprocess = _env_bool("MISCITE_TEXT_EXTRACT_SUBPROCESS", True)
+
+        accelerator = _env_str("MISCITE_ACCELERATOR", "cpu").lower()
+        if accelerator not in {"cpu", "gpu"}:
+            raise ValueError("MISCITE_ACCELERATOR must be 'cpu' or 'gpu'.")
 
         crossref_mailto = _env_str("MISCITE_CROSSREF_MAILTO", "")
         crossref_user_agent = _env_str(
@@ -258,13 +300,56 @@ class Settings:
         worker_processes = _env_int("MISCITE_WORKER_PROCESSES", 1, min_value=1, max_value=max(1, cpu_count * 8))
 
         cookie_secure = _env_bool("MISCITE_COOKIE_SECURE", False)
+        trust_proxy = _env_bool("MISCITE_TRUST_PROXY", False)
+        maintenance_mode = _env_bool("MISCITE_MAINTENANCE_MODE", False)
+        maintenance_message = _env_str(
+            "MISCITE_MAINTENANCE_MESSAGE",
+            "Maintenance in progress. Uploads are temporarily disabled.",
+        )
+        load_shed_mode = _env_bool("MISCITE_LOAD_SHED_MODE", False)
+        access_token_days = _env_int("MISCITE_ACCESS_TOKEN_DAYS", 30, min_value=1, max_value=3650)
+        expose_sensitive_report_fields = _env_bool("MISCITE_EXPOSE_SENSITIVE_REPORT_FIELDS", False)
+
+        rate_limit_enabled = _env_bool("MISCITE_RATE_LIMIT_ENABLED", True)
+        rate_limit_window_seconds = _env_int("MISCITE_RATE_LIMIT_WINDOW_SECONDS", 60, min_value=1, max_value=3600)
+        rate_limit_login = _env_int("MISCITE_RATE_LIMIT_LOGIN", 12, min_value=1, max_value=1000)
+        rate_limit_register = _env_int("MISCITE_RATE_LIMIT_REGISTER", 6, min_value=1, max_value=1000)
+        rate_limit_upload = _env_int("MISCITE_RATE_LIMIT_UPLOAD", 6, min_value=1, max_value=1000)
+        rate_limit_report_access = _env_int("MISCITE_RATE_LIMIT_REPORT_ACCESS", 20, min_value=1, max_value=1000)
+        rate_limit_events = _env_int("MISCITE_RATE_LIMIT_EVENTS", 120, min_value=1, max_value=5000)
+        rate_limit_stream = _env_int("MISCITE_RATE_LIMIT_STREAM", 6, min_value=1, max_value=1000)
+        rate_limit_api = _env_int("MISCITE_RATE_LIMIT_API", 120, min_value=1, max_value=5000)
+
+        job_stale_seconds = _env_int("MISCITE_JOB_STALE_SECONDS", 3600, min_value=60, max_value=86_400)
+        job_stale_action = _env_str("MISCITE_JOB_STALE_ACTION", "fail").lower()
+        if job_stale_action not in {"fail", "requeue"}:
+            raise ValueError("MISCITE_JOB_STALE_ACTION must be 'fail' or 'requeue'.")
+        job_max_attempts = _env_int("MISCITE_JOB_MAX_ATTEMPTS", 2, min_value=1, max_value=10)
+        job_reap_interval_seconds = _env_int("MISCITE_JOB_REAP_INTERVAL_SECONDS", 60, min_value=5, max_value=3600)
+
+        upload_scan_enabled = _env_bool("MISCITE_UPLOAD_SCAN_ENABLED", False)
+        upload_scan_command = _env_str("MISCITE_UPLOAD_SCAN_COMMAND", "")
+        upload_scan_timeout_seconds = _env_float("MISCITE_UPLOAD_SCAN_TIMEOUT_SECONDS", 45.0, min_value=5.0, max_value=600.0)
+
+        if load_shed_mode:
+            enable_deep_analysis = False
+            enable_deep_analysis_llm_key_selection = False
+            enable_deep_analysis_llm_suggestions = False
+            llm_max_calls = min(llm_max_calls, 5)
+            llm_match_max_calls = min(llm_match_max_calls, 10)
 
         return cls(
             db_url=db_url,
             storage_dir=storage_dir,
             max_upload_mb=max_upload_mb,
+            max_body_mb=max_body_mb,
+            max_unpacked_mb=max_unpacked_mb,
             session_days=session_days,
             log_level=log_level,
+            text_extract_backend=text_extract_backend,
+            text_extract_timeout_seconds=text_extract_timeout_seconds,
+            text_extract_subprocess=text_extract_subprocess,
+            accelerator=accelerator,
             crossref_mailto=crossref_mailto,
             crossref_user_agent=crossref_user_agent,
             retractionwatch_csv=retractionwatch_csv,
@@ -327,4 +412,26 @@ class Settings:
             worker_poll_seconds=worker_poll_seconds,
             worker_processes=worker_processes,
             cookie_secure=cookie_secure,
+            trust_proxy=trust_proxy,
+            maintenance_mode=maintenance_mode,
+            maintenance_message=maintenance_message,
+            load_shed_mode=load_shed_mode,
+            access_token_days=access_token_days,
+            expose_sensitive_report_fields=expose_sensitive_report_fields,
+            rate_limit_enabled=rate_limit_enabled,
+            rate_limit_window_seconds=rate_limit_window_seconds,
+            rate_limit_login=rate_limit_login,
+            rate_limit_register=rate_limit_register,
+            rate_limit_upload=rate_limit_upload,
+            rate_limit_report_access=rate_limit_report_access,
+            rate_limit_events=rate_limit_events,
+            rate_limit_stream=rate_limit_stream,
+            rate_limit_api=rate_limit_api,
+            job_stale_seconds=job_stale_seconds,
+            job_stale_action=job_stale_action,
+            job_max_attempts=job_max_attempts,
+            job_reap_interval_seconds=job_reap_interval_seconds,
+            upload_scan_enabled=upload_scan_enabled,
+            upload_scan_command=upload_scan_command,
+            upload_scan_timeout_seconds=upload_scan_timeout_seconds,
         )

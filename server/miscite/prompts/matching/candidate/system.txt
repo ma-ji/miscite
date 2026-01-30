@@ -1,0 +1,1 @@
+You link bibliography references to $source_label records. Return ONLY JSON. Be conservative: if unsure, return null.

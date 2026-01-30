@@ -42,12 +42,13 @@
                 class="ds-stack ds-stack--tight"
                 data-upload-form
                 data-billing-disabled="{{ 'true' if (billing_required and not subscription_active) else 'false' }}"
+                data-maintenance-disabled="{{ 'true' if maintenance_mode else 'false' }}"
               >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <div class="form-field">
                   <label class="form-label" for="file">Manuscript file</label>
                   <div
-                    class="ds-dropzone {{ 'is-disabled' if (billing_required and not subscription_active) else '' }}"
+                    class="ds-dropzone {{ 'is-disabled' if (billing_required and not subscription_active) or maintenance_mode else '' }}"
                     data-dropzone
                   >
                     <input
@@ -57,7 +58,7 @@
                       name="file"
                       accept=".pdf,.docx"
                       aria-describedby="upload-constraints upload-selected"
-                      {{ "disabled" if (billing_required and not subscription_active) else "" }}
+                      {{ "disabled" if (billing_required and not subscription_active) or maintenance_mode else "" }}
                     />
                     <div class="ds-dropzone-body">
                       <span class="ds-dropzone-title">
@@ -133,7 +134,7 @@
                     type="submit"
                     data-upload-submit
                     disabled
-                    {{ "disabled" if (billing_required and not subscription_active) else "" }}
+                    {{ "disabled" if (billing_required and not subscription_active) or maintenance_mode else "" }}
                   >
                     Generate report
                   </button>
@@ -362,7 +363,7 @@
     </div>
   </section>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function () {
       var form = document.querySelector("[data-upload-form]");
       var filterForm = document.querySelector("[data-auto-submit]");
@@ -373,6 +374,7 @@
       var stateEl = form ? form.querySelector("[data-upload-state]") : null;
       var fileLabel = form ? form.querySelector("[data-dropzone-file]") : null;
       var billingBlocked = form ? form.dataset.billingDisabled === "true" : true;
+      var maintenanceBlocked = form ? form.dataset.maintenanceDisabled === "true" : true;
 
       var setState = function (state) {
         if (!stateEl) return;
@@ -382,7 +384,7 @@
       var updateSubmit = function () {
         if (!submitButton) return;
         var hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
-        submitButton.disabled = billingBlocked || !hasFile;
+        submitButton.disabled = billingBlocked || maintenanceBlocked || !hasFile;
       };
 
       if (fileInput) {
@@ -410,7 +412,7 @@
         ["dragenter", "dragover"].forEach(function (eventName) {
           dropzone.addEventListener(eventName, function (event) {
             event.preventDefault();
-            if (!billingBlocked) {
+            if (!billingBlocked && !maintenanceBlocked) {
               dropzone.classList.add("is-dragover");
             }
           });
@@ -432,7 +434,7 @@
         if (uploadModule) {
           uploadModule.scrollIntoView({ behavior: "smooth", block: "center" });
         }
-        if (fileInput && !billingBlocked) {
+        if (fileInput && !billingBlocked && !maintenanceBlocked) {
           fileInput.focus();
         }
       });

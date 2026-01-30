@@ -15,6 +15,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - Run web app: `python -m server.main` (or `make dev`).
 - Run worker: `python -m server.worker` (or `make worker`).
 - Combined: `bash scripts/dev.sh`.
+  - Optional flags for both web/worker: `--blank-db`, `--text-backend {markitdown,docling}`, `--accelerator {cpu,gpu}`.
 
 ## High-level architecture
 - **Web app**: `server/main.py` creates FastAPI app, mounts routes and static assets.
@@ -28,6 +29,9 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/worker.py`: worker process launcher.
 - `server/miscite/worker.py`: job loop, progress events, dataset auto-sync.
 - `server/miscite/analysis/`: text extraction, parsing, matching, checks, deep analysis.
+- `server/miscite/prompts/`: LLM prompts organized by stage (parsing/matching/checks/deep_analysis) with paired `system.txt` + `user.txt`.
+- `server/miscite/prompts/registry.yaml`: prompt catalog (purpose, inputs, schema).
+- `server/miscite/prompts/schemas/`: JSON Schemas for LLM prompt outputs.
 - `server/miscite/sources/`: OpenAlex, Crossref, arXiv, datasets, optional APIs, sync helpers.
 - `server/miscite/routes/`: auth, dashboard, billing, health endpoints.
 - `server/miscite/templates/`: Jinja UI (job report page relies on report JSON shape).
@@ -67,9 +71,11 @@ No migrations are present; schema changes require manual DB resets or a future m
 Settings live in `server/miscite/config.py` and `.env.example`. Critical env keys:
 - Required: `OPENROUTER_API_KEY`.
 - Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
+- Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate).
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys and flags.
+- Ops/security: maintenance mode, load shedding, rate limits, upload scan, job reaper, access-token TTL.
 
 If you add new env vars:
 - Update `server/miscite/config.py`.
@@ -95,6 +101,7 @@ If you add new env vars:
   - Predatory venue source must be enabled (CSV or API).
 - LLM parsing and inappropriate checks are mandatory; missing `OPENROUTER_API_KEY` or disabled `MISCITE_ENABLE_LLM_INAPPROPRIATE` fails jobs.
 - Docling is required for text extraction (`docling` package).
+- Stale RUNNING jobs are reaped based on `MISCITE_JOB_STALE_SECONDS`; be mindful of long-running documents.
 
 ## Common commands
 - `make dev` / `python -m server.main`: run web app.

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["citations", "notes"],
+  "properties": {
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "raw", "locator", "context"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["numeric", "author_year"]},
+          "raw": {"type": "string"},
+          "locator": {"type": "string"},
+          "context": {"type": "string"}
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import re
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from server.miscite.config import Settings
 from server.miscite.db import db_session, get_sessionmaker
 from server.miscite.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
+from server.miscite.rate_limit import acquire_stream_slot, enforce_rate_limit, release_stream_slot
 from server.miscite.security import access_token_hint, generate_access_token, hash_token, require_csrf, require_user
 from server.miscite.storage import save_upload
 from server.miscite.web import template_context, templates
@@ -56,6 +58,14 @@ def _relative_time(ts: dt.datetime | None) -> str:
     return f"{max(1, seconds // (86400 * 365))}y ago"
 
 
+def _safe_error_message(settings: Settings, message: str | None) -> str | None:
+    if not message:
+        return None
+    if settings.expose_sensitive_report_fields:
+        return message
+    return "Analysis failed. Please retry or contact support."
+
+
 def _load_report(job: AnalysisJob) -> dict | None:
     if not job.report_json:
         return None
@@ -63,6 +73,65 @@ def _load_report(job: AnalysisJob) -> dict | None:
         return json.loads(job.report_json)
     except Exception:
         return None
+
+
+def _token_expired(job: AnalysisJob) -> bool:
+    if job.access_token_hash and job.access_token_expires_at is None:
+        return True
+    if job.access_token_expires_at and job.access_token_expires_at < dt.datetime.now(dt.UTC):
+        return True
+    return False
+
+
+_PATH_HINT_RE = re.compile(r"(^/|[A-Za-z]:\\|\\.\\./|/data/|/home/)")
+_URL_HINT_RE = re.compile(r"^https?://", re.IGNORECASE)
+
+
+def _looks_sensitive(detail: str) -> bool:
+    if not detail:
+        return False
+    if _PATH_HINT_RE.search(detail):
+        return True
+    if _URL_HINT_RE.search(detail):
+        return True
+    return False
+
+
+def _redact_sources(sources: list[dict] | None) -> list[dict] | None:
+    if not sources:
+        return sources
+    redacted: list[dict] = []
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        name = str(src.get("name") or "").strip() or "Source"
+        detail = str(src.get("detail") or "").strip()
+        if "dataset" in name.lower() or "api" in name.lower() or _looks_sensitive(detail):
+            detail = "Available on request."
+        redacted.append({"name": name, "detail": detail})
+    return redacted
+
+
+def _redact_methodology(md: str | None) -> str | None:
+    if not md:
+        return md
+    lines = md.splitlines()
+    out: list[str] = []
+    skip = False
+    for line in lines:
+        header = line.strip().lower()
+        if header.startswith("## data sources used") or header.startswith("## configuration snapshot"):
+            skip = True
+            continue
+        if skip:
+            if header.startswith("## "):
+                skip = False
+            else:
+                continue
+        if skip:
+            continue
+        out.append(line)
+    return "\n".join(out).strip() or None
 
 
 @router.get("/")
@@ -91,6 +160,14 @@ def report_access_form(request: Request):
 
 @router.post("/reports/access")
 def report_access(request: Request, token: str = Form(""), db: Session = Depends(db_session)):
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="report-access",
+        limit=settings.rate_limit_report_access,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     token_value = token.strip()
     if not token_value:
         return templates.TemplateResponse(
@@ -120,6 +197,16 @@ def report_access(request: Request, token: str = Form(""), db: Session = Depends
         )
 
     job, doc = row
+    now = dt.datetime.now(dt.UTC)
+    if job.access_token_expires_at is None or job.access_token_expires_at < now:
+        return templates.TemplateResponse(
+            "report_access.html",
+            template_context(
+                request,
+                title="Get report",
+                access_error="That token has expired. Request a new token from the report owner.",
+            ),
+        )
     report = _load_report(job)
 
     return templates.TemplateResponse(
@@ -131,7 +218,8 @@ def report_access(request: Request, token: str = Form(""), db: Session = Depends
                 "id": job.id,
                 "status": job.status,
                 "filename": doc.original_filename,
-                "error_message": job.error_message,
+                "error_message": None,
+                "has_error": bool(job.error_message),
                 "access_token_hint": job.access_token_hint,
             },
             report=report,
@@ -205,7 +293,7 @@ def dashboard(
             "created_at_human": _human_date(job.created_at),
             "created_at_relative": _relative_time(job.created_at),
             "filename": doc.original_filename,
-            "error_message": job.error_message,
+            "error_message": _safe_error_message(settings, job.error_message),
         }
 
     jobs = [
@@ -216,7 +304,7 @@ def dashboard(
             "created_at_human": _human_date(job.created_at),
             "created_at_relative": _relative_time(job.created_at),
             "filename": doc.original_filename,
-            "error_message": job.error_message,
+            "error_message": _safe_error_message(settings, job.error_message),
         }
         for job, doc in rows
     ]
@@ -252,8 +340,17 @@ def upload(
 ):
     request.state.user = user
     settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="upload",
+        limit=settings.rate_limit_upload,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
 
     require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
 
     if settings.billing_enabled:
         billing = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user.id))
@@ -293,6 +390,7 @@ def job_page(
     db: Session = Depends(db_session),
 ):
     request.state.user = user
+    settings: Settings = request.app.state.settings
 
     row = db.execute(
         select(AnalysisJob, Document)
@@ -314,8 +412,10 @@ def job_page(
                 "id": job.id,
                 "status": job.status,
                 "filename": doc.original_filename,
-                "error_message": job.error_message,
+                "error_message": _safe_error_message(settings, job.error_message),
                 "access_token_hint": job.access_token_hint,
+                "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
+                "access_token_expired": _token_expired(job),
             },
             report=report,
             methodology_md=job.methodology_md or "",
@@ -333,7 +433,17 @@ def job_access_token(
     db: Session = Depends(db_session),
 ):
     request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-access-token",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
 
     row = db.execute(
         select(AnalysisJob, Document)
@@ -347,6 +457,7 @@ def job_access_token(
     token = generate_access_token()
     job.access_token_hash = hash_token(token)
     job.access_token_hint = access_token_hint(token)
+    job.access_token_expires_at = dt.datetime.now(dt.UTC) + dt.timedelta(days=settings.access_token_days)
     db.commit()
 
     report = _load_report(job)
@@ -360,8 +471,10 @@ def job_access_token(
                 "id": job.id,
                 "status": job.status,
                 "filename": doc.original_filename,
-                "error_message": job.error_message,
+                "error_message": _safe_error_message(settings, job.error_message),
                 "access_token_hint": job.access_token_hint,
+                "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
+                "access_token_expired": _token_expired(job),
             },
             report=report,
             methodology_md=job.methodology_md or "",
@@ -379,10 +492,24 @@ def job_api(
     db: Session = Depends(db_session),
 ):
     request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="api-jobs",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
 
     job = db.scalar(select(AnalysisJob).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id))
     if not job:
         raise HTTPException(status_code=404)
+
+    data_sources = json.loads(job.sources_json) if job.sources_json else None
+    methodology_md = job.methodology_md
+    if not settings.expose_sensitive_report_fields:
+        data_sources = _redact_sources(data_sources)
+        methodology_md = _redact_methodology(methodology_md)
 
     payload = {
         "id": job.id,
@@ -390,10 +517,10 @@ def job_api(
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
-        "error_message": job.error_message,
+        "error_message": _safe_error_message(settings, job.error_message),
         "report": json.loads(job.report_json) if job.report_json else None,
-        "data_sources": json.loads(job.sources_json) if job.sources_json else None,
-        "methodology_md": job.methodology_md,
+        "data_sources": data_sources,
+        "methodology_md": methodology_md,
     }
     return payload
 
@@ -417,6 +544,14 @@ def job_events(
     db: Session = Depends(db_session),
 ):
     request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-events",
+        limit=settings.rate_limit_events,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
 
     job = db.scalar(select(AnalysisJob).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id))
     if not job:
@@ -430,7 +565,7 @@ def job_events(
 
     return {
         "status": job.status,
-        "error_message": job.error_message,
+        "error_message": _safe_error_message(settings, job.error_message),
         "events": [_event_payload(ev) for ev in rows],
     }
 
@@ -443,7 +578,20 @@ async def job_stream(
 ):
     request.state.user = user
     settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-stream-open",
+        limit=settings.rate_limit_stream,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
     SessionLocal = get_sessionmaker(settings)
+    slot_key = acquire_stream_slot(
+        request,
+        settings=settings,
+        key="job-stream",
+        max_active=settings.rate_limit_stream,
+    )
 
     with SessionLocal() as db:
         job_exists = db.scalar(select(AnalysisJob.id).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id))
@@ -453,35 +601,38 @@ async def job_stream(
     async def event_stream():
         last_id = 0
         terminal = {JobStatus.completed.value, JobStatus.failed.value}
-        while True:
-            if await request.is_disconnected():
-                break
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
 
-            with SessionLocal() as db:
-                rows = db.execute(
-                    select(AnalysisJobEvent)
-                    .where(AnalysisJobEvent.job_id == job_id, AnalysisJobEvent.id > last_id)
-                    .order_by(AnalysisJobEvent.id)
-                ).scalars().all()
-                for ev in rows:
-                    payload = json.dumps(_event_payload(ev), ensure_ascii=False)
-                    yield f"event: progress\ndata: {payload}\n\n"
-                if rows:
-                    last_id = rows[-1].id
+                with SessionLocal() as db:
+                    rows = db.execute(
+                        select(AnalysisJobEvent)
+                        .where(AnalysisJobEvent.job_id == job_id, AnalysisJobEvent.id > last_id)
+                        .order_by(AnalysisJobEvent.id)
+                    ).scalars().all()
+                    for ev in rows:
+                        payload = json.dumps(_event_payload(ev), ensure_ascii=False)
+                        yield f"event: progress\ndata: {payload}\n\n"
+                    if rows:
+                        last_id = rows[-1].id
 
-                job = db.get(AnalysisJob, job_id)
-                if job:
-                    status_payload = json.dumps(
-                        {"status": job.status, "error_message": job.error_message},
-                        ensure_ascii=False,
-                    )
-                    yield f"event: status\ndata: {status_payload}\n\n"
-                    if job.status in terminal:
-                        done_payload = json.dumps({"status": job.status}, ensure_ascii=False)
-                        yield f"event: done\ndata: {done_payload}\n\n"
-                        break
+                    job = db.get(AnalysisJob, job_id)
+                    if job:
+                        status_payload = json.dumps(
+                            {"status": job.status, "error_message": _safe_error_message(settings, job.error_message)},
+                            ensure_ascii=False,
+                        )
+                        yield f"event: status\ndata: {status_payload}\n\n"
+                        if job.status in terminal:
+                            done_payload = json.dumps({"status": job.status}, ensure_ascii=False)
+                            yield f"event: done\ndata: {done_payload}\n\n"
+                            break
 
-            await asyncio.sleep(1.0)
+                await asyncio.sleep(1.0)
+        finally:
+            release_stream_slot(slot_key)
 
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)

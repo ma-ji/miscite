@@ -124,7 +124,7 @@ def set_csrf_cookie(response, *, token: str, settings: Settings) -> None:
     response.set_cookie(
         _CSRF_COOKIE_NAME,
         token,
-        httponly=False,
+        httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
         max_age=int(dt.timedelta(days=settings.session_days).total_seconds()),
