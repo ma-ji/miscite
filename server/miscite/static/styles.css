@@ -422,6 +422,31 @@ textarea {
   color: var(--text);
 }
 
+.miscite-wordmark {
+  position: relative;
+  display: inline-block;
+}
+
+.miscite-wordmark::after {
+  content: "";
+  position: absolute;
+  left: -0.06em;
+  right: -0.06em;
+  top: 62%;
+  height: 0.12em;
+  background: linear-gradient(90deg, var(--primary), var(--focus));
+  border-radius: 999px;
+  transform: rotate(-12deg);
+  transform-origin: center;
+  pointer-events: none;
+  opacity: 0.92;
+}
+
+a.miscite-wordmark:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
 .app-tag {
   font-size: var(--text-12);
   font-weight: 600;
