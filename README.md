@@ -155,6 +155,7 @@ Copy `.env.example` to `.env` and edit. Key settings:
 Notes:
 - `markitdown` supports multiple file types; use `docling` if you prefer its PDF/DOCX pipeline.
 - `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT=auto` chooses `fork` on Linux and `spawn` on macOS/Windows.
+- If you see `Text extraction timed out`, try increasing `MISCITE_TEXT_EXTRACT_TIMEOUT_SECONDS` (Docling on CPU can be slow) or set `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT=spawn`.
 - `gpu` uses CUDA via torch (local NLI only).
 
 Config values are validated at startup; out-of-range values raise errors. Key bounds:
