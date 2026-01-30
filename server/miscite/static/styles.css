@@ -3,6 +3,8 @@
   --bg: #ffffff;
   --surface: #f8efe2;
   --surface-2: #f5e3cc;
+  --header-bg: #ffffff;
+  --header-border: #e1e4e8;
   --control-bg: var(--bg);
   --control-bg-disabled: var(--border-soft);
   --text: #072332;
@@ -73,6 +75,8 @@
     --bg: #072332;
     --surface: rgba(248, 239, 226, 0.08);
     --surface-2: rgba(245, 227, 204, 0.14);
+    --header-bg: #0b2f42;
+    --header-border: rgba(248, 239, 226, 0.22);
     --control-bg: var(--surface-2);
     --control-bg-disabled: var(--surface);
     --text: #ffffff;
@@ -117,6 +121,8 @@
   --bg: #ffffff;
   --surface: #f8efe2;
   --surface-2: #f5e3cc;
+  --header-bg: #ffffff;
+  --header-border: #e1e4e8;
   --control-bg: var(--bg);
   --control-bg-disabled: var(--border-soft);
   --text: #072332;
@@ -160,6 +166,8 @@
   --bg: #072332;
   --surface: rgba(248, 239, 226, 0.08);
   --surface-2: rgba(245, 227, 204, 0.14);
+  --header-bg: #0b2f42;
+  --header-border: rgba(248, 239, 226, 0.22);
   --control-bg: var(--surface-2);
   --control-bg-disabled: var(--surface);
   --text: #ffffff;
@@ -220,6 +228,10 @@ body {
 img {
   max-width: 100%;
   display: block;
+}
+
+i.material-icons {
+  line-height: 1;
 }
 
 a {
@@ -383,8 +395,10 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-soft, var(--border));
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--header-border);
+  box-shadow: 0 1px 0 var(--header-border), var(--shadow-1);
+  backdrop-filter: saturate(140%) blur(10px);
 }
 
 .app-header-inner {
@@ -1049,6 +1063,12 @@ p {
   font-size: var(--text-14);
 }
 
+.landing-proof-item .ds-status {
+  height: 40px;
+  padding: 0 14px;
+  line-height: 1;
+}
+
 .landing-report {
   background: linear-gradient(135deg, var(--surface), var(--surface-2));
 }
@@ -1097,6 +1117,30 @@ p {
 .landing-cta {
   position: relative;
   overflow: hidden;
+}
+
+.landing-cta .ds-grid {
+  align-items: center;
+}
+
+.landing-cta .hero-actions {
+  justify-content: flex-end;
+}
+
+.landing-cta .hero-actions .ds-button {
+  min-width: 160px;
+}
+
+.landing-cta .card-content {
+  padding: var(--space-5);
+}
+
+.landing-trust-grid {
+  align-items: stretch;
+}
+
+.landing-trust-grid .ds-card {
+  height: 100%;
 }
 
 .landing-cta::after {
@@ -1605,6 +1649,12 @@ p {
 
 .ds-status i {
   font-size: 16px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ds-status--success {
@@ -2023,6 +2073,10 @@ input[readonly] {
 
   .ds-severity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-cta .hero-actions {
+    justify-content: flex-start;
   }
 }
 
