@@ -383,7 +383,7 @@ textarea {
 
 @media (max-width: 640px) {
   .ds-container {
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-5);
   }
 
   .ds-main {

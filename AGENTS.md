@@ -47,7 +47,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
 - `server/miscite/static/favicon.svg`: brand favicon (referenced in `base.html`).
 - `kb/`: research and promptbook material (not wired into the runtime app). Don't read or edit `promptbook.md`, it is for dev use.
-- `scripts/`: helper scripts (dev runner, Zotero helper).
+- `scripts/`: helper scripts (dev runner, nginx install, Zotero helper).
 
 ## Runtime data flow
 
@@ -136,6 +136,7 @@ If you add new env vars:
 - `make worker` / `python -m server.worker`: run worker.
 - `make sync-rw` / `python -m server.sync_retractionwatch`: sync retraction dataset.
 - `make sync-predatory` / `python -m server.sync_predatory`: sync predatory lists.
+- `bash scripts/install-nginx.sh`: install nginx and enable service.
 - `make check`: compile server modules.
 
 ## Extending the system
