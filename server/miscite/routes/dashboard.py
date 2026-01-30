@@ -7,10 +7,9 @@ import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import RedirectResponse, Response, StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
-from weasyprint import CSS, HTML
 
 from server.miscite.config import Settings
 from server.miscite.db import db_session, get_sessionmaker
@@ -91,6 +90,31 @@ def _token_expired(job: AnalysisJob) -> bool:
     if job.access_token_expires_at and job.access_token_expires_at < dt.datetime.now(dt.UTC):
         return True
     return False
+
+
+def _resolve_access_token(
+    db: Session,
+    token_value: str,
+) -> tuple[tuple[AnalysisJob, Document] | None, str | None]:
+    token_value = token_value.strip()
+    if not token_value:
+        return None, "Please enter an access token."
+
+    token_hash = hash_token(token_value)
+    row = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.access_token_hash == token_hash)
+        .limit(1)
+    ).first()
+    if not row:
+        return None, "That token was not recognized. Double-check and try again."
+
+    job, doc = row
+    now = dt.datetime.now(dt.UTC)
+    if job.access_token_expires_at is None or job.access_token_expires_at < now:
+        return None, "That token has expired. Request a new token from the report owner."
+    return (job, doc), None
 
 
 _PATH_HINT_RE = re.compile(r"(^/|[A-Za-z]:\\|\\.\\./|/data/|/home/)")
@@ -179,44 +203,42 @@ def report_access(request: Request, token: str = Form(""), db: Session = Depends
         window_seconds=settings.rate_limit_window_seconds,
     )
     token_value = token.strip()
-    if not token_value:
+    resolved, error = _resolve_access_token(db, token_value)
+    if error:
         return templates.TemplateResponse(
             "report_access.html",
             template_context(
                 request,
                 title="Get report",
-                access_error="Please enter an access token.",
+                access_error=error,
+            ),
+        )
+    return RedirectResponse(f"/reports/{token_value}", status_code=303)
+
+
+@router.get("/reports/{token}")
+def report_access_token(request: Request, token: str, db: Session = Depends(db_session)):
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="report-access",
+        limit=settings.rate_limit_report_access,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    token_value = token.strip()
+    resolved, error = _resolve_access_token(db, token_value)
+    if error:
+        return templates.TemplateResponse(
+            "report_access.html",
+            template_context(
+                request,
+                title="Get report",
+                access_error=error,
             ),
         )
 
-    token_hash = hash_token(token_value)
-    row = db.execute(
-        select(AnalysisJob, Document)
-        .join(Document, Document.id == AnalysisJob.document_id)
-        .where(AnalysisJob.access_token_hash == token_hash)
-        .limit(1)
-    ).first()
-    if not row:
-        return templates.TemplateResponse(
-            "report_access.html",
-            template_context(
-                request,
-                title="Get report",
-                access_error="That token was not recognized. Double-check and try again.",
-            ),
-        )
-
-    job, doc = row
-    now = dt.datetime.now(dt.UTC)
-    if job.access_token_expires_at is None or job.access_token_expires_at < now:
-        return templates.TemplateResponse(
-            "report_access.html",
-            template_context(
-                request,
-                title="Get report",
-                access_error="That token has expired. Request a new token from the report owner.",
-            ),
-        )
+    job, doc = resolved
     report = _load_report(job)
 
     return templates.TemplateResponse(
@@ -439,82 +461,6 @@ def job_page(
     )
 
 
-@router.get("/jobs/{job_id}/report.pdf")
-def job_report_pdf(
-    request: Request,
-    job_id: str,
-    user: User = Depends(require_user),
-    db: Session = Depends(db_session),
-):
-    request.state.user = user
-    settings: Settings = request.app.state.settings
-    enforce_rate_limit(
-        request,
-        settings=settings,
-        key="job-pdf",
-        limit=settings.rate_limit_api,
-        window_seconds=settings.rate_limit_window_seconds,
-    )
-
-    row = db.execute(
-        select(AnalysisJob, Document)
-        .join(Document, Document.id == AnalysisJob.document_id)
-        .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
-    ).first()
-    if not row:
-        raise HTTPException(status_code=404)
-    job, doc = row
-
-    report = _load_report(job)
-    if report is None:
-        raise HTTPException(status_code=404, detail="Report not available.")
-
-    ctx = template_context(
-        request,
-        title="Report PDF",
-        job={
-            "id": job.id,
-            "status": job.status,
-            "filename": doc.original_filename,
-            "error_message": _safe_error_message(settings, job.error_message),
-            "access_token_hint": job.access_token_hint,
-            "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
-            "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
-            if job.access_token_expires_at
-            else None,
-            "access_token_expired": _token_expired(job),
-        },
-        report=report,
-        methodology_md=job.methodology_md or "",
-        public_view=False,
-        pdf_view=True,
-        hide_report_access=True,
-    )
-
-    html = templates.get_template("job.html").render(ctx)
-    css_path = Path(__file__).resolve().parents[1] / "static" / "styles.css"
-    pdf_css = CSS(
-        string="""
-@page { size: letter; margin: 18mm; }
-body { background: #fff; }
-.app-header, .ds-footer, .skip-link { display: none !important; }
-.ds-main { padding-top: 0 !important; }
-"""
-    )
-    pdf_bytes = HTML(string=html, base_url=str(request.base_url)).write_pdf(
-        stylesheets=[CSS(filename=str(css_path)), pdf_css]
-    )
-
-    stem = Path(doc.original_filename).stem or "miscite-report"
-    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-") or "miscite-report"
-    filename = f"{safe_stem}-report.pdf"
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @router.post("/jobs/{job_id}/access-token")
 def job_access_token(
     request: Request,
@@ -630,6 +576,16 @@ def _event_payload(event: AnalysisJobEvent) -> dict:
     }
 
 
+def _require_access_job(db: Session, token_hash: str) -> AnalysisJob:
+    job = db.scalar(select(AnalysisJob).where(AnalysisJob.access_token_hash == token_hash))
+    if not job:
+        raise HTTPException(status_code=404)
+    now = dt.datetime.now(dt.UTC)
+    if job.access_token_expires_at is None or job.access_token_expires_at < now:
+        raise HTTPException(status_code=403, detail="Access token expired.")
+    return job
+
+
 @router.get("/api/jobs/{job_id}/events")
 def job_events(
     request: Request,
@@ -655,6 +611,37 @@ def job_events(
     rows = db.execute(
         select(AnalysisJobEvent)
         .where(AnalysisJobEvent.job_id == job_id, AnalysisJobEvent.id > since_id)
+        .order_by(AnalysisJobEvent.id)
+    ).scalars().all()
+
+    return {
+        "status": job.status,
+        "error_message": _safe_error_message(settings, job.error_message),
+        "events": [_event_payload(ev) for ev in rows],
+    }
+
+
+@router.get("/api/reports/{token}/events")
+def report_events(
+    request: Request,
+    token: str,
+    since_id: int = Query(0, ge=0),
+    db: Session = Depends(db_session),
+):
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="report-events",
+        limit=settings.rate_limit_events,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    token_hash = hash_token(token.strip())
+    job = _require_access_job(db, token_hash)
+
+    rows = db.execute(
+        select(AnalysisJobEvent)
+        .where(AnalysisJobEvent.job_id == job.id, AnalysisJobEvent.id > since_id)
         .order_by(AnalysisJobEvent.id)
     ).scalars().all()
 
@@ -724,6 +711,74 @@ async def job_stream(
                             done_payload = json.dumps({"status": job.status}, ensure_ascii=False)
                             yield f"event: done\ndata: {done_payload}\n\n"
                             break
+
+                await asyncio.sleep(1.0)
+        finally:
+            release_stream_slot(slot_key)
+
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+
+
+@router.get("/api/reports/{token}/stream")
+async def report_stream(
+    request: Request,
+    token: str,
+):
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="report-stream-open",
+        limit=settings.rate_limit_stream,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    token_hash = hash_token(token.strip())
+    SessionLocal = get_sessionmaker(settings)
+    slot_key = acquire_stream_slot(
+        request,
+        settings=settings,
+        key="report-stream",
+        max_active=settings.rate_limit_stream,
+    )
+
+    with SessionLocal() as db:
+        _require_access_job(db, token_hash)
+
+    async def event_stream():
+        last_id = 0
+        terminal = {JobStatus.completed.value, JobStatus.failed.value}
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                with SessionLocal() as db:
+                    try:
+                        job = _require_access_job(db, token_hash)
+                    except HTTPException:
+                        break
+
+                    rows = db.execute(
+                        select(AnalysisJobEvent)
+                        .where(AnalysisJobEvent.job_id == job.id, AnalysisJobEvent.id > last_id)
+                        .order_by(AnalysisJobEvent.id)
+                    ).scalars().all()
+                    for ev in rows:
+                        payload = json.dumps(_event_payload(ev), ensure_ascii=False)
+                        yield f"event: progress\ndata: {payload}\n\n"
+                    if rows:
+                        last_id = rows[-1].id
+
+                    status_payload = json.dumps(
+                        {"status": job.status, "error_message": _safe_error_message(settings, job.error_message)},
+                        ensure_ascii=False,
+                    )
+                    yield f"event: status\ndata: {status_payload}\n\n"
+                    if job.status in terminal:
+                        done_payload = json.dumps({"status": job.status}, ensure_ascii=False)
+                        yield f"event: done\ndata: {done_payload}\n\n"
+                        break
 
                 await asyncio.sleep(1.0)
         finally:

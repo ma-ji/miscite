@@ -1,3 +1,5 @@
+## Don't read or edit this file. For dev use
+
 THINK HARD: Build a fully functional citation check platform for academic manuscripts:
 
 1. User can upload a PDF file or MS word file.
@@ -287,5 +289,5 @@ THINK HARD: Work on the email delivery system and user system:
 1. Use Mailgun API for email.
 2. Simplify register process: enter email, send a random code to email, use that code as login credential. User can select remain signed in for: current window session, 7 days, 30 days.
 3. Merge the sign in and register buttons elsewhere given the new simplified process. Keep using the color for register.
-
-4. Access token is generated automatically once a job is started and sent to email, with related information. Use can use this token to check the progress or access the report.
+4. Generate an access token automatically once a job starts and email it with the related information. Users can use this token to check progress or access the report.
+5. By default, the access token and report are valid for 7 days and then auto-deleted.

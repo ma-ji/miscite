@@ -575,6 +575,14 @@ textarea {
   text-decoration: none;
 }
 
+.app-report-button {
+  color: var(--primary);
+}
+
+.app-report-button:hover {
+  color: var(--primary-hover);
+}
+
 .ds-button[disabled] {
   opacity: 0.6;
   cursor: not-allowed;

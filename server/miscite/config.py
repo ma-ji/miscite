@@ -357,7 +357,7 @@ class Settings:
             "Maintenance in progress. Uploads are temporarily disabled.",
         )
         load_shed_mode = _env_bool("MISCITE_LOAD_SHED_MODE", False)
-        access_token_days = _env_int("MISCITE_ACCESS_TOKEN_DAYS", 30, min_value=1, max_value=3650)
+        access_token_days = _env_int("MISCITE_ACCESS_TOKEN_DAYS", 7, min_value=1, max_value=3650)
         expose_sensitive_report_fields = _env_bool("MISCITE_EXPOSE_SENSITIVE_REPORT_FIELDS", False)
 
         rate_limit_enabled = _env_bool("MISCITE_RATE_LIMIT_ENABLED", True)

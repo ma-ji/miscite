@@ -59,6 +59,7 @@ def template_context(request: Request, **extra):
         "current_user": getattr(request.state, "user", None),
         "csrf_token": get_csrf_cookie(request) or "",
         "record_estimate": "250M+",
+        "access_token_days": settings.access_token_days,
         "csp_nonce": getattr(request.state, "csp_nonce", ""),
         "maintenance_mode": settings.maintenance_mode,
         "maintenance_message": settings.maintenance_message,

@@ -170,7 +170,7 @@ Config values are validated at startup; out-of-range values raise errors. Key bo
 - `MISCITE_MAINTENANCE_MODE` (default: `false`) – disables uploads/rotations/billing writes, keeps read-only access
 - `MISCITE_MAINTENANCE_MESSAGE` – banner text shown in the UI
 - `MISCITE_LOAD_SHED_MODE` (default: `false`) – disables deep analysis and clamps LLM call budgets
-- `MISCITE_ACCESS_TOKEN_DAYS` (default: `30`) – report access tokens expire after this many days
+- `MISCITE_ACCESS_TOKEN_DAYS` (default: `7`) – report access tokens expire after this many days (reports are deleted after expiry)
 - `MISCITE_EXPOSE_SENSITIVE_REPORT_FIELDS` (default: `false`) – expose full data source details + configuration snapshots in `/api/jobs/{id}`
 
 ### Rate limiting

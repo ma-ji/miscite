@@ -86,6 +86,7 @@ def login_page(request: Request, email: str | None = None, session_length: str |
             title="Sign in",
             login_email=email or "",
             session_choice=session_choice,
+            login_step="request",
             code_sent=False,
             login_code_length=settings.login_code_length,
             login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -120,6 +121,7 @@ def login_request(
                 title="Sign in",
                 login_email="",
                 session_choice=session_choice,
+                login_step="request",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -137,6 +139,7 @@ def login_request(
                 title="Sign in",
                 login_email=normalized_email,
                 session_choice=session_choice,
+                login_step="request",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -159,6 +162,7 @@ def login_request(
                 title="Sign in",
                 login_email=normalized_email,
                 session_choice=session_choice,
+                login_step="request",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -176,6 +180,7 @@ def login_request(
                 title="Sign in",
                 login_email=normalized_email,
                 session_choice=session_choice,
+                login_step="request",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -209,6 +214,7 @@ def login_request(
                 title="Sign in",
                 login_email=normalized_email,
                 session_choice=session_choice,
+                login_step="request",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -226,6 +232,7 @@ def login_request(
             title="Sign in",
             login_email=normalized_email,
             session_choice=session_choice,
+            login_step="verify",
             code_sent=True,
             login_code_length=settings.login_code_length,
             login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -254,7 +261,7 @@ def login_verify(
     normalized_email = _normalize_email(email)
     code_value = "".join(code.split())
     session_choice, session_days, persistent = _session_choice(session_length, settings)
-    if not normalized_email or not code_value:
+    if not normalized_email:
         return templates.TemplateResponse(
             "login.html",
             template_context(
@@ -262,11 +269,29 @@ def login_verify(
                 title="Sign in",
                 login_email=normalized_email,
                 session_choice=session_choice,
+                login_step="request",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
                 turnstile_site_key=settings.turnstile_site_key,
-                flash={"level": "red", "message": "Enter your email and code."},
+                flash={"level": "red", "message": "Enter your email first."},
+            ),
+            status_code=400,
+        )
+    if not code_value:
+        return templates.TemplateResponse(
+            "login.html",
+            template_context(
+                request,
+                title="Sign in",
+                login_email=normalized_email,
+                session_choice=session_choice,
+                login_step="verify",
+                code_sent=False,
+                login_code_length=settings.login_code_length,
+                login_code_ttl_minutes=settings.login_code_ttl_minutes,
+                turnstile_site_key=settings.turnstile_site_key,
+                flash={"level": "red", "message": "Enter your sign-in code."},
             ),
             status_code=400,
         )
@@ -287,6 +312,7 @@ def login_verify(
                 title="Sign in",
                 login_email=normalized_email,
                 session_choice=session_choice,
+                login_step="verify",
                 code_sent=False,
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
@@ -306,6 +332,7 @@ def login_verify(
                     title="Sign in",
                     login_email=normalized_email,
                     session_choice=session_choice,
+                    login_step="verify",
                     code_sent=False,
                     login_code_length=settings.login_code_length,
                     login_code_ttl_minutes=settings.login_code_ttl_minutes,

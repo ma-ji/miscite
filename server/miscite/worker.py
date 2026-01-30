@@ -4,17 +4,29 @@ import datetime as dt
 import json
 import logging
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from server.miscite.analysis.pipeline import analyze_document
 from server.miscite.config import Settings
 from server.miscite.db import get_sessionmaker, init_db
-from server.miscite.models import AnalysisJob, AnalysisJobEvent, Document, JobStatus
+from server.miscite.email import send_access_token_email
+from server.miscite.models import AnalysisJob, AnalysisJobEvent, Document, JobStatus, User
+from server.miscite.security import access_token_hint, generate_access_token, hash_token
 from server.miscite.sources.predatory_sync import sync_predatory_datasets
 from server.miscite.sources.retractionwatch_sync import sync_retractionwatch_dataset
+
+
+@dataclass(frozen=True)
+class _AccessTokenEmail:
+    token: str
+    to_email: str
+    job_id: str
+    filename: str
+    expires_at: dt.datetime
 
 
 def _claim_next_job(db: Session) -> str | None:
@@ -52,6 +64,42 @@ def _load_job(db: Session, job_id: str) -> tuple[AnalysisJob, Document] | None:
     if not doc:
         return None
     return job, doc
+
+
+def _ensure_access_token(settings: Settings, job_id: str) -> _AccessTokenEmail | None:
+    SessionLocal = get_sessionmaker(settings)
+    db = SessionLocal()
+    try:
+        row = db.execute(
+            select(AnalysisJob, Document, User)
+            .join(Document, Document.id == AnalysisJob.document_id)
+            .join(User, User.id == AnalysisJob.user_id)
+            .where(AnalysisJob.id == job_id)
+        ).first()
+        if not row:
+            return None
+        job, doc, user = row
+        now = dt.datetime.now(dt.UTC)
+        if job.access_token_hash and job.access_token_expires_at and job.access_token_expires_at >= now:
+            return None
+        token = generate_access_token()
+        job.access_token_hash = hash_token(token)
+        job.access_token_hint = access_token_hint(token)
+        job.access_token_expires_at = now + dt.timedelta(days=settings.access_token_days)
+        db.add(job)
+        db.commit()
+        return _AccessTokenEmail(
+            token=token,
+            to_email=user.email,
+            job_id=job.id,
+            filename=doc.original_filename,
+            expires_at=job.access_token_expires_at,
+        )
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _process_job(settings: Settings, job_id: str) -> None:
@@ -165,6 +213,45 @@ def _reap_stale_jobs(settings: Settings) -> None:
         db.close()
 
 
+def _reap_expired_jobs(settings: Settings) -> None:
+    SessionLocal = get_sessionmaker(settings)
+    db = SessionLocal()
+    expired_paths: list[str] = []
+    committed = False
+    try:
+        now = dt.datetime.now(dt.UTC)
+        rows = db.execute(
+            select(AnalysisJob, Document)
+            .join(Document, Document.id == AnalysisJob.document_id)
+            .where(
+                AnalysisJob.access_token_expires_at.is_not(None),
+                AnalysisJob.access_token_expires_at < now,
+                AnalysisJob.status.in_([JobStatus.completed.value, JobStatus.failed.value]),
+            )
+        ).all()
+        if not rows:
+            return
+        for job, doc in rows:
+            expired_paths.append(doc.storage_path)
+            db.execute(delete(AnalysisJobEvent).where(AnalysisJobEvent.job_id == job.id))
+            db.delete(job)
+            db.delete(doc)
+        db.commit()
+        committed = True
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+    if not committed:
+        return
+    for path in expired_paths:
+        try:
+            Path(path).unlink()
+        except OSError:
+            pass
+
+
 def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
     logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
     log = logging.getLogger(f"miscite.worker.{process_index}")
@@ -208,6 +295,7 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
 
         if time.time() >= next_reap_at:
             _reap_stale_jobs(settings)
+            _reap_expired_jobs(settings)
             next_reap_at = time.time() + float(settings.job_reap_interval_seconds)
 
         db = SessionLocal()
@@ -223,6 +311,25 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
         if not job_id:
             time.sleep(settings.worker_poll_seconds)
             continue
+
+        try:
+            payload = _ensure_access_token(settings, job_id)
+        except Exception as e:
+            payload = None
+            log.warning("Failed to issue access token for job %s: %s", job_id, e)
+        if payload:
+            try:
+                send_access_token_email(
+                    settings,
+                    to_email=payload.to_email,
+                    token=payload.token,
+                    job_id=payload.job_id,
+                    filename=payload.filename,
+                    expires_at=payload.expires_at,
+                )
+                log.info("Sent access token email for job %s", job_id)
+            except Exception as e:
+                log.warning("Failed to send access token email for job %s: %s", job_id, e)
 
         log.info("Processing job %s", job_id)
         try:

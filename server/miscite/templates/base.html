@@ -4,21 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title or "miscite" }}</title>
-    {% if not pdf_view %}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap"
-      />
-    {% endif %}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" />
     <meta name="color-scheme" content="light dark" />
-    {% if not pdf_view %}
-      <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-    {% endif %}
-    {% if not pdf_view %}
-      <link rel="stylesheet" href="/static/styles.css" />
-    {% endif %}
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -47,7 +38,7 @@
         </nav>
         <div class="app-actions">
           {% if not hide_report_access %}
-            <a class="ds-button ds-button--ghost ds-button--sm" href="/reports/access">Get report</a>
+            <a class="ds-button ds-button--ghost ds-button--sm app-report-button" href="/reports/access">Get report</a>
           {% endif %}
           {% if current_user %}
             <form method="post" action="/logout">

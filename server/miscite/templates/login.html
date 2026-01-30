@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+  {% set active_step = login_step or ("verify" if code_sent else "request") %}
   <section class="ds-section">
     <div class="ds-grid">
       <div class="span-6">
@@ -17,90 +18,152 @@
         </ul>
       </div>
       <div class="span-6">
-        <div class="ds-card">
+        <div class="ds-card ds-card--hero">
           <div class="card-content">
-            <h3>Get a sign-in code</h3>
-            <form method="post" action="/login/request" class="ds-stack">
-              <div class="form-field">
-                <label class="form-label" for="email">Email</label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  autocomplete="email"
-                  value="{{ login_email }}"
-                />
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="session-length">Stay signed in for</label>
-                <select id="session-length" name="session_length">
-                  <option value="session" {{ "selected" if session_choice == "session" else "" }}>
-                    This browser session
-                  </option>
-                  <option value="7" {{ "selected" if session_choice == "7" else "" }}>7 days</option>
-                  <option value="30" {{ "selected" if session_choice == "30" else "" }}>30 days</option>
-                </select>
-                <p class="form-help">
-                  We will email a {{ login_code_length }}-digit code. It expires in {{ login_code_ttl_minutes }} minutes.
-                </p>
-              </div>
-              <div class="form-field">
-                <div
-                  class="cf-turnstile"
-                  data-sitekey="{{ turnstile_site_key }}"
-                  data-theme="auto"
-                ></div>
-              </div>
-              <button class="ds-button ds-button--primary" type="submit">Email code</button>
-            </form>
+            <h2>Get access</h2>
+            <p class="form-help">
+              No password required. We’ll email a short code to confirm it’s you.
+            </p>
+          </div>
+          <div class="card-content">
+            <div class="ds-disclosure-list">
+              <details class="ds-disclosure" {% if active_step == "request" %}open{% endif %}>
+                <summary class="ds-disclosure-summary">
+                  <i class="material-icons ds-disclosure-icon" aria-hidden="true">mail</i>
+                  <span class="ds-disclosure-type">Step 1</span>
+                  <span class="ds-disclosure-title">Email me a sign-in code</span>
+                  <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                </summary>
+                <div class="ds-disclosure-body">
+                  <form
+                    method="post"
+                    action="/login/request"
+                    class="ds-stack"
+                    data-disable-on-submit
+                    data-loading-text="Sending…"
+                  >
+                    <div class="form-field">
+                      <label class="form-label" for="email">Email</label>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        required
+                        autocomplete="email"
+                        autocapitalize="none"
+                        spellcheck="false"
+                        value="{{ login_email }}"
+                        {% if active_step == "request" %}autofocus{% endif %}
+                      />
+                    </div>
+                    <div class="form-field">
+                      <label class="form-label" for="session-length">Stay signed in for</label>
+                      <select
+                        id="session-length"
+                        name="session_length"
+                        aria-describedby="login-request-help"
+                        required
+                      >
+                        <option value="session" {{ "selected" if session_choice == "session" else "" }}>
+                          This browser session
+                        </option>
+                        <option value="7" {{ "selected" if session_choice == "7" else "" }}>7 days</option>
+                        <option value="30" {{ "selected" if session_choice == "30" else "" }}>30 days</option>
+                      </select>
+                      <p class="form-help" id="login-request-help">
+                        We will email a {{ login_code_length }}-digit code. It expires in {{ login_code_ttl_minutes }} minutes.
+                      </p>
+                    </div>
+                    {% if turnstile_site_key %}
+                      <div class="form-field">
+                        <div
+                          class="cf-turnstile"
+                          data-sitekey="{{ turnstile_site_key }}"
+                          data-theme="auto"
+                        ></div>
+                      </div>
+                    {% endif %}
+                    <button class="ds-button ds-button--primary" type="submit">Email code</button>
+                  </form>
+                </div>
+              </details>
+
+              <details class="ds-disclosure" {% if active_step == "verify" %}open{% endif %}>
+                <summary class="ds-disclosure-summary">
+                  <i class="material-icons ds-disclosure-icon" aria-hidden="true">verified_user</i>
+                  <span class="ds-disclosure-type">Step 2</span>
+                  <span class="ds-disclosure-title">Enter your code</span>
+                  <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                </summary>
+                <div class="ds-disclosure-body">
+                  <form
+                    method="post"
+                    action="/login/verify"
+                    class="ds-stack"
+                    data-disable-on-submit
+                    data-loading-text="Signing in…"
+                  >
+                    <input type="hidden" name="email" value="{{ login_email }}" />
+                    <input type="hidden" name="session_length" value="{{ session_choice }}" />
+
+                    {% if login_email %}
+                      <p class="form-help">
+                        Signing in as <span class="miscite-mono">{{ login_email }}</span>.
+                      </p>
+                    {% else %}
+                      <p class="form-help">
+                        Enter your email in Step 1 first.
+                      </p>
+                    {% endif %}
+                    <div class="form-field">
+                      <label class="form-label" for="code">Sign-in code</label>
+                      <input
+                        id="code"
+                        name="code"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        maxlength="{{ login_code_length }}"
+                        minlength="{{ login_code_length }}"
+                        pattern="[0-9]{{ '{' }}{{ login_code_length }}{{ '}' }}"
+                        required
+                        aria-describedby="login-verify-help"
+                        {% if active_step == "verify" %}autofocus{% endif %}
+                      />
+                      <p class="form-help" id="login-verify-help">
+                        Enter the {{ login_code_length }} digits from your email. If you didn’t get one, reopen Step 1 to resend.
+                      </p>
+                    </div>
+                    <button class="ds-button ds-button--secondary" type="submit">Sign in</button>
+                  </form>
+                </div>
+              </details>
+            </div>
           </div>
           <div class="card-action">
-            <span class="miscite-muted">Have a code?</span>
-            <span>Enter it below.</span>
-          </div>
-          <div class="card-content">
-            <h3>Enter your code</h3>
-            <form method="post" action="/login/verify" class="ds-stack">
-              <div class="form-field">
-                <label class="form-label" for="verify-email">Email</label>
-                <input
-                  id="verify-email"
-                  name="email"
-                  type="email"
-                  required
-                  autocomplete="email"
-                  value="{{ login_email }}"
-                />
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="code">Sign-in code</label>
-                <input
-                  id="code"
-                  name="code"
-                  type="text"
-                  inputmode="numeric"
-                  autocomplete="one-time-code"
-                  maxlength="{{ login_code_length }}"
-                  required
-                />
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="verify-session-length">Stay signed in for</label>
-                <select id="verify-session-length" name="session_length">
-                  <option value="session" {{ "selected" if session_choice == "session" else "" }}>
-                    This browser session
-                  </option>
-                  <option value="7" {{ "selected" if session_choice == "7" else "" }}>7 days</option>
-                  <option value="30" {{ "selected" if session_choice == "30" else "" }}>30 days</option>
-                </select>
-              </div>
-              <button class="ds-button ds-button--secondary" type="submit">Sign in</button>
-            </form>
+            <span class="miscite-muted">Secure, passwordless access.</span>
+            <span class="miscite-muted">We only email sign-in codes.</span>
           </div>
         </div>
       </div>
     </div>
   </section>
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% if turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% endif %}
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function () {
+      document.querySelectorAll("[data-disable-on-submit]").forEach(function (form) {
+        form.addEventListener("submit", function () {
+          var button = form.querySelector("button[type='submit']");
+          if (!button) return;
+          button.disabled = true;
+          var loadingText = form.getAttribute("data-loading-text");
+          if (loadingText) {
+            button.textContent = loadingText;
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}

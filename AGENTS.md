@@ -3,13 +3,16 @@
 Repository guide for future assistants working on **miscite**.
 
 ## Project conventions
+
 - Keep this AGENTS.md up to date; update it whenever the codebase structure, workflows, or contracts change.
 - This project is in active development; do not preserve backward compatibility or add fallbacks unless explicitly requested.
 
 ## Product summary
+
 miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It parses in-text citations and bibliography entries, resolves references against metadata sources, flags issues (missing refs, retractions, predatory venues, potentially inappropriate citations), and renders a traceable report in a FastAPI + Jinja UI.
 
 ## Quickstart (dev)
+
 - Install deps: `pip install -r requirements.txt` (optional NLI: `pip install -r requirements-optional.txt`).
 - Configure env: copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
 - Run web app: `python -m server.main` (or `make dev`).
@@ -18,6 +21,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
   - Optional flags for both web/worker: `--blank-db`, `--text-backend {markitdown,docling}`, `--accelerator {cpu,gpu}`, `--debug`.
 
 ## High-level architecture
+
 - **Web app**: `server/main.py` creates FastAPI app, mounts routes and static assets.
 - **Worker**: `server/worker.py` spawns one or more worker processes; `server/miscite/worker.py` runs the job loop.
 - **DB**: SQLAlchemy models in `server/miscite/models.py`, SQLite by default.
@@ -25,6 +29,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - **Analysis pipeline**: `server/miscite/analysis/pipeline.py` is the main orchestration.
 
 ## Repository map
+
 - `server/main.py`: FastAPI entrypoint.
 - `server/worker.py`: worker process launcher.
 - `server/miscite/worker.py`: job loop, progress events, dataset auto-sync.
@@ -39,12 +44,13 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/templates/`: Jinja UI (job report page relies on report JSON shape).
 - `server/miscite/templates/report_access.html`: token-based public report access form.
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
-- `kb/`: research and promptbook material (not wired into the runtime app).
+- `kb/`: research and promptbook material (not wired into the runtime app). Don't read or edit `promptbook.md`, it is for dev use.
 - `scripts/`: helper scripts (dev runner, Zotero helper).
 
 ## Runtime data flow
+
 1) **Upload** (`/upload`): `server/miscite/storage.py` saves PDF/DOCX and creates `Document` + `AnalysisJob` rows.
-2) **Worker claims job**: `server/miscite/worker.py` updates job to RUNNING and writes `AnalysisJobEvent` progress rows.
+2) **Worker claims job**: `server/miscite/worker.py` updates job to RUNNING, issues an access token (emailed to the user), and writes `AnalysisJobEvent` progress rows.
 3) **Analyze document**: `server/miscite/analysis/pipeline.py`:
    - Text extraction via Docling (`analysis/docling_extract.py`).
    - LLM parsing (OpenRouter) to get bibliography + citations (`analysis/llm_parsing.py`).
@@ -55,12 +61,16 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON.
 
 ## Report schema contract
+
 The report JSON returned by `analysis/pipeline.py` is rendered in `server/miscite/templates/job.html` and returned by `/api/jobs/{id}`. If you add new issue types, summary fields, or change schema, update:
+
 - `server/miscite/templates/job.html`
 - any clients reading `/api/jobs/{id}`
 
 ## Data model (SQLAlchemy)
+
 Defined in `server/miscite/models.py`:
+
 - `User` / `UserSession`: auth + session cookies.
 - `LoginCode`: short-lived email sign-in codes.
 - `Document`: uploaded file metadata.
@@ -71,7 +81,9 @@ Defined in `server/miscite/models.py`:
 No migrations are present; schema changes require manual DB resets or a future migration plan.
 
 ## Configuration and env
+
 Settings live in `server/miscite/config.py` and `.env.example`. Critical env keys:
+
 - Required: `OPENROUTER_API_KEY`.
 - Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
@@ -84,10 +96,12 @@ Settings live in `server/miscite/config.py` and `.env.example`. Critical env key
 - Email login: Mailgun API keys + login code TTL/length.
 
 If you add new env vars:
+
 - Update `server/miscite/config.py`.
 - Update `.env.example` and `README.md`.
 
 ## External integrations
+
 - **OpenRouter**: LLM parsing, matching, and inappropriate-citation classification.
 - **OpenAlex**: metadata resolution, retraction flags, deep analysis network expansion.
 - **Crossref**: metadata resolution, retraction info.
@@ -99,10 +113,12 @@ If you add new env vars:
 - **Cloudflare Turnstile**: bot protection on login/register step.
 
 ## UI and design system
+
 - Templates: `server/miscite/templates/`.
 - CSS tokens + components documented in `DESIGN.md` and implemented in `server/miscite/static/styles.css`.
 
 ## Worker notes / footguns
+
 - A worker must run for uploads to process; jobs stay PENDING otherwise.
 - The pipeline raises errors if required datasets are missing:
   - Retraction Watch CSV must exist.
@@ -110,8 +126,10 @@ If you add new env vars:
 - LLM parsing and inappropriate checks are mandatory; missing `OPENROUTER_API_KEY` or disabled `MISCITE_ENABLE_LLM_INAPPROPRIATE` fails jobs.
 - Docling is required for text extraction (`docling` package).
 - Stale RUNNING jobs are reaped based on `MISCITE_JOB_STALE_SECONDS`; be mindful of long-running documents.
+- Access tokens are issued at job start and expire after `MISCITE_ACCESS_TOKEN_DAYS`; expired jobs and uploads are auto-deleted by the worker.
 
 ## Common commands
+
 - `make dev` / `python -m server.main`: run web app.
 - `make worker` / `python -m server.worker`: run worker.
 - `make sync-rw` / `python -m server.sync_retractionwatch`: sync retraction dataset.
@@ -119,11 +137,13 @@ If you add new env vars:
 - `make check`: compile server modules.
 
 ## Extending the system
+
 - New metadata sources: add client in `server/miscite/sources/` and wire into `analysis/pipeline.py`.
 - New issue types: add to pipeline and update report template/summary counts.
 - Parsing changes: update `analysis/llm_parsing.py` or `analysis/citation_parsing.py`.
 - Deep analysis tweaks: `analysis/deep_analysis.py` (watch LLM budget and OpenAlex usage limits).
 
 ## Security notes
+
 - Auth uses email login codes + session + CSRF cookies (`server/miscite/security.py`).
 - Set `MISCITE_COOKIE_SECURE=true` for HTTPS deployments.

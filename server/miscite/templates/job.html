@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
   {% set has_error = job.error_message or job.has_error %}
-  {% set pdf_view = pdf_view|default(false) %}
   <section class="ds-section">
     <div class="ds-grid">
-      <div class="span-{{ 12 if pdf_view else 7 }}">
+      <div class="span-7">
         <p class="eyebrow">Report</p>
         <h1>{{ job.filename }}</h1>
         <p class="lead">
@@ -24,14 +23,14 @@
           {% endif %}
         </div>
       </div>
-      {% if not pdf_view %}
       <div class="span-5">
         {% if public_view %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
               <h3>Read-only report</h3>
               <p class="miscite-muted">
-                This view is shared via access token. Get access to manage jobs and exports.
+                This view is shared via access token and can show live progress until the report is ready.
+                Get access to manage jobs and exports.
               </p>
               <div class="ds-stack">
                 <a class="ds-button ds-button--primary" href="/login">Get access</a>
@@ -41,14 +40,12 @@
         {% else %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
-              <h3>Quick actions</h3>
-              <p class="miscite-muted">Download this report.</p>
-              <div class="ds-stack">
-                <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}/report.pdf">Download PDF</a>
-              </div>
+              <h3>Access token</h3>
+              <p class="miscite-muted">
+                Tokens are issued when a job starts and emailed to you. They expire after {{ access_token_days }} days.
+              </p>
               <div class="ds-panel ds-panel--compact ds-mt-4">
                 <div class="ds-panel-body">
-                  <p class="eyebrow">Access token</p>
                   {% if access_token %}
                     <p class="miscite-muted">Copy and share this token. It is shown once.</p>
                     <p class="ds-quote miscite-mono">{{ access_token }}</p>
@@ -80,7 +77,7 @@
                       </form>
                     {% endif %}
                   {% else %}
-                    <p class="miscite-muted">Generate a token to share this report externally.</p>
+                    <p class="miscite-muted">A token will be emailed when the job starts. You can also generate one now.</p>
                     <form method="post" action="/jobs/{{ job.id }}/access-token">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                       <button class="ds-button ds-button--secondary ds-button--sm" type="submit">
@@ -94,7 +91,6 @@
           </div>
         {% endif %}
       </div>
-      {% endif %}
     </div>
     {% if job.error_message and not public_view %}
       <div class="ds-alert ds-alert--error ds-mt-5">
@@ -107,7 +103,7 @@
     {% endif %}
   </section>
 
-  {% if not public_view and not pdf_view and job.status != "COMPLETED" %}
+  {% if job.status != "COMPLETED" %}
     <section class="ds-section" id="job-progress-section" data-job-id="{{ job.id }}">
       <div class="ds-card">
         <div class="card-content">
@@ -531,20 +527,31 @@
         <h4>Report not available yet</h4>
         <p class="miscite-muted">Refresh in a moment to view the generated summary.</p>
         {% if public_view %}
-          <a class="ds-button ds-button--secondary" href="/reports/access">Re-enter access token</a>
+          <a class="ds-button ds-button--secondary" href="{{ request.url.path }}">Refresh report</a>
         {% else %}
           <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}">Refresh report</a>
         {% endif %}
       </div>
     </section>
   {% endif %}
-  {% if not public_view and not pdf_view %}
-    <script nonce="{{ csp_nonce }}">
-      (function () {
-        var section = document.getElementById("job-progress-section");
-        if (!section) {
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var section = document.getElementById("job-progress-section");
+      if (!section) {
+        return;
+      }
+
+      var publicView = {{ "true" if public_view else "false" }};
+      var accessToken = null;
+      if (publicView) {
+        var match = window.location.pathname.match(/^\/reports\/([^/]+)$/);
+        if (match) {
+          accessToken = decodeURIComponent(match[1]);
+        }
+        if (!accessToken) {
           return;
         }
+      }
 
       var jobId = section.getAttribute("data-job-id");
       var statusText = document.getElementById("job-status-text");
@@ -630,8 +637,11 @@
         }
       };
 
+      var eventsPath = publicView ? "/api/reports/" + accessToken + "/events" : "/api/jobs/" + jobId + "/events";
+      var streamUrl = publicView ? "/api/reports/" + accessToken + "/stream" : "/api/jobs/" + jobId + "/stream";
+
       var poll = function () {
-        fetch("/api/jobs/" + jobId + "/events?since_id=" + lastEventId, {
+        fetch(eventsPath + "?since_id=" + lastEventId, {
           headers: { Accept: "application/json" },
           cache: "no-store",
         })
@@ -658,7 +668,7 @@
           poll();
           return;
         }
-        var source = new EventSource("/api/jobs/" + jobId + "/stream");
+        var source = new EventSource(streamUrl);
         source.addEventListener("progress", function (event) {
           try {
             handleProgress(JSON.parse(event.data));
@@ -688,69 +698,66 @@
         };
       };
 
-        connect();
-      })();
-    </script>
-  {% endif %}
-  {% if not pdf_view %}
-    <script nonce="{{ csp_nonce }}">
-      (function () {
-        var buttons = document.querySelectorAll("[data-severity-filter]");
-        if (!buttons.length) {
+      connect();
+    })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var buttons = document.querySelectorAll("[data-severity-filter]");
+      if (!buttons.length) {
+        return;
+      }
+      var issues = document.querySelectorAll(".js-issue[data-severity]");
+      var active = null;
+
+      var setActive = function (severity) {
+        active = severity;
+        buttons.forEach(function (btn) {
+          var isActive = btn.getAttribute("data-severity-filter") === severity;
+          btn.classList.toggle("is-active", isActive);
+          btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+        issues.forEach(function (issue) {
+          var match = issue.getAttribute("data-severity") === severity;
+          issue.hidden = !match;
+        });
+      };
+
+      var clearActive = function () {
+        active = null;
+        buttons.forEach(function (btn) {
+          btn.classList.remove("is-active");
+          btn.setAttribute("aria-pressed", "false");
+        });
+        issues.forEach(function (issue) {
+          issue.hidden = false;
+        });
+      };
+
+      buttons.forEach(function (btn) {
+        btn.addEventListener("click", function (event) {
+          event.stopPropagation();
+          var severity = btn.getAttribute("data-severity-filter");
+          if (!severity) {
+            return;
+          }
+          if (active === severity) {
+            clearActive();
+          } else {
+            setActive(severity);
+          }
+        });
+      });
+
+      document.addEventListener("click", function (event) {
+        if (!active) {
           return;
         }
-        var issues = document.querySelectorAll(".js-issue[data-severity]");
-        var active = null;
-
-        var setActive = function (severity) {
-          active = severity;
-          buttons.forEach(function (btn) {
-            var isActive = btn.getAttribute("data-severity-filter") === severity;
-            btn.classList.toggle("is-active", isActive);
-            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-          });
-          issues.forEach(function (issue) {
-            var match = issue.getAttribute("data-severity") === severity;
-            issue.hidden = !match;
-          });
-        };
-
-        var clearActive = function () {
-          active = null;
-          buttons.forEach(function (btn) {
-            btn.classList.remove("is-active");
-            btn.setAttribute("aria-pressed", "false");
-          });
-          issues.forEach(function (issue) {
-            issue.hidden = false;
-          });
-        };
-
-        buttons.forEach(function (btn) {
-          btn.addEventListener("click", function (event) {
-            event.stopPropagation();
-            var severity = btn.getAttribute("data-severity-filter");
-            if (!severity) {
-              return;
-            }
-            if (active === severity) {
-              clearActive();
-            } else {
-              setActive(severity);
-            }
-          });
-        });
-
-        document.addEventListener("click", function (event) {
-          if (!active) {
-            return;
-          }
-          if (event.target.closest("[data-severity-filter]")) {
-            return;
-          }
-          clearActive();
-        });
-      })();
-    </script>
-  {% endif %}
+        if (event.target.closest("[data-severity-filter]")) {
+          return;
+        }
+        clearActive();
+      });
+    })();
+  </script>
 {% endblock %}
