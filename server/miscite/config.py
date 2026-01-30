@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import multiprocessing as mp
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -57,6 +59,27 @@ def _env_bool(name: str, default: bool) -> bool:
     raise ValueError(f"Invalid boolean value for {name}: {raw!r}")
 
 
+def _resolve_text_extract_context(raw: str) -> str:
+    value = (raw or "").strip().lower() or "auto"
+    explicit = value != "auto"
+    if value == "auto":
+        if sys.platform.startswith("win") or sys.platform == "darwin":
+            value = "spawn"
+        else:
+            value = "fork"
+    if value not in {"fork", "spawn"}:
+        raise ValueError("MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT must be 'auto', 'fork', or 'spawn'.")
+    available = mp.get_all_start_methods()
+    if value not in available:
+        if explicit:
+            raise ValueError(
+                f"MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT {value!r} not supported on this platform "
+                f"(available: {available})."
+            )
+        value = "spawn" if "spawn" in available else available[0]
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     db_url: str
@@ -70,6 +93,7 @@ class Settings:
     text_extract_backend: str
     text_extract_timeout_seconds: float
     text_extract_subprocess: bool
+    text_extract_process_context: str
     accelerator: str
 
     crossref_mailto: str
@@ -188,6 +212,9 @@ class Settings:
             raise ValueError("MISCITE_TEXT_EXTRACT_BACKEND must be 'markitdown' or 'docling'.")
         text_extract_timeout_seconds = _env_float("MISCITE_TEXT_EXTRACT_TIMEOUT_SECONDS", 120.0, min_value=10.0, max_value=1200.0)
         text_extract_subprocess = _env_bool("MISCITE_TEXT_EXTRACT_SUBPROCESS", True)
+        text_extract_process_context = _resolve_text_extract_context(
+            _env_str("MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT", "auto")
+        )
 
         accelerator = _env_str("MISCITE_ACCELERATOR", "cpu").lower()
         if accelerator not in {"cpu", "gpu"}:
@@ -349,6 +376,7 @@ class Settings:
             text_extract_backend=text_extract_backend,
             text_extract_timeout_seconds=text_extract_timeout_seconds,
             text_extract_subprocess=text_extract_subprocess,
+            text_extract_process_context=text_extract_process_context,
             accelerator=accelerator,
             crossref_mailto=crossref_mailto,
             crossref_user_agent=crossref_user_agent,

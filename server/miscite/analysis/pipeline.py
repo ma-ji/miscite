@@ -429,6 +429,7 @@ def analyze_document(
         backend=settings.text_extract_backend,
         timeout_seconds=settings.text_extract_timeout_seconds,
         use_subprocess=settings.text_extract_subprocess,
+        process_context=settings.text_extract_process_context,
     )
     _progress("extract", "Text extracted", 0.08)
     if not settings.openrouter_api_key:

@@ -134,6 +134,7 @@ Copy `.env.example` to `.env` and edit. Key settings:
 - `MISCITE_TEXT_EXTRACT_BACKEND` (default: `markitdown`, options: `markitdown|docling`)
 - `MISCITE_TEXT_EXTRACT_TIMEOUT_SECONDS` (default: `120`)
 - `MISCITE_TEXT_EXTRACT_SUBPROCESS` (default: `true`)
+- `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT` (default: `auto`, options: `auto|fork|spawn`)
 - `MISCITE_ACCELERATOR` (default: `cpu`, options: `cpu|gpu`)
 - `MISCITE_COOKIE_SECURE` (default: `false`)
 - `MISCITE_TRUST_PROXY` (default: `false`)
@@ -141,6 +142,7 @@ Copy `.env.example` to `.env` and edit. Key settings:
 
 Notes:
 - `markitdown` supports multiple file types; use `docling` if you prefer its PDF/DOCX pipeline.
+- `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT=auto` chooses `fork` on Linux and `spawn` on macOS/Windows.
 - `gpu` uses CUDA via torch (local NLI only).
 
 Config values are validated at startup; out-of-range values raise errors. Key bounds:
@@ -191,6 +193,7 @@ Config values are validated at startup; out-of-range values raise errors. Key bo
 - `--blank-db` – use a blank sqlite DB at `./data/miscite-blank.db`
 - `--text-backend {markitdown,docling}`
 - `--accelerator {cpu,gpu}`
+- `--debug` – enable verbose logging (`MISCITE_LOG_LEVEL=DEBUG`)
 
 ### Metadata (OpenAlex/Crossref/arXiv)
 

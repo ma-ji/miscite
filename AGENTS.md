@@ -15,7 +15,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - Run web app: `python -m server.main` (or `make dev`).
 - Run worker: `python -m server.worker` (or `make worker`).
 - Combined: `bash scripts/dev.sh`.
-  - Optional flags for both web/worker: `--blank-db`, `--text-backend {markitdown,docling}`, `--accelerator {cpu,gpu}`.
+  - Optional flags for both web/worker: `--blank-db`, `--text-backend {markitdown,docling}`, `--accelerator {cpu,gpu}`, `--debug`.
 
 ## High-level architecture
 - **Web app**: `server/main.py` creates FastAPI app, mounts routes and static assets.
@@ -71,7 +71,7 @@ No migrations are present; schema changes require manual DB resets or a future m
 Settings live in `server/miscite/config.py` and `.env.example`. Critical env keys:
 - Required: `OPENROUTER_API_KEY`.
 - Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
-- Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_ACCELERATOR`.
+- Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate).
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys and flags.

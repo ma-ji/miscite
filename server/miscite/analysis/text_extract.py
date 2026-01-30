@@ -32,12 +32,14 @@ def extract_text(
     backend: str,
     timeout_seconds: float = 120.0,
     use_subprocess: bool = True,
+    process_context: str = "spawn",
 ) -> str:
     if not use_subprocess:
         return _extract_text_direct(path, backend=backend)
 
-    queue: mp.Queue = mp.Queue()
-    proc = mp.get_context("spawn").Process(
+    ctx = mp.get_context(process_context)
+    queue: mp.Queue = ctx.Queue()
+    proc = ctx.Process(
         target=_extract_worker,
         args=(str(path), backend, queue),
         daemon=True,

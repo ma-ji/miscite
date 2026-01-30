@@ -9,6 +9,11 @@ _DEFAULT_BLANK_DB_PATH = Path("./data/miscite-blank.db").resolve()
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable verbose logging (sets MISCITE_LOG_LEVEL=DEBUG).",
+    )
+    parser.add_argument(
         "--blank-db",
         action="store_true",
         help="Use a blank sqlite DB at ./data/miscite-blank.db (overrides MISCITE_DB_URL).",
@@ -26,6 +31,8 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> None:
 
 
 def apply_runtime_overrides(args: argparse.Namespace) -> None:
+    if getattr(args, "debug", False):
+        os.environ["MISCITE_LOG_LEVEL"] = "DEBUG"
     if getattr(args, "text_backend", None):
         os.environ["MISCITE_TEXT_EXTRACT_BACKEND"] = args.text_backend
     if getattr(args, "accelerator", None):

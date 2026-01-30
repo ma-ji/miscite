@@ -55,6 +55,9 @@ def main() -> None:
     load_dotenv()
     apply_runtime_overrides(args)
     reload = os.getenv("MISCITE_RELOAD", "").strip().lower() in {"1", "true", "yes", "y", "on"}
+    if getattr(args, "debug", False):
+        uvicorn.run("server.main:app", host="0.0.0.0", port=8000, reload=reload, log_level="debug")
+        return
     uvicorn.run("server.main:app", host="0.0.0.0", port=8000, reload=reload)
 
 
