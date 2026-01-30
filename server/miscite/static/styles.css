@@ -444,6 +444,32 @@ textarea {
   flex-wrap: wrap;
 }
 
+.app-theme-switch {
+  margin-left: auto;
+  gap: 6px;
+}
+
+.app-theme-icon {
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.app-theme-switch .ds-toggle-track {
+  width: 36px;
+  height: 18px;
+}
+
+.app-theme-switch .ds-toggle-track::after {
+  width: 14px;
+  height: 14px;
+  top: 2px;
+  left: 2px;
+}
+
+.app-theme-switch input:checked + .ds-toggle-track::after {
+  transform: translateX(18px);
+}
+
 @media (max-width: 900px) {
   .app-header-inner {
     flex-wrap: wrap;

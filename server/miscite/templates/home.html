@@ -7,8 +7,9 @@
           <p class="eyebrow">Commercial citation intelligence</p>
           <h1>Audit-ready citation checks for journals, labs, and research teams.</h1>
           <p class="lead">
-            miscite scans PDF and DOCX manuscripts, resolves every reference against trusted metadata
-            sources, and flags missing, retracted, or risky citations with a traceable report.
+            miscite scans PDF and DOCX manuscripts, resolves every reference against vetted metadata
+            registries, and flags missing, retracted, or risky citations with a traceable report.
+            A proprietary relevance engine suggests additional references and improvements.
           </p>
         </div>
         <div class="landing-reveal" data-delay="2">
@@ -18,8 +19,9 @@
           </div>
           <div class="hero-meta">
             <span class="ds-badge">PDF + DOCX</span>
-            <span class="ds-pill">OpenAlex + Crossref + arXiv</span>
-            <span class="ds-pill">Retraction Watch + predatory lists</span>
+            <span class="ds-pill">Verified metadata registries</span>
+            <span class="ds-pill">Retraction & integrity watchlists</span>
+            <span class="ds-pill">Est. {{ record_estimate }} scholarly records</span>
           </div>
         </div>
         <div class="landing-proof landing-reveal" data-delay="3">
@@ -28,14 +30,14 @@
               <i class="material-icons" aria-hidden="true">fact_check</i>
               Evidence-first
             </span>
-            <p>Every issue includes source metadata, context, and a rationale you can audit.</p>
+            <p>Every issue includes evidence context and a rationale you can audit.</p>
           </div>
           <div class="landing-proof-item">
             <span class="ds-status ds-status--processing">
               <i class="material-icons" aria-hidden="true">autorenew</i>
               Decision-ready
             </span>
-            <p>Summaries, severity buckets, and exportable JSON keep reviews consistent.</p>
+            <p>Severity buckets plus relevance recommendations highlight how to improve coverage.</p>
           </div>
           <div class="landing-proof-item">
             <span class="ds-status">
@@ -70,15 +72,15 @@
             </div>
             <dl class="ds-meta">
               <dt>Coverage</dt>
-              <dd>Reference resolution across three metadata sources.</dd>
+              <dd>Reference resolution across multiple metadata registries.</dd>
               <dt>Checks</dt>
-              <dd>Missing refs, retractions, predatory venues, context review.</dd>
+              <dd>Missing refs, retractions, venue risk signals, context review.</dd>
               <dt>Report</dt>
-              <dd>Summary counts, evidence links, and methodology notes.</dd>
+              <dd>Summary counts, evidence links, and recommendations.</dd>
             </dl>
             <div class="ds-chip-row">
-              <span class="ds-chip">Traceable sources</span>
-              <span class="ds-chip">Audit trail</span>
+              <span class="ds-chip">Evidence trail</span>
+              <span class="ds-chip">Audit-ready</span>
               <span class="ds-chip">Export JSON</span>
             </div>
           </div>
@@ -109,7 +111,7 @@
             </div>
             <h3>Reference resolution</h3>
             <p class="miscite-muted">
-              Match DOI, title, and author metadata across OpenAlex, Crossref, and arXiv.
+              Match DOI, title, and author metadata across trusted scholarly registries.
             </p>
             <ul class="ds-list">
               <li>Multi-source matching</li>
@@ -127,11 +129,11 @@
             </div>
             <h3>Risk flags</h3>
             <p class="miscite-muted">
-              Surface missing bibliography items, retractions, and predatory venues instantly.
+              Surface missing bibliography items, retractions, and venue-risk signals instantly.
             </p>
             <ul class="ds-list">
-              <li>Retraction Watch signals</li>
-              <li>Predatory venue lists</li>
+              <li>Retraction registry signals</li>
+              <li>Venue risk watchlists</li>
               <li>Unresolved references</li>
             </ul>
           </div>
@@ -143,14 +145,14 @@
             <div class="landing-feature-icon">
               <i class="material-icons" aria-hidden="true">insights</i>
             </div>
-            <h3>Context checks</h3>
+            <h3>Recommendation engine</h3>
             <p class="miscite-muted">
-              Compare citation context to metadata to surface potentially inappropriate references.
+              Suggest relevant references and improvements with a proprietary relevance model.
             </p>
             <ul class="ds-list">
-              <li>Context-aware review</li>
-              <li>Rationale summaries</li>
-              <li>Prioritized severity</li>
+              <li>Suggested additions</li>
+              <li>Coverage gaps</li>
+              <li>Prioritized improvements</li>
             </ul>
           </div>
         </div>
@@ -163,7 +165,7 @@
             </div>
             <h3>Audit-ready reporting</h3>
             <p class="miscite-muted">
-              Every report includes a methodology trail your team can cite back to.
+              Every report includes a concise review summary your team can cite.
             </p>
             <ul class="ds-list">
               <li>Exportable JSON</li>
@@ -193,7 +195,7 @@
               <li>Upload PDF or DOCX files in seconds.</li>
               <li>Parse citations and bibliography entries automatically.</li>
               <li>Resolve metadata and flag issues by severity.</li>
-              <li>Review the methodology trail and export findings.</li>
+              <li>Review recommendations and export findings.</li>
             </ul>
             <div class="hero-actions">
               <a class="ds-button ds-button--primary" href="/register">Run a check</a>
@@ -224,7 +226,7 @@
                 </li>
                 <li class="ds-stepper-step is-active">
                   <span class="ds-stepper-bullet"></span>
-                  Resolve metadata sources
+                  Resolve metadata signals
                 </li>
                 <li class="ds-stepper-step">
                   <span class="ds-stepper-bullet"></span>
@@ -232,7 +234,7 @@
                 </li>
                 <li class="ds-stepper-step">
                   <span class="ds-stepper-bullet"></span>
-                  Publish report + methodology
+                  Publish report + review notes
                 </li>
               </ol>
               <div class="ds-progress-inline" aria-hidden="true"></div>
@@ -256,17 +258,16 @@
       <div class="span-6 landing-reveal" data-delay="1">
         <div class="ds-card">
           <div class="card-content">
-            <h3>Verified data sources</h3>
+            <h3>Verified evidence sources</h3>
             <p class="miscite-muted">
-              Resolve references across multiple metadata providers and record where each signal
-              originated.
+              Resolve references across multiple registries and record where each signal originated.
             </p>
             <div class="ds-chip-row">
-              <span class="ds-chip">OpenAlex</span>
-              <span class="ds-chip">Crossref</span>
-              <span class="ds-chip">arXiv</span>
-              <span class="ds-chip">Retraction Watch</span>
-              <span class="ds-chip">Predatory datasets</span>
+              <span class="ds-chip">Metadata registries</span>
+              <span class="ds-chip">Publisher records</span>
+              <span class="ds-chip">Retraction registries</span>
+              <span class="ds-chip">Integrity watchlists</span>
+              <span class="ds-chip">Quality signals</span>
             </div>
             <ul class="ds-list ds-mt-4">
               <li>Multi-source matches reduce false negatives.</li>
@@ -285,15 +286,15 @@
             </p>
             <ul class="ds-list">
               <li>Severity scoring for quick triage.</li>
-              <li>Methodology notes included with every report.</li>
+              <li>Review notes included with every report.</li>
               <li>Exportable JSON for audit trails and downstream review.</li>
+              <li>Recommendations remain advisory and human-reviewed.</li>
             </ul>
             <div class="ds-panel ds-panel--compact ds-mt-4">
               <div class="ds-panel-body">
                 <p class="eyebrow">Audit trail</p>
                 <p class="miscite-muted">
-                  Keep an immutable trail of checks, sources, and reviewer actions for submission
-                  records.
+                  Keep an immutable trail of checks and reviewer actions for submission records.
                 </p>
               </div>
             </div>
@@ -392,8 +393,8 @@
         </summary>
         <div class="ds-disclosure-body">
           <p class="miscite-muted">
-            References are matched against OpenAlex, Crossref, and arXiv metadata, plus retraction
-            and predatory lists. Each match is recorded alongside its data source.
+            References are matched against multiple scholarly registries and integrity watchlists.
+            Each match is recorded with evidence context and review notes.
           </p>
         </div>
       </details>

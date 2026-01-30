@@ -24,6 +24,18 @@ def _sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def hash_token(value: str) -> str:
+    return _sha256_hex(value)
+
+
+def generate_access_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
+def access_token_hint(token: str) -> str:
+    return token[-6:] if len(token) >= 6 else token
+
+
 def _as_utc(value: dt.datetime) -> dt.datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=dt.UTC)

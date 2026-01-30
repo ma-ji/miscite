@@ -37,5 +37,6 @@ def template_context(request: Request, **extra):
         "request": request,
         "current_user": getattr(request.state, "user", None),
         "csrf_token": get_csrf_cookie(request) or "",
+        "record_estimate": "250M+",
         **extra,
     }

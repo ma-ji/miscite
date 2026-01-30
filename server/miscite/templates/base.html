@@ -40,21 +40,21 @@
           {% endif %}
         </nav>
         <div class="app-actions">
-          <label class="ds-toggle app-theme-toggle">
-            <i class="material-icons" aria-hidden="true">brightness_6</i>
-            <span class="theme-label">Theme: Light</span>
-            <input type="checkbox" role="switch" data-theme-toggle aria-label="Toggle theme" />
-            <span class="ds-toggle-track" aria-hidden="true"></span>
-          </label>
+          <a class="ds-button ds-button--ghost ds-button--sm" href="/reports/access">Get report</a>
           {% if current_user %}
             <form method="post" action="/logout">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <button class="ds-button ds-button--secondary" type="submit">Logout</button>
+              <button class="ds-button ds-button--secondary ds-button--sm" type="submit">Logout</button>
             </form>
           {% else %}
-            <a class="ds-button ds-button--secondary" href="/login">Sign in</a>
-            <a class="ds-button ds-button--primary" href="/register">Create account</a>
+            <a class="ds-button ds-button--secondary ds-button--sm" href="/login">Sign in</a>
+            <a class="ds-button ds-button--primary ds-button--sm" href="/register">Join</a>
           {% endif %}
+          <label class="ds-toggle app-theme-switch" aria-label="Toggle theme">
+            <i class="material-icons app-theme-icon" aria-hidden="true">brightness_6</i>
+            <input type="checkbox" role="switch" data-theme-toggle aria-label="Toggle theme" />
+            <span class="ds-toggle-track" aria-hidden="true"></span>
+          </label>
         </div>
       </div>
     </header>
@@ -82,8 +82,6 @@
         var toggle = document.querySelector("[data-theme-toggle]");
         var root = document.documentElement;
         var storageKey = "miscite-theme";
-        var toggleLabel = toggle ? toggle.closest("label") : null;
-        var themeLabel = toggleLabel ? toggleLabel.querySelector(".theme-label") : null;
 
         var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
         var preferredTheme = function () {
@@ -100,9 +98,6 @@
             var active = root.getAttribute("data-theme") || preferredTheme();
             toggle.checked = active === "dark";
             toggle.setAttribute("aria-checked", active === "dark" ? "true" : "false");
-            if (themeLabel) {
-              themeLabel.textContent = active === "dark" ? "Theme: Dark" : "Theme: Light";
-            }
           }
         };
 

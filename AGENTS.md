@@ -31,6 +31,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/sources/`: OpenAlex, Crossref, arXiv, datasets, optional APIs, sync helpers.
 - `server/miscite/routes/`: auth, dashboard, billing, health endpoints.
 - `server/miscite/templates/`: Jinja UI (job report page relies on report JSON shape).
+- `server/miscite/templates/report_access.html`: token-based public report access form.
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
 - `kb/`: research and promptbook material (not wired into the runtime app).
 - `scripts/`: helper scripts (dev runner, Zotero helper).
@@ -56,7 +57,7 @@ The report JSON returned by `analysis/pipeline.py` is rendered in `server/miscit
 Defined in `server/miscite/models.py`:
 - `User` / `UserSession`: auth + session cookies.
 - `Document`: uploaded file metadata.
-- `AnalysisJob`: status, report JSON, methodology markdown.
+- `AnalysisJob`: status, report JSON, methodology markdown, access-token hash/hint for shared report access.
 - `AnalysisJobEvent`: streaming progress events for SSE.
 - `BillingAccount`: Stripe subscription status.
 

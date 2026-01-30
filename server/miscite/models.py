@@ -76,6 +76,8 @@ class AnalysisJob(Base):
     sources_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     methodology_md: Mapped[str | None] = mapped_column(Text, nullable=True)
     worker_version: Mapped[str] = mapped_column(String(32), default="0.1")
+    access_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    access_token_hint: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="jobs")
 

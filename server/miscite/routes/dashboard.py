@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from server.miscite.config import Settings
 from server.miscite.db import db_session, get_sessionmaker
 from server.miscite.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
-from server.miscite.security import require_csrf, require_user
+from server.miscite.security import access_token_hint, generate_access_token, hash_token, require_csrf, require_user
 from server.miscite.storage import save_upload
 from server.miscite.web import template_context, templates
 
@@ -56,6 +56,15 @@ def _relative_time(ts: dt.datetime | None) -> str:
     return f"{max(1, seconds // (86400 * 365))}y ago"
 
 
+def _load_report(job: AnalysisJob) -> dict | None:
+    if not job.report_json:
+        return None
+    try:
+        return json.loads(job.report_json)
+    except Exception:
+        return None
+
+
 @router.get("/")
 def root(request: Request, db: Session = Depends(db_session)):
     user = None
@@ -69,6 +78,66 @@ def root(request: Request, db: Session = Depends(db_session)):
     return templates.TemplateResponse(
         "home.html",
         template_context(request, title="miscite"),
+    )
+
+
+@router.get("/reports/access")
+def report_access_form(request: Request):
+    return templates.TemplateResponse(
+        "report_access.html",
+        template_context(request, title="Get report"),
+    )
+
+
+@router.post("/reports/access")
+def report_access(request: Request, token: str = Form(""), db: Session = Depends(db_session)):
+    token_value = token.strip()
+    if not token_value:
+        return templates.TemplateResponse(
+            "report_access.html",
+            template_context(
+                request,
+                title="Get report",
+                access_error="Please enter an access token.",
+            ),
+        )
+
+    token_hash = hash_token(token_value)
+    row = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.access_token_hash == token_hash)
+        .limit(1)
+    ).first()
+    if not row:
+        return templates.TemplateResponse(
+            "report_access.html",
+            template_context(
+                request,
+                title="Get report",
+                access_error="That token was not recognized. Double-check and try again.",
+            ),
+        )
+
+    job, doc = row
+    report = _load_report(job)
+
+    return templates.TemplateResponse(
+        "job.html",
+        template_context(
+            request,
+            title="Report",
+            job={
+                "id": job.id,
+                "status": job.status,
+                "filename": doc.original_filename,
+                "error_message": job.error_message,
+                "access_token_hint": job.access_token_hint,
+            },
+            report=report,
+            methodology_md="",
+            public_view=True,
+        ),
     )
 
 
@@ -234,12 +303,7 @@ def job_page(
         raise HTTPException(status_code=404)
     job, doc = row
 
-    report = None
-    if job.report_json:
-        try:
-            report = json.loads(job.report_json)
-        except Exception:
-            report = None
+    report = _load_report(job)
 
     return templates.TemplateResponse(
         "job.html",
@@ -251,9 +315,58 @@ def job_page(
                 "status": job.status,
                 "filename": doc.original_filename,
                 "error_message": job.error_message,
+                "access_token_hint": job.access_token_hint,
             },
             report=report,
             methodology_md=job.methodology_md or "",
+            public_view=False,
+        ),
+    )
+
+
+@router.post("/jobs/{job_id}/access-token")
+def job_access_token(
+    request: Request,
+    job_id: str,
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    require_csrf(request, csrf_token)
+
+    row = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404)
+    job, doc = row
+
+    token = generate_access_token()
+    job.access_token_hash = hash_token(token)
+    job.access_token_hint = access_token_hint(token)
+    db.commit()
+
+    report = _load_report(job)
+
+    return templates.TemplateResponse(
+        "job.html",
+        template_context(
+            request,
+            title="Job",
+            job={
+                "id": job.id,
+                "status": job.status,
+                "filename": doc.original_filename,
+                "error_message": job.error_message,
+                "access_token_hint": job.access_token_hint,
+            },
+            report=report,
+            methodology_md=job.methodology_md or "",
+            access_token=token,
+            public_view=False,
         ),
     )
 

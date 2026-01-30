@@ -8,24 +8,75 @@
         <p class="lead">
           Status: <span class="miscite-mono" id="job-status-text">{{ job.status }}</span>
         </p>
+        <p class="miscite-muted">
+          Reports include recommendations to improve citation coverage when available.
+        </p>
         <div class="hero-meta">
-          <span class="ds-pill">Job ID: {{ job.id }}</span>
+          {% if public_view %}
+            <span class="ds-pill">Access: token</span>
+          {% else %}
+            <span class="ds-pill">Job ID: {{ job.id }}</span>
+          {% endif %}
           {% if job.error_message %}
             <span class="ds-pill">Needs attention</span>
           {% endif %}
         </div>
       </div>
       <div class="span-4">
-        <div class="ds-card ds-card--subtle">
-          <div class="card-content">
-            <h3>Quick actions</h3>
-            <p class="miscite-muted">Download or refresh this report.</p>
-            <div class="ds-stack">
-              <a class="ds-button ds-button--secondary" href="/api/jobs/{{ job.id }}">Download JSON</a>
-              <a class="ds-button ds-button--ghost" href="/jobs/{{ job.id }}">Refresh</a>
+        {% if public_view %}
+          <div class="ds-card ds-card--subtle">
+            <div class="card-content">
+              <h3>Read-only report</h3>
+              <p class="miscite-muted">
+                This view is shared via access token. Sign in to manage jobs and exports.
+              </p>
+              <div class="ds-stack">
+                <a class="ds-button ds-button--secondary" href="/login">Sign in</a>
+                <a class="ds-button ds-button--ghost" href="/register">Create account</a>
+              </div>
             </div>
           </div>
-        </div>
+        {% else %}
+          <div class="ds-card ds-card--subtle">
+            <div class="card-content">
+              <h3>Quick actions</h3>
+              <p class="miscite-muted">Download or refresh this report.</p>
+              <div class="ds-stack">
+                <a class="ds-button ds-button--secondary" href="/api/jobs/{{ job.id }}">Download JSON</a>
+                <a class="ds-button ds-button--ghost" href="/jobs/{{ job.id }}">Refresh</a>
+              </div>
+              <div class="ds-panel ds-panel--compact ds-mt-4">
+                <div class="ds-panel-body">
+                  <p class="eyebrow">Access token</p>
+                  {% if access_token %}
+                    <p class="miscite-muted">Copy and share this token. It is shown once.</p>
+                    <p class="ds-quote miscite-mono">{{ access_token }}</p>
+                  {% elif job.access_token_hint %}
+                    <p class="miscite-muted">
+                      Active token ending in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
+                    </p>
+                    <form method="post" action="/jobs/{{ job.id }}/access-token">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <button class="ds-button ds-button--ghost ds-button--sm" type="submit">Rotate token</button>
+                    </form>
+                  {% else %}
+                    <p class="miscite-muted">Generate a token to share this report externally.</p>
+                    <form method="post" action="/jobs/{{ job.id }}/access-token">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <button class="ds-button ds-button--secondary ds-button--sm" type="submit">
+                        Generate token
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            <div class="card-action">
+              <a href="/reports/access">Get report</a>
+              <span class="miscite-muted">Use an access token</span>
+            </div>
+          </div>
+        {% endif %}
       </div>
     </div>
     {% if job.error_message %}
@@ -35,7 +86,7 @@
     {% endif %}
   </section>
 
-  {% if job.status != "COMPLETED" %}
+  {% if not public_view and job.status != "COMPLETED" %}
     <section class="ds-section" id="job-progress-section" data-job-id="{{ job.id }}">
       <div class="ds-card">
         <div class="card-content">
@@ -90,7 +141,7 @@
                 </div>
                 <div class="ds-stat">
                   <div class="ds-stat-value">{{ report.summary.predatory_matches }}</div>
-                  <div class="ds-stat-label">Predatory matches</div>
+                  <div class="ds-stat-label">Venue risk</div>
                 </div>
                 <div class="ds-stat">
                   <div class="ds-stat-value">{{ report.summary.potentially_inappropriate }}</div>
@@ -150,8 +201,8 @@
                       {% set issue_description = "This reference matches a retracted record." %}
                       {% set issue_action = "Consider replacing the reference or clearly noting the retraction context." %}
                     {% elif issue.type == "predatory_venue_match" %}
-                      {% set issue_label = "Predatory venue match" %}
-                      {% set issue_description = "The journal or publisher matches a predatory venue list." %}
+                      {% set issue_label = "Venue risk match" %}
+                      {% set issue_description = "The journal or publisher matches a venue risk watchlist." %}
                       {% set issue_action = "Confirm the venue quality before citing." %}
                     {% elif issue.type == "potentially_inappropriate" %}
                       {% set issue_label = "Potentially inappropriate citation" %}
@@ -166,7 +217,7 @@
                       <summary class="ds-disclosure-summary">
                         <i class="material-icons ds-disclosure-icon" aria-hidden="true">flag</i>
                         <span class="ds-severity" aria-label="Severity {{ severity }}">{{ severity }}</span>
-                        <span class="ds-disclosure-type miscite-mono">{{ issue.type }}</span>
+                        <span class="ds-disclosure-type">{{ issue_label }}</span>
                         <span class="ds-disclosure-title">{{ issue.title }}</span>
                         <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
                       </summary>
@@ -219,26 +270,26 @@
                               {% endif %}
                             </dl>
                             {% if details.retraction %}
-                              <div class="ds-chip-row" aria-label="Retraction sources">
-                                {% for hit in details.retraction %}
-                                  <span class="ds-chip">Retraction source: {{ hit.source }}</span>
-                                {% endfor %}
+                              <div class="ds-chip-row" aria-label="Retraction signals">
+                                <span class="ds-chip">Retraction signal detected</span>
+                                <span class="ds-chip">Verified registries</span>
                               </div>
                             {% endif %}
                             {% if details.match %}
-                              <div class="ds-chip-row" aria-label="Predatory sources">
-                                {% for hit in details.match %}
-                                  <span class="ds-chip">Match source: {{ hit.source }}</span>
-                                {% endfor %}
+                              <div class="ds-chip-row" aria-label="Venue risk signals">
+                                <span class="ds-chip">Venue risk signal detected</span>
+                                <span class="ds-chip">Curated watchlists</span>
                               </div>
                             {% endif %}
                             {% if details.nli %}
-                              <div class="ds-chip-row" aria-label="Model signals">
-                                <span class="ds-chip">NLI: {{ details.nli.label }} ({{ "%.2f"|format(details.nli.confidence) }})</span>
+                              <div class="ds-chip-row" aria-label="Automated signals">
+                                <span class="ds-chip">Automated signal: {{ details.nli.label }}</span>
+                                <span class="ds-chip">Confidence: {{ "%.2f"|format(details.nli.confidence) }}</span>
                               </div>
                             {% elif details.llm %}
-                              <div class="ds-chip-row" aria-label="Model signals">
-                                <span class="ds-chip">LLM: {{ details.llm.label }} ({{ "%.2f"|format(details.llm.confidence) }})</span>
+                              <div class="ds-chip-row" aria-label="Automated signals">
+                                <span class="ds-chip">Automated signal: {{ details.llm.label }}</span>
+                                <span class="ds-chip">Confidence: {{ "%.2f"|format(details.llm.confidence) }}</span>
                               </div>
                             {% endif %}
                           </div>
@@ -255,10 +306,6 @@
                             {% endif %}
                           </div>
                         </div>
-                        <details class="ds-raw">
-                          <summary>Show raw issue data</summary>
-                          <pre class="miscite-mono pre-wrap">{{ issue|tojson(indent=2) }}</pre>
-                        </details>
                       </div>
                     </details>
                   {% endfor %}
@@ -274,10 +321,10 @@
 	      <section class="ds-section">
 	        <div class="ds-card">
 	          <div class="card-content">
-	            <h3>Deep literature suggestions</h3>
+	            <h3>Recommendations</h3>
 	            <p class="miscite-muted">
-	              Optional guidance to strengthen your citations and literature review. Use the <span class="miscite-mono">[R#]</span> markers to jump to the
-	              reference list for this section.
+	              Proprietary relevance analysis suggests additional references and improvement opportunities.
+	              Use the <span class="miscite-mono">[R#]</span> markers to jump to the reference list for this section.
 	            </p>
 
 	            {% if report.deep_analysis.status == "completed" %}
@@ -307,7 +354,7 @@
 	                  </div>
 	                {% endif %}
 	              {% else %}
-	                <p class="miscite-muted">No deep suggestions were generated for this run.</p>
+	                <p class="miscite-muted">No recommendations were generated for this run.</p>
 	              {% endif %}
 
 	              {% if da.citation_groups and da.references %}
@@ -375,15 +422,11 @@
 	                </div>
 	              {% endif %}
 
-	              <details class="ds-raw ds-mt-5">
-	                <summary>Show raw deep analysis data</summary>
-	                <pre class="miscite-mono pre-wrap">{{ report.deep_analysis|tojson(indent=2) }}</pre>
-	              </details>
             {% elif report.deep_analysis.status == "skipped" %}
-              <p class="miscite-muted">{{ report.deep_analysis.reason|default("Deep analysis was skipped.") }}</p>
+              <p class="miscite-muted">{{ report.deep_analysis.reason|default("Recommendations were skipped.") }}</p>
             {% else %}
               <div class="ds-alert ds-alert--warning ds-mt-4">
-                Deep analysis did not complete: {{ report.deep_analysis.reason|default("Unknown error") }}
+                Recommendations did not complete: {{ report.deep_analysis.reason|default("Unknown error") }}
               </div>
             {% endif %}
           </div>
@@ -396,50 +439,33 @@
         <div class="span-6">
           <div class="ds-card">
             <div class="card-content">
-              <h3>Data sources</h3>
-              <p class="miscite-muted">Sources used for this report.</p>
-              {% if report.data_sources %}
-                <ul class="ds-list ds-mt-4">
-                  {% for source in report.data_sources %}
-                    <li>{{ source }}</li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                <p class="miscite-muted">No sources recorded for this run.</p>
-              {% endif %}
-              {% if report.parsing %}
-                <dl class="ds-meta ds-mt-4">
-                  {% if report.parsing.parser_backend %}
-                    <dt>Parser</dt>
-                    <dd>{{ report.parsing.parser_backend }}</dd>
-                  {% endif %}
-                  <dt>LLM parsing</dt>
-                  <dd>{{ "Yes" if report.parsing.llm_parsing_used else "No" }}</dd>
-                </dl>
-              {% endif %}
-              <details class="ds-raw">
-                <summary>Show raw data sources</summary>
-                <pre class="miscite-mono pre-wrap">{{ report.data_sources|tojson(indent=2) }}</pre>
-              </details>
+              <h3>Evidence coverage</h3>
+              <p class="miscite-muted">
+                Sources are vetted and managed privately to protect detection integrity.
+              </p>
+              <ul class="ds-list ds-mt-4">
+                <li>Scholarly metadata registries</li>
+                <li>Publisher and venue records</li>
+                <li>Retraction registries and integrity watchlists</li>
+                <li>Internal quality signals and consistency checks</li>
+              </ul>
+              <p class="miscite-muted ds-mt-4">
+                Need a source attestation? Request a compliance summary from your account team.
+              </p>
             </div>
           </div>
         </div>
         <div class="span-6">
           <div class="ds-card">
             <div class="card-content">
-              <h3>Methodology</h3>
-              <p class="miscite-muted">How this check was performed.</p>
-              <div class="ds-prose ds-mt-4">
-                {% for line in methodology_md.split("\\n") %}
-                  {% if line.strip() %}
-                    <p>{{ line }}</p>
-                  {% endif %}
-                {% endfor %}
-              </div>
-              <details class="ds-raw">
-                <summary>Show raw methodology</summary>
-                <pre class="miscite-mono pre-wrap">{{ methodology_md }}</pre>
-              </details>
+              <h3>Review process</h3>
+              <p class="miscite-muted">A concise overview of how this check was performed.</p>
+              <ul class="ds-list ds-mt-4">
+                <li>Extract citation text and bibliography entries.</li>
+                <li>Normalize references and resolve metadata across vetted registries.</li>
+                <li>Cross-check integrity signals and venue risk indicators.</li>
+                <li>Summarize findings with evidence context and reviewer-ready notes.</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -450,16 +476,21 @@
       <div class="ds-empty">
         <h4>Report not available yet</h4>
         <p class="miscite-muted">Refresh in a moment to view the generated summary.</p>
-        <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}">Refresh report</a>
+        {% if public_view %}
+          <a class="ds-button ds-button--secondary" href="/reports/access">Re-enter access token</a>
+        {% else %}
+          <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}">Refresh report</a>
+        {% endif %}
       </div>
     </section>
   {% endif %}
-  <script>
-    (function () {
-      var section = document.getElementById("job-progress-section");
-      if (!section) {
-        return;
-      }
+  {% if not public_view %}
+    <script>
+      (function () {
+        var section = document.getElementById("job-progress-section");
+        if (!section) {
+          return;
+        }
 
       var jobId = section.getAttribute("data-job-id");
       var statusText = document.getElementById("job-status-text");
@@ -603,7 +634,8 @@
         };
       };
 
-      connect();
-    })();
-  </script>
+        connect();
+      })();
+    </script>
+  {% endif %}
 {% endblock %}
