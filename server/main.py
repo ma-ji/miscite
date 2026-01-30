@@ -5,7 +5,9 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
@@ -41,6 +43,13 @@ def create_app() -> FastAPI:
     app.include_router(billing.router)
 
     app.mount("/static", StaticFiles(directory="server/miscite/static"), name="static")
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_redirect(request: Request, exc: HTTPException):
+        if exc.status_code == 401 and not request.url.path.startswith("/api/"):
+            return RedirectResponse("/", status_code=303)
+        return await http_exception_handler(request, exc)
+
     return app
 
 
