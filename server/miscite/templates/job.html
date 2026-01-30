@@ -270,6 +270,127 @@
       </div>
     </section>
 
+	    {% if report.deep_analysis %}
+	      <section class="ds-section">
+	        <div class="ds-card">
+	          <div class="card-content">
+	            <h3>Deep literature suggestions</h3>
+	            <p class="miscite-muted">
+	              Optional guidance to strengthen your citations and literature review. Use the <span class="miscite-mono">[R#]</span> markers to jump to the
+	              reference list for this section.
+	            </p>
+
+	            {% if report.deep_analysis.status == "completed" %}
+	              {% set da = report.deep_analysis %}
+	              {% set sug = da.suggestions %}
+	              {% if sug and sug.status == "completed" %}
+	                {% if sug.overview %}
+	                  <p class="ds-issue-guidance">{{ sug.overview|da_cite }}</p>
+	                {% endif %}
+	                {% if sug.note %}
+	                  <p class="miscite-muted">{{ sug.note }}</p>
+	                {% endif %}
+	                {% if sug.sections %}
+	                  <div class="ds-stack ds-mt-4">
+	                    {% for section in sug.sections %}
+	                      <div>
+	                        <h4>{{ section.title }}</h4>
+	                        {% if section.bullets %}
+	                          <ul class="ds-list ds-mt-3">
+	                            {% for bullet in section.bullets %}
+	                              <li>{{ bullet|da_cite }}</li>
+	                            {% endfor %}
+	                          </ul>
+	                        {% endif %}
+	                      </div>
+	                    {% endfor %}
+	                  </div>
+	                {% endif %}
+	              {% else %}
+	                <p class="miscite-muted">No deep suggestions were generated for this run.</p>
+	              {% endif %}
+
+	              {% if da.citation_groups and da.references %}
+	                <h4 class="ds-mt-5">Shortlists</h4>
+	                <p class="miscite-muted">Quick lists used by the suggestions above (each item links to the master reference list).</p>
+	                <div class="ds-grid ds-mt-4">
+	                  {% for group in da.citation_groups %}
+	                    <div class="span-6 ds-mt-4">
+	                      <details class="ds-disclosure ds-disclosure--low" open>
+	                        <summary>{{ group.title }}</summary>
+	                        <ul class="ds-list ds-mt-3">
+	                          {% for rid in group.rids|default([]) %}
+	                            {% set ref = da.references.get(rid) %}
+	                            {% if ref %}
+	                              <li>
+	                                <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>
+	                                {{ ref.title|default("Untitled") }}
+	                                {% if ref.year %} ({{ ref.year }}){% endif %}
+	                                {% if ref.in_paper %}<span class="ds-chip">Already cited</span>{% endif %}
+	                              </li>
+	                            {% endif %}
+	                          {% endfor %}
+	                        </ul>
+	                      </details>
+	                    </div>
+	                  {% endfor %}
+	                </div>
+	              {% endif %}
+
+	              {% if da.reference_groups and da.references %}
+	                <h4 class="ds-mt-5">Reference list for this section</h4>
+	                <p class="miscite-muted">Each reference appears once (grouped); click <span class="miscite-mono">[R#]</span> anywhere above to jump here.</p>
+	                <div class="ds-stack ds-mt-4">
+	                  {% for group in da.reference_groups %}
+	                    <details class="ds-disclosure ds-disclosure--low" {% if loop.index <= 2 %}open{% endif %}>
+	                      <summary>{{ group.title }}</summary>
+	                      <ol class="ds-list ds-mt-3">
+	                        {% for rid in group.rids|default([]) %}
+	                          {% set ref = da.references.get(rid) %}
+	                          {% if ref %}
+	                            <li id="da-ref-{{ rid }}">
+	                              <div>
+	                                <span class="miscite-mono">[{{ rid }}]</span>
+	                                {{ ref.apa_base }}
+	                              </div>
+	                              <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
+	                                {% if ref.doi %}
+	                                  <a class="ds-chip miscite-mono" href="https://doi.org/{{ ref.doi }}">DOI: {{ ref.doi }}</a>
+	                                {% elif ref.official_url %}
+	                                  <a class="ds-chip miscite-mono" href="{{ ref.official_url }}">URL: {{ ref.official_url }}</a>
+	                                {% endif %}
+	                                {% if ref.oa_pdf_url %}
+	                                  <a class="ds-chip" href="{{ ref.oa_pdf_url }}">Open PDF</a>
+	                                {% endif %}
+	                                {% if ref.in_paper %}
+	                                  <span class="ds-chip">Already cited</span>
+	                                {% endif %}
+	                              </div>
+	                            </li>
+	                          {% endif %}
+	                        {% endfor %}
+	                      </ol>
+	                    </details>
+	                  {% endfor %}
+	                </div>
+	              {% endif %}
+
+	              <details class="ds-raw ds-mt-5">
+	                <summary>Show raw deep analysis data</summary>
+	                <pre class="miscite-mono pre-wrap">{{ report.deep_analysis|tojson(indent=2) }}</pre>
+	              </details>
+            {% elif report.deep_analysis.status == "skipped" %}
+              <p class="miscite-muted">{{ report.deep_analysis.reason|default("Deep analysis was skipped.") }}</p>
+            {% else %}
+              <div class="ds-alert ds-alert--warning ds-mt-4">
+                Deep analysis did not complete: {{ report.deep_analysis.reason|default("Unknown error") }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
     <section class="ds-section">
       <div class="ds-grid">
         <div class="span-6">

@@ -122,7 +122,7 @@ class PredatoryRecord:
 @dataclass(frozen=True)
 class PredatoryMatch:
     record: PredatoryRecord
-    match_type: str  # "issn_exact" | "name_exact" | "name_contains"
+    match_type: str  # "issn_exact" | "name_exact"
     confidence: float
 
     def as_dict(self) -> dict:
@@ -230,12 +230,8 @@ class PredatoryVenueDataset:
                 name_n = self._norm(rec.name)
                 if journal_n == name_n:
                     return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
-                if name_n and name_n in journal_n:
-                    return PredatoryMatch(record=rec, match_type="name_contains", confidence=0.55)
             if rec.venue_type == "publisher" and publisher_n and rec.name:
                 name_n = self._norm(rec.name)
                 if publisher_n == name_n:
                     return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
-                if name_n and name_n in publisher_n:
-                    return PredatoryMatch(record=rec, match_type="name_contains", confidence=0.55)
         return None

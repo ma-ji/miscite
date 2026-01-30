@@ -8,6 +8,21 @@ from server.miscite.analysis.normalize import normalize_doi
 from server.miscite.sources.http import backoff_sleep
 
 
+def _openalex_work_id_suffix(openalex_id: str) -> str | None:
+    if not openalex_id:
+        return None
+    openalex_id = openalex_id.strip()
+    if not openalex_id:
+        return None
+    if openalex_id.startswith("https://openalex.org/"):
+        return openalex_id.rstrip("/").split("/")[-1] or None
+    if openalex_id.startswith("https://api.openalex.org/works/"):
+        return openalex_id.rstrip("/").split("/")[-1] or None
+    if openalex_id.startswith("W"):
+        return openalex_id
+    return None
+
+
 @dataclass
 class OpenAlexClient:
     timeout_seconds: float = 20.0
@@ -65,6 +80,30 @@ class OpenAlexClient:
     def search(self, query: str, *, rows: int = 5) -> list[dict]:
         url = "https://api.openalex.org/works"
         params = {"search": query, "per-page": rows}
+        for attempt in range(3):
+            try:
+                resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
+                resp.raise_for_status()
+                return (resp.json() or {}).get("results") or []
+            except requests.RequestException:
+                backoff_sleep(attempt)
+        return []
+
+    def list_citing_works(self, openalex_id: str, *, rows: int = 100) -> list[dict]:
+        """
+        Returns a list of OpenAlex works that cite the given work.
+
+        Note: This method returns at most `rows` results (single page).
+        """
+        suffix = _openalex_work_id_suffix(openalex_id)
+        if not suffix:
+            return []
+        url = "https://api.openalex.org/works"
+        params = {
+            "filter": f"cites:{suffix}",
+            "sort": "publication_date:desc",
+            "per-page": rows,
+        }
         for attempt in range(3):
             try:
                 resp = self._client().get(url, params=params, timeout=self.timeout_seconds)

@@ -113,6 +113,23 @@ class Settings:
     enable_local_nli: bool
     local_nli_model: str
 
+    enable_deep_analysis: bool
+    enable_deep_analysis_llm_key_selection: bool
+    enable_deep_analysis_llm_suggestions: bool
+    deep_analysis_min_confidence: float
+    deep_analysis_max_original_refs: int
+    deep_analysis_paper_excerpt_max_chars: int
+    deep_analysis_max_nodes: int
+    deep_analysis_max_edges: int
+    deep_analysis_max_workers: int
+    deep_analysis_max_references_per_work: int
+    deep_analysis_max_second_hop_seeds: int
+    deep_analysis_max_total_citing_refs: int
+    deep_analysis_max_citing_refs_for_second_hop: int
+    deep_analysis_display_max_key_refs: int
+    deep_analysis_display_max_per_category: int
+    deep_analysis_display_max_openalex_fetches: int
+
     billing_enabled: bool
     stripe_secret_key: str
     stripe_webhook_secret: str
@@ -208,6 +225,27 @@ class Settings:
         enable_local_nli = _env_bool("MISCITE_ENABLE_LOCAL_NLI", False)
         local_nli_model = _env_str("MISCITE_LOCAL_NLI_MODEL", "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli")
 
+        enable_deep_analysis = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS", False)
+        enable_deep_analysis_llm_key_selection = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS_LLM_KEY_SELECTION", True)
+        enable_deep_analysis_llm_suggestions = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS_LLM_SUGGESTIONS", True)
+        deep_analysis_min_confidence = _env_float("MISCITE_DEEP_ANALYSIS_MIN_CONFIDENCE", 0.55, min_value=0.0, max_value=1.0)
+        deep_analysis_max_original_refs = _env_int("MISCITE_DEEP_ANALYSIS_MAX_ORIGINAL_REFS", 400, min_value=10, max_value=5000)
+        deep_analysis_paper_excerpt_max_chars = _env_int("MISCITE_DEEP_ANALYSIS_PAPER_EXCERPT_MAX_CHARS", 6000, min_value=500, max_value=50_000)
+        deep_analysis_max_nodes = _env_int("MISCITE_DEEP_ANALYSIS_MAX_NODES", 2500, min_value=100, max_value=200_000)
+        deep_analysis_max_edges = _env_int("MISCITE_DEEP_ANALYSIS_MAX_EDGES", 50_000, min_value=100, max_value=1_000_000)
+        deep_analysis_max_workers = _env_int("MISCITE_DEEP_ANALYSIS_MAX_WORKERS", 8, min_value=1, max_value=64)
+        deep_analysis_max_references_per_work = _env_int("MISCITE_DEEP_ANALYSIS_MAX_REFERENCES_PER_WORK", 80, min_value=5, max_value=500)
+        deep_analysis_max_second_hop_seeds = _env_int("MISCITE_DEEP_ANALYSIS_MAX_SECOND_HOP_SEEDS", 500, min_value=0, max_value=50_000)
+        deep_analysis_max_total_citing_refs = _env_int("MISCITE_DEEP_ANALYSIS_MAX_TOTAL_CITING_REFS", 1000, min_value=0, max_value=50_000)
+        deep_analysis_max_citing_refs_for_second_hop = _env_int(
+            "MISCITE_DEEP_ANALYSIS_MAX_CITING_REFS_FOR_SECOND_HOP", 800, min_value=0, max_value=50_000
+        )
+        deep_analysis_display_max_key_refs = _env_int("MISCITE_DEEP_ANALYSIS_DISPLAY_MAX_KEY_REFS", 25, min_value=1, max_value=200)
+        deep_analysis_display_max_per_category = _env_int("MISCITE_DEEP_ANALYSIS_DISPLAY_MAX_PER_CATEGORY", 20, min_value=1, max_value=200)
+        deep_analysis_display_max_openalex_fetches = _env_int(
+            "MISCITE_DEEP_ANALYSIS_DISPLAY_MAX_OPENALEX_FETCHES", 140, min_value=0, max_value=2000
+        )
+
         billing_enabled = _env_bool("MISCITE_BILLING_ENABLED", False)
         stripe_secret_key = _env_str("STRIPE_SECRET_KEY", "")
         stripe_webhook_secret = _env_str("STRIPE_WEBHOOK_SECRET", "")
@@ -264,6 +302,22 @@ class Settings:
             llm_citation_parse_max_candidate_chars=llm_citation_parse_max_candidate_chars,
             enable_local_nli=enable_local_nli,
             local_nli_model=local_nli_model,
+            enable_deep_analysis=enable_deep_analysis,
+            enable_deep_analysis_llm_key_selection=enable_deep_analysis_llm_key_selection,
+            enable_deep_analysis_llm_suggestions=enable_deep_analysis_llm_suggestions,
+            deep_analysis_min_confidence=deep_analysis_min_confidence,
+            deep_analysis_max_original_refs=deep_analysis_max_original_refs,
+            deep_analysis_paper_excerpt_max_chars=deep_analysis_paper_excerpt_max_chars,
+            deep_analysis_max_nodes=deep_analysis_max_nodes,
+            deep_analysis_max_edges=deep_analysis_max_edges,
+            deep_analysis_max_workers=deep_analysis_max_workers,
+            deep_analysis_max_references_per_work=deep_analysis_max_references_per_work,
+            deep_analysis_max_second_hop_seeds=deep_analysis_max_second_hop_seeds,
+            deep_analysis_max_total_citing_refs=deep_analysis_max_total_citing_refs,
+            deep_analysis_max_citing_refs_for_second_hop=deep_analysis_max_citing_refs_for_second_hop,
+            deep_analysis_display_max_key_refs=deep_analysis_display_max_key_refs,
+            deep_analysis_display_max_per_category=deep_analysis_display_max_per_category,
+            deep_analysis_display_max_openalex_fetches=deep_analysis_display_max_openalex_fetches,
             billing_enabled=billing_enabled,
             stripe_secret_key=stripe_secret_key,
             stripe_webhook_secret=stripe_webhook_secret,

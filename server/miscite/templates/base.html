@@ -40,15 +40,12 @@
           {% endif %}
         </nav>
         <div class="app-actions">
-          <button
-            class="ds-button ds-button--ghost ds-theme-toggle"
-            type="button"
-            data-theme-toggle
-            aria-pressed="false"
-          >
+          <label class="ds-toggle app-theme-toggle">
             <i class="material-icons" aria-hidden="true">brightness_6</i>
-            <span class="theme-label">Theme</span>
-          </button>
+            <span class="theme-label">Theme: Light</span>
+            <input type="checkbox" role="switch" data-theme-toggle aria-label="Toggle theme" />
+            <span class="ds-toggle-track" aria-hidden="true"></span>
+          </label>
           {% if current_user %}
             <form method="post" action="/logout">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
@@ -85,6 +82,8 @@
         var toggle = document.querySelector("[data-theme-toggle]");
         var root = document.documentElement;
         var storageKey = "miscite-theme";
+        var toggleLabel = toggle ? toggle.closest("label") : null;
+        var themeLabel = toggleLabel ? toggleLabel.querySelector(".theme-label") : null;
 
         var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
         var preferredTheme = function () {
@@ -99,10 +98,10 @@
           }
           if (toggle) {
             var active = root.getAttribute("data-theme") || preferredTheme();
-            toggle.setAttribute("aria-pressed", active === "dark" ? "true" : "false");
-            var label = toggle.querySelector(".theme-label");
-            if (label) {
-              label.textContent = active === "dark" ? "Theme: Dark" : "Theme: Light";
+            toggle.checked = active === "dark";
+            toggle.setAttribute("aria-checked", active === "dark" ? "true" : "false");
+            if (themeLabel) {
+              themeLabel.textContent = active === "dark" ? "Theme: Dark" : "Theme: Light";
             }
           }
         };
@@ -125,9 +124,8 @@
         }
 
         if (toggle) {
-          toggle.addEventListener("click", function () {
-            var active = root.getAttribute("data-theme") || preferredTheme();
-            var next = active === "dark" ? "light" : "dark";
+          toggle.addEventListener("change", function () {
+            var next = toggle.checked ? "dark" : "light";
             try {
               localStorage.setItem(storageKey, next);
             } catch (err) {

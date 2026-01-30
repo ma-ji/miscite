@@ -21,6 +21,7 @@ UI uses a lightweight CSS-variables design system (light/dark) in `server/miscit
     - Heuristic relevance between citing context and the cited work’s title/abstract (when available).
     - Optional local NLI model (GPU/CPU) to catch obvious contradictions.
     - OpenRouter LLM for conservative classification (“appropriate / inappropriate / uncertain”).
+- Optional **deep literature analysis** (off by default): picks key references, expands the surrounding citation neighborhood (works cited by / citing them), and suggests additions/removals to strengthen the paper.
 - Clear report transparency:
   - Lists data sources used per reference.
   - Includes methodology + limitations.
@@ -192,6 +193,12 @@ You can use different LLM models for different tasks:
 - `MISCITE_LLM_MODEL`: inappropriate-citation classification
 - `MISCITE_LLM_PARSE_MODEL`: citation/bibliography parsing
 - `MISCITE_LLM_MATCH_MODEL`: OpenAlex/Crossref/arXiv match disambiguation
+
+### Deep analysis (optional)
+
+Off by default (can be expensive):
+
+- `MISCITE_ENABLE_DEEP_ANALYSIS=true`
 
 #### LLM parsing
 

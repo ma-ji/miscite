@@ -15,6 +15,24 @@ def _norm_issn(issn: str) -> str:
     return (issn or "").replace("-", "").strip().lower()
 
 
+def _record_exact_match(record: dict, *, journal: str | None, publisher: str | None, issn: str | None) -> bool:
+    issn_n = _norm_issn(issn or "")
+    journal_n = _norm_text(journal or "")
+    publisher_n = _norm_text(publisher or "")
+
+    rec_issn = _norm_issn(str(record.get("issn") or ""))
+    rec_journal = _norm_text(str(record.get("journal") or ""))
+    rec_publisher = _norm_text(str(record.get("publisher") or ""))
+
+    if issn_n and rec_issn and issn_n == rec_issn:
+        return True
+    if journal_n and rec_journal and journal_n == rec_journal:
+        return True
+    if publisher_n and rec_publisher and publisher_n == rec_publisher:
+        return True
+    return False
+
+
 @dataclass
 class PredatoryApiClient:
     """Optional API client for predatory venue lookups.
@@ -90,9 +108,9 @@ class PredatoryApiClient:
 
             if issn_n and rec_issn and issn_n == rec_issn:
                 return rec
-            if journal_n and rec_journal and (journal_n == rec_journal or rec_journal in journal_n):
+            if journal_n and rec_journal and journal_n == rec_journal:
                 return rec
-            if publisher_n and rec_publisher and (publisher_n == rec_publisher or rec_publisher in publisher_n):
+            if publisher_n and rec_publisher and publisher_n == rec_publisher:
                 return rec
         return None
 
@@ -119,9 +137,11 @@ class PredatoryApiClient:
 def _parse_predatory_lookup_response(payload: object, *, journal: str | None, publisher: str | None, issn: str | None) -> dict | None:
     if isinstance(payload, dict):
         if payload.get("match") is True and isinstance(payload.get("record"), dict):
-            return payload["record"]
+            record = payload["record"]
+            return record if _record_exact_match(record, journal=journal, publisher=publisher, issn=issn) else None
         if isinstance(payload.get("record"), dict):
-            return payload["record"]
+            record = payload["record"]
+            return record if _record_exact_match(record, journal=journal, publisher=publisher, issn=issn) else None
         records = payload.get("records") or payload.get("items") or payload.get("data")
         if isinstance(records, list):
             # If the API returns candidate records, apply the same matching logic.
@@ -130,7 +150,7 @@ def _parse_predatory_lookup_response(payload: object, *, journal: str | None, pu
             return client._lookup_from_list(journal=journal, publisher=publisher, issn=issn)
         # Some APIs return a single record object.
         if any(k in payload for k in ("journal", "publisher", "issn")):
-            return payload
+            return payload if _record_exact_match(payload, journal=journal, publisher=publisher, issn=issn) else None
         return None
 
     if isinstance(payload, list):

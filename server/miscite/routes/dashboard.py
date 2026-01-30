@@ -25,6 +25,37 @@ def _subscription_active(account: BillingAccount | None) -> bool:
     return account.subscription_status in {"active", "trialing"}
 
 
+def _human_date(ts: dt.datetime | None) -> str:
+    if ts is None:
+        return ""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=dt.UTC)
+    return f"{ts.strftime('%b')} {ts.day}, {ts.year}"
+
+
+def _relative_time(ts: dt.datetime | None) -> str:
+    if ts is None:
+        return ""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=dt.UTC)
+    now = dt.datetime.now(dt.UTC)
+    delta = now - ts
+    seconds = max(0, int(delta.total_seconds()))
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    if seconds < 86400 * 7:
+        return f"{seconds // 86400}d ago"
+    if seconds < 86400 * 30:
+        return f"{max(1, seconds // (86400 * 7))}w ago"
+    if seconds < 86400 * 365:
+        return f"{max(1, seconds // (86400 * 30))}mo ago"
+    return f"{max(1, seconds // (86400 * 365))}y ago"
+
+
 @router.get("/")
 def root(request: Request, db: Session = Depends(db_session)):
     user = None
@@ -46,6 +77,9 @@ def dashboard(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(db_session),
+    q: str | None = Query(default=None, alias="q"),
+    status: str | None = Query(default=None, alias="status"),
+    sort: str | None = Query(default=None, alias="sort"),
 ):
     request.state.user = user
     settings: Settings = request.app.state.settings
@@ -53,20 +87,67 @@ def dashboard(
     billing = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user.id))
     subscription_status = billing.subscription_status if billing else "inactive"
 
-    rows = db.execute(
+    status_filter = (status or "all").lower()
+    if status_filter not in {"all", "completed", "failed", "processing"}:
+        status_filter = "all"
+
+    sort_choice = (sort or "newest").lower()
+    if sort_choice not in {"newest", "oldest", "status"}:
+        sort_choice = "newest"
+
+    stmt = (
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.user_id == user.id)
+    )
+    if q:
+        stmt = stmt.where(Document.original_filename.ilike(f"%{q}%"))
+    if status_filter == "completed":
+        stmt = stmt.where(AnalysisJob.status == JobStatus.completed.value)
+    elif status_filter == "failed":
+        stmt = stmt.where(AnalysisJob.status == JobStatus.failed.value)
+    elif status_filter == "processing":
+        stmt = stmt.where(AnalysisJob.status.in_([JobStatus.pending.value, JobStatus.running.value]))
+
+    if sort_choice == "oldest":
+        stmt = stmt.order_by(AnalysisJob.created_at)
+    elif sort_choice == "status":
+        stmt = stmt.order_by(AnalysisJob.status, desc(AnalysisJob.created_at))
+    else:
+        stmt = stmt.order_by(desc(AnalysisJob.created_at))
+
+    rows = db.execute(stmt.limit(25)).all()
+
+    latest_row = db.execute(
         select(AnalysisJob, Document)
         .join(Document, Document.id == AnalysisJob.document_id)
         .where(AnalysisJob.user_id == user.id)
         .order_by(desc(AnalysisJob.created_at))
-        .limit(25)
-    ).all()
+        .limit(1)
+    ).first()
+
+    latest_job = None
+    if latest_row:
+        job, doc = latest_row
+        latest_job = {
+            "id": job.id,
+            "status": job.status,
+            "created_at": job.created_at.isoformat(),
+            "created_at_human": _human_date(job.created_at),
+            "created_at_relative": _relative_time(job.created_at),
+            "filename": doc.original_filename,
+            "error_message": job.error_message,
+        }
 
     jobs = [
         {
             "id": job.id,
             "status": job.status,
             "created_at": job.created_at.isoformat(),
+            "created_at_human": _human_date(job.created_at),
+            "created_at_relative": _relative_time(job.created_at),
             "filename": doc.original_filename,
+            "error_message": job.error_message,
         }
         for job, doc in rows
     ]
@@ -78,11 +159,16 @@ def dashboard(
         "dashboard.html",
         template_context(
             request,
-            title="Dashboard",
+            title="Analyze citations",
             jobs=jobs,
             billing_required=billing_required,
             subscription_active=subscription_active,
             subscription_status=subscription_status,
+            query=q or "",
+            status_filter=status_filter,
+            sort_choice=sort_choice,
+            max_upload_mb=settings.max_upload_mb,
+            latest_job=latest_job,
         ),
     )
 

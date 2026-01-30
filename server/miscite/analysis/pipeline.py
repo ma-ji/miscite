@@ -11,6 +11,7 @@ from server.miscite.analysis.citation_parsing import (
     ReferenceEntry,
     split_references,
 )
+from server.miscite.analysis.deep_analysis import run_deep_analysis
 from server.miscite.analysis.llm_parsing import (
     extract_references_section_with_llm,
     parse_citations_with_llm,
@@ -18,7 +19,12 @@ from server.miscite.analysis.llm_parsing import (
 )
 from server.miscite.analysis.local_nli import LocalNliModel
 from server.miscite.analysis.methodology import build_methodology_md
-from server.miscite.analysis.normalize import content_tokens, normalize_doi
+from server.miscite.analysis.normalize import (
+    content_tokens,
+    normalize_author_year_key,
+    normalize_author_year_locator,
+    normalize_doi,
+)
 from server.miscite.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.sources.arxiv import ArxivClient
@@ -362,7 +368,9 @@ def _summarize_openalex_work(work: dict) -> dict:
         "type": work.get("type"),
         "host_venue": work.get("host_venue"),
         "primary_location": work.get("primary_location"),
+        "best_oa_location": work.get("best_oa_location"),
         "open_access": work.get("open_access"),
+        "biblio": work.get("biblio"),
         "cited_by_count": work.get("cited_by_count"),
         "referenced_works_count": len(work.get("referenced_works") or []) if isinstance(work.get("referenced_works"), list) else None,
         "authorships": authors,
@@ -483,8 +491,12 @@ def analyze_document(
         if ref.ref_number is not None:
             numeric_map[str(ref.ref_number)] = ref
         if ref.first_author and ref.year:
-            key = f"{ref.first_author}-{ref.year}"
-            author_year_map.setdefault(key, []).append(ref)
+            raw_key = f"{ref.first_author}-{ref.year}"
+            norm_key = normalize_author_year_key(ref.first_author, ref.year)
+            if norm_key:
+                author_year_map.setdefault(norm_key, []).append(ref)
+            if raw_key and raw_key != norm_key:
+                author_year_map.setdefault(raw_key, []).append(ref)
 
     citation_to_ref: list[tuple[CitationInstance, ReferenceEntry | None]] = []
     for cit in citations:
@@ -492,7 +504,8 @@ def analyze_document(
         if cit.kind == "numeric":
             ref = numeric_map.get(cit.locator)
         else:
-            candidates = author_year_map.get(cit.locator) or []
+            key = normalize_author_year_locator(cit.locator) or cit.locator
+            candidates = author_year_map.get(key) or author_year_map.get(cit.locator) or []
             if len(candidates) == 1:
                 ref = candidates[0]
             elif len(candidates) > 1:
@@ -1085,7 +1098,7 @@ def analyze_document(
                 {
                     "type": "retracted_article",
                     "title": f"Retracted work cited: {work.doi}",
-                    "severity": "high" if high_conf else "medium",
+                    "severity": "high",
                     "details": {
                         "ref_id": ref.ref_id,
                         "retraction": retraction_hits,
@@ -1122,7 +1135,7 @@ def analyze_document(
                 {
                     "type": "predatory_venue_match",
                     "title": f"Predatory venue match for {ref.ref_id}",
-                    "severity": "high" if high_conf else "medium",
+                    "severity": "high",
                     "details": {
                         "ref_id": ref.ref_id,
                         "match": predatory_hits,
@@ -1240,9 +1253,30 @@ def analyze_document(
         "potentially_inappropriate": potentially_inappropriate,
     }
 
+    deep_analysis_report: dict | None = None
+    try:
+        deep_budget = max(0, llm_max_calls - llm_calls)
+        deep_result = run_deep_analysis(
+            settings=settings,
+            llm_client=llm_client,
+            openalex=openalex,
+            references=references,
+            resolved_by_ref_id=resolved_by_ref_id,
+            citation_to_ref=citation_to_ref,
+            paper_excerpt=main_text,
+            progress=(lambda msg, frac: _progress("deep", msg, 0.96 + 0.015 * frac)),
+            llm_budget=deep_budget,
+        )
+        used_sources.extend(deep_result.used_sources)
+        limitations.extend(deep_result.limitations)
+        deep_analysis_report = deep_result.report
+    except Exception as e:
+        deep_analysis_report = {"status": "failed", "reason": str(e)}
+
     report = {
         "summary": summary,
         "issues": issues,
+        "deep_analysis": deep_analysis_report,
         "references": [
             {
                 "ref_id": ref.ref_id,

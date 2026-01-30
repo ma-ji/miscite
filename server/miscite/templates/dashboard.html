@@ -1,138 +1,521 @@
 {% extends "base.html" %}
 {% block content %}
-  <section class="ds-section">
+  {% set upload_state = "idle" %}
+  {% if latest_job %}
+    {% if latest_job.status == "COMPLETED" %}
+      {% set upload_state = "completed" %}
+    {% elif latest_job.status == "FAILED" %}
+      {% set upload_state = "failed" %}
+    {% elif latest_job.status in ["PENDING", "RUNNING"] %}
+      {% set upload_state = "processing" %}
+    {% endif %}
+  {% endif %}
+
+  <section class="ds-section ds-section--hero">
     <div class="ds-grid">
       <div class="span-8">
-        <p class="eyebrow">Workspace</p>
-        <h1>Dashboard</h1>
-        <p class="lead">
-          Upload a manuscript (PDF or DOCX) and generate a clear, explainable citation report.
-        </p>
+        <div class="ds-stack ds-stack--lg">
+          <div>
+            <p class="eyebrow">Workspace</p>
+            <h1>Analyze citations</h1>
+            <p class="lead">
+              Run checks against OpenAlex/Crossref/arXiv metadata, Retraction Watch, and curated lists.
+            </p>
+            <p class="miscite-muted">Files are processed securely; reports are workspace-scoped.</p>
+          </div>
+          <div class="ds-card ds-card--hero" id="upload-module">
+            <div class="card-content">
+              <div class="ds-card-header ds-card-header--split">
+                <div>
+                  <h3>Analyze a manuscript</h3>
+                  <p class="miscite-muted">Upload a manuscript to generate a detailed citation report.</p>
+                </div>
+                {% if jobs|length == 0 %}
+                  <a class="ds-link" href="#sample-report">Sample report</a>
+                {% endif %}
+              </div>
+              <form
+                method="post"
+                action="/upload"
+                enctype="multipart/form-data"
+                class="ds-stack ds-stack--tight"
+                data-upload-form
+                data-billing-disabled="{{ 'true' if (billing_required and not subscription_active) else 'false' }}"
+              >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <div class="form-field">
+                  <label class="form-label" for="file">Manuscript file</label>
+                  <div
+                    class="ds-dropzone {{ 'is-disabled' if (billing_required and not subscription_active) else '' }}"
+                    data-dropzone
+                  >
+                    <input
+                      id="file"
+                      class="ds-dropzone-input"
+                      type="file"
+                      name="file"
+                      accept=".pdf,.docx"
+                      aria-describedby="upload-constraints upload-selected"
+                      {{ "disabled" if (billing_required and not subscription_active) else "" }}
+                    />
+                    <div class="ds-dropzone-body">
+                      <span class="ds-dropzone-title">
+                        Drop a PDF/DOCX here, or <span class="ds-dropzone-browse">Browse</span>
+                      </span>
+                      <span class="ds-dropzone-meta" id="upload-constraints">
+                        PDF, DOCX · Max {{ max_upload_mb }} MB · Optional page limit
+                      </span>
+                    </div>
+                    <div class="ds-dropzone-file" id="upload-selected" data-dropzone-file>
+                      No file selected
+                    </div>
+                  </div>
+                </div>
+                <div class="ds-upload-state" data-upload-state="{{ upload_state }}" aria-live="polite">
+                  <div class="ds-upload-state-item" data-state="idle">
+                    <i class="material-icons" aria-hidden="true">upload_file</i>
+                    <span>Choose a file to start your analysis.</span>
+                  </div>
+                  <div class="ds-upload-state-item" data-state="selected">
+                    <i class="material-icons" aria-hidden="true">task_alt</i>
+                    <span>Ready to analyze. Review file details and start the report.</span>
+                  </div>
+                  <div class="ds-upload-state-item" data-state="uploading">
+                    <div class="ds-upload-progress">
+                      <div class="ds-progress-bar ds-progress-bar--inline" aria-hidden="true">
+                        <div class="ds-progress-fill ds-progress-fill--indeterminate"></div>
+                      </div>
+                      <span>Uploading manuscript…</span>
+                    </div>
+                  </div>
+                  <div class="ds-upload-state-item" data-state="processing">
+                    <div class="ds-upload-progress">
+                      <span>Processing {{ latest_job.filename if latest_job else "your manuscript" }}</span>
+                      <a class="ds-link" href="{{ '/jobs/' ~ latest_job.id if latest_job else '#' }}">View status</a>
+                    </div>
+                    <ol class="ds-stepper" aria-label="Processing steps">
+                      <li class="ds-stepper-step is-complete">
+                        <span class="ds-stepper-bullet"></span>
+                        <span class="ds-stepper-label">Upload</span>
+                      </li>
+                      <li class="ds-stepper-step is-active">
+                        <span class="ds-stepper-bullet"></span>
+                        <span class="ds-stepper-label">Analyze</span>
+                      </li>
+                      <li class="ds-stepper-step">
+                        <span class="ds-stepper-bullet"></span>
+                        <span class="ds-stepper-label">Report ready</span>
+                      </li>
+                    </ol>
+                  </div>
+                  <div class="ds-upload-state-item" data-state="completed">
+                    <i class="material-icons" aria-hidden="true">check_circle</i>
+                    <span>
+                      Report ready for {{ latest_job.filename if latest_job else "your manuscript" }}.
+                      <a class="ds-link" href="{{ '/jobs/' ~ latest_job.id if latest_job else '#' }}">View report</a>
+                    </span>
+                  </div>
+                  <div class="ds-upload-state-item" data-state="failed">
+                    <i class="material-icons" aria-hidden="true">error</i>
+                    <span>
+                      Analysis failed{{ ": " ~ latest_job.error_message if latest_job and latest_job.error_message else "" }}.
+                      Review the error, then retry with a fresh upload.
+                    </span>
+                    <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-retry-upload>
+                      Retry upload
+                    </button>
+                  </div>
+                </div>
+                <div class="ds-upload-actions">
+                  <button
+                    class="ds-button ds-button--primary"
+                    type="submit"
+                    data-upload-submit
+                    disabled
+                    {{ "disabled" if (billing_required and not subscription_active) else "" }}
+                  >
+                    Generate report
+                  </button>
+                  {% if jobs|length == 0 %}
+                    <a class="ds-button ds-button--ghost" href="#sample-report">Sample report</a>
+                  {% endif %}
+                </div>
+              </form>
+            </div>
+          </div>
+          {% if jobs|length == 0 %}
+            <details class="ds-sample" id="sample-report">
+              <summary>Sample report preview</summary>
+              <div class="ds-sample-body">
+                <p class="miscite-muted">
+                  See how a report surfaces missing metadata, retraction matches, and citation context.
+                </p>
+                <ul class="ds-list">
+                  <li>Highlights missing DOIs and ambiguous references.</li>
+                  <li>Flags retractions and curated list matches.</li>
+                  <li>Summarizes actionable next steps per issue.</li>
+                </ul>
+              </div>
+            </details>
+          {% endif %}
+        </div>
       </div>
       <div class="span-4">
-        <div class="ds-card ds-card--subtle">
-          <div class="card-content">
-            <div class="ds-stat-grid">
+        <div class="ds-panel ds-panel--compact">
+          <div class="ds-panel-header">
+            <div>
+              <p class="eyebrow">Account</p>
+              <h3>Workspace overview</h3>
+            </div>
+            <span class="ds-badge ds-badge--neutral">{{ subscription_status }}</span>
+          </div>
+          <div class="ds-panel-body">
+            <div class="ds-stat-grid ds-stat-grid--compact">
               <div class="ds-stat">
                 <div class="ds-stat-value">{{ jobs|length }}</div>
                 <div class="ds-stat-label">Recent jobs</div>
               </div>
               <div class="ds-stat">
-                <div class="ds-stat-value ds-stat-value--label">{{ subscription_status }}</div>
-                <div class="ds-stat-label">Billing status</div>
+                <div class="ds-stat-value ds-stat-value--label">
+                  {{ latest_job.created_at_relative if latest_job else "—" }}
+                </div>
+                <div class="ds-stat-label">Last run</div>
               </div>
             </div>
+            <div class="ds-panel-meta">
+              <span class="ds-badge">Signed in</span>
+              <span class="miscite-mono">{{ current_user.email }}</span>
+            </div>
+          </div>
+          <div class="ds-panel-actions">
+            <a class="ds-button ds-button--secondary ds-button--sm" href="/billing">Manage billing</a>
+            <a class="ds-icon-button" href="/dashboard" aria-label="Refresh dashboard">
+              <i class="material-icons" aria-hidden="true">refresh</i>
+            </a>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="ds-section">
-    <div class="ds-grid">
-      <div class="span-7">
-        <div class="ds-card">
-          <div class="card-content">
-            <div class="ds-card-header">
-              <h3>Upload</h3>
-              <p class="miscite-muted">
-                Run checks against OpenAlex/Crossref/arXiv metadata, Retraction Watch, and curated lists.
-              </p>
-            </div>
-            {% if billing_required and not subscription_active %}
-              <div class="ds-alert ds-alert--warning">
-                Subscription required to run analyses. <a href="/billing">Manage billing</a>.
-              </div>
-            {% endif %}
-            <form method="post" action="/upload" enctype="multipart/form-data" class="ds-stack">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <div class="form-field">
-                <label class="form-label" for="file">Manuscript</label>
-                <input
-                  id="file"
-                  type="file"
-                  name="file"
-                  accept=".pdf,.docx"
-                  {{ "disabled" if (billing_required and not subscription_active) else "" }}
-                />
-                <p class="form-help">PDF or DOCX only.</p>
-              </div>
-              <button
-                class="ds-button ds-button--primary"
-                type="submit"
-                {{ "disabled" if (billing_required and not subscription_active) else "" }}
-              >
-                Submit for review
-              </button>
-            </form>
-          </div>
+  {% if billing_required and not subscription_active %}
+    <section class="ds-section ds-section--banner">
+      <div class="ds-banner ds-banner--warning" role="status">
+        <div>
+          <p class="eyebrow">Billing</p>
+          <h3>Billing inactive — activate to generate reports</h3>
+          <p class="miscite-muted">
+            Your workspace needs an active subscription before we can run new citation analyses.
+          </p>
         </div>
+        <a class="ds-button ds-button--primary" href="/billing">Activate billing</a>
       </div>
-      <div class="span-5">
-        <div class="ds-card">
-          <div class="card-content">
-            <div class="ds-card-header">
-              <h3>Account</h3>
-              <p class="miscite-muted">Signed in with your team workspace.</p>
-            </div>
-            <div class="ds-stack">
-              <div>
-                <span class="ds-badge">Signed in</span>
-                <span class="miscite-mono">{{ current_user.email }}</span>
-              </div>
-              <div class="ds-alert ds-alert--info">
-                Billing status: <span class="miscite-mono">{{ subscription_status }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="card-action">
-            <a href="/billing">Manage billing</a>
-            <a href="/dashboard">Refresh</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+    </section>
+  {% endif %}
 
   <section class="ds-section">
     <div class="section-header">
-      <p class="eyebrow">Recent work</p>
-      <h2>Latest analyses</h2>
-      <p class="lead">Your last 25 jobs appear here with status and file name.</p>
+      <p class="eyebrow">Workspace</p>
+      <h2>Recent analyses</h2>
+      <p class="lead">Search, filter, and revisit your last 25 jobs.</p>
     </div>
-    {% if jobs|length == 0 %}
-      <div class="ds-empty">
-        <h4>No jobs yet</h4>
-        <p class="miscite-muted">Upload a manuscript to generate your first report.</p>
-        <a class="ds-button ds-button--secondary" href="/dashboard">Start an upload</a>
+    <form class="ds-table-controls" method="get" action="/dashboard" data-auto-submit>
+      <div class="ds-input-with-icon">
+        <i class="material-icons" aria-hidden="true">search</i>
+        <input
+          type="search"
+          name="q"
+          placeholder="Search by filename"
+          value="{{ query }}"
+          aria-label="Search by filename"
+          data-search-input
+        />
       </div>
-    {% else %}
-      <div class="ds-card">
-        <div class="card-content">
-          <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
-            <table class="ds-table">
-              <thead>
-                <tr>
-                  <th>Created</th>
-                  <th>File</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for job in jobs %}
+      <div class="ds-filter-group" role="radiogroup" aria-label="Filter jobs by status">
+        <label class="ds-filter-pill">
+          <input type="radio" name="status" value="all" {{ "checked" if status_filter == "all" else "" }} />
+          <span>All</span>
+        </label>
+        <label class="ds-filter-pill">
+          <input
+            type="radio"
+            name="status"
+            value="completed"
+            {{ "checked" if status_filter == "completed" else "" }}
+          />
+          <span>Completed</span>
+        </label>
+        <label class="ds-filter-pill">
+          <input type="radio" name="status" value="failed" {{ "checked" if status_filter == "failed" else "" }} />
+          <span>Failed</span>
+        </label>
+        <label class="ds-filter-pill">
+          <input
+            type="radio"
+            name="status"
+            value="processing"
+            {{ "checked" if status_filter == "processing" else "" }}
+          />
+          <span>Processing</span>
+        </label>
+      </div>
+      <div class="form-field ds-table-control">
+        <label class="form-label" for="sort">Sort</label>
+        <select id="sort" name="sort">
+          <option value="newest" {{ "selected" if sort_choice == "newest" else "" }}>Newest</option>
+          <option value="oldest" {{ "selected" if sort_choice == "oldest" else "" }}>Oldest</option>
+          <option value="status" {{ "selected" if sort_choice == "status" else "" }}>Status</option>
+        </select>
+      </div>
+    </form>
+    <div data-workspace-results>
+      {% if jobs|length == 0 %}
+        <div class="ds-empty">
+          {% if query or status_filter != "all" %}
+            <h4>No matching jobs</h4>
+            <p class="miscite-muted">Try a different filename or reset your filters.</p>
+            <a class="ds-button ds-button--secondary" href="/dashboard">Clear filters</a>
+          {% else %}
+            <h4>No jobs yet</h4>
+            <p class="miscite-muted">Upload a manuscript to generate your first report.</p>
+            <a class="ds-button ds-button--secondary" href="#upload-module">Start an upload</a>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="ds-card ds-card--plain">
+          <div class="card-content">
+            <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
+              <table class="ds-table">
+                <thead>
                   <tr>
-                    <td class="miscite-mono">{{ job.created_at }}</td>
-                    <td>{{ job.filename }}</td>
-                    <td class="miscite-mono">{{ job.status }}</td>
-                    <td><a href="/jobs/{{ job.id }}">View</a></td>
+                    <th scope="col">Created</th>
+                    <th scope="col">File</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="ds-table-actions-col">Actions</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {% for job in jobs %}
+                    <tr>
+                      <td>
+                        <div class="ds-job-date">
+                          <time datetime="{{ job.created_at }}" title="{{ job.created_at }}">{{ job.created_at_human }}</time>
+                          <span class="miscite-muted">{{ job.created_at_relative }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="ds-job-file">
+                          <span title="{{ job.filename }}">{{ job.filename }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        {% if job.status == "COMPLETED" %}
+                          <span class="ds-status ds-status--success">
+                            <i class="material-icons" aria-hidden="true">check_circle</i>
+                            Completed
+                          </span>
+                        {% elif job.status == "FAILED" %}
+                          <span
+                            class="ds-status ds-status--error"
+                            title="{{ job.error_message or 'Analysis failed. Open to view details.' }}"
+                          >
+                            <i class="material-icons" aria-hidden="true">error</i>
+                            Failed
+                          </span>
+                        {% else %}
+                          <span class="ds-status ds-status--processing">
+                            <i class="material-icons" aria-hidden="true">autorenew</i>
+                            Processing
+                          </span>
+                          <div class="ds-progress-inline" aria-hidden="true"></div>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <div class="ds-table-actions">
+                          {% if job.status == "COMPLETED" %}
+                            <a class="ds-button ds-button--secondary ds-button--sm" href="/jobs/{{ job.id }}">
+                              View report
+                            </a>
+                          {% elif job.status == "FAILED" %}
+                            <a class="ds-button ds-button--secondary ds-button--sm" href="/jobs/{{ job.id }}">
+                              View error
+                            </a>
+                            <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-retry-upload>
+                              Retry
+                            </button>
+                          {% else %}
+                            <a class="ds-button ds-button--ghost ds-button--sm" href="/jobs/{{ job.id }}">
+                              View status
+                            </a>
+                          {% endif %}
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
-    {% endif %}
+      {% endif %}
+    </div>
   </section>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var form = document.querySelector("[data-upload-form]");
+      var filterForm = document.querySelector("[data-auto-submit]");
+
+      var fileInput = form ? form.querySelector('input[type="file"]') : null;
+      var submitButton = form ? form.querySelector("[data-upload-submit]") : null;
+      var dropzone = form ? form.querySelector("[data-dropzone]") : null;
+      var stateEl = form ? form.querySelector("[data-upload-state]") : null;
+      var fileLabel = form ? form.querySelector("[data-dropzone-file]") : null;
+      var billingBlocked = form ? form.dataset.billingDisabled === "true" : true;
+
+      var setState = function (state) {
+        if (!stateEl) return;
+        stateEl.setAttribute("data-upload-state", state);
+      };
+
+      var updateSubmit = function () {
+        if (!submitButton) return;
+        var hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+        submitButton.disabled = billingBlocked || !hasFile;
+      };
+
+      if (fileInput) {
+        fileInput.addEventListener("change", function () {
+          var name = fileInput.files && fileInput.files.length > 0 ? fileInput.files[0].name : "No file selected";
+          if (fileLabel) {
+            fileLabel.textContent = name;
+          }
+          if (fileInput.files && fileInput.files.length > 0) {
+            setState("selected");
+          } else {
+            setState("idle");
+          }
+          updateSubmit();
+        });
+      }
+
+      if (form) {
+        form.addEventListener("submit", function () {
+          setState("uploading");
+        });
+      }
+
+      if (dropzone) {
+        ["dragenter", "dragover"].forEach(function (eventName) {
+          dropzone.addEventListener(eventName, function (event) {
+            event.preventDefault();
+            if (!billingBlocked) {
+              dropzone.classList.add("is-dragover");
+            }
+          });
+        });
+        ["dragleave", "drop"].forEach(function (eventName) {
+          dropzone.addEventListener(eventName, function (event) {
+            event.preventDefault();
+            dropzone.classList.remove("is-dragover");
+          });
+        });
+      }
+
+      document.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof Element)) return;
+        var retryButton = target.closest("[data-retry-upload]");
+        if (!retryButton) return;
+        var uploadModule = document.getElementById("upload-module");
+        if (uploadModule) {
+          uploadModule.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        if (fileInput && !billingBlocked) {
+          fileInput.focus();
+        }
+      });
+
+      updateSubmit();
+
+      if (filterForm) {
+        var searchInput = filterForm.querySelector("[data-search-input]");
+        var autoInputs = filterForm.querySelectorAll('input[type="radio"], select');
+        var resultsContainer = document.querySelector("[data-workspace-results]");
+        var activeController = null;
+        var submitNow = function () {
+          if (!resultsContainer) {
+            filterForm.submit();
+            return;
+          }
+          var params = new URLSearchParams(new FormData(filterForm));
+          var url = filterForm.action + (params.toString() ? "?" + params.toString() : "");
+
+          if (activeController) {
+            activeController.abort();
+          }
+          activeController = new AbortController();
+          resultsContainer.setAttribute("aria-busy", "true");
+
+          try {
+            window.history.replaceState(null, "", url);
+          } catch (err) {
+            // ignore history errors
+          }
+
+          fetch(url, {
+            signal: activeController.signal,
+            headers: { "X-Requested-With": "fetch" },
+          })
+            .then(function (resp) {
+              if (!resp.ok) {
+                throw new Error("Failed to fetch results");
+              }
+              return resp.text();
+            })
+            .then(function (html) {
+              if (!resultsContainer) return;
+              var doc = new DOMParser().parseFromString(html, "text/html");
+              var next = doc.querySelector("[data-workspace-results]");
+              if (next) {
+                resultsContainer.innerHTML = next.innerHTML;
+              }
+            })
+            .catch(function (err) {
+              if (err && err.name === "AbortError") {
+                return;
+              }
+              console.warn(err);
+            })
+            .finally(function () {
+              if (resultsContainer) {
+                resultsContainer.removeAttribute("aria-busy");
+              }
+            });
+        };
+
+        filterForm.addEventListener("submit", function (event) {
+          event.preventDefault();
+          submitNow();
+        });
+
+        autoInputs.forEach(function (input) {
+          input.addEventListener("change", function () {
+            submitNow();
+          });
+        });
+        if (searchInput) {
+          var timer = null;
+          searchInput.addEventListener("input", function () {
+            if (timer) {
+              window.clearTimeout(timer);
+            }
+            timer = window.setTimeout(function () {
+              submitNow();
+            }, 350);
+          });
+        }
+      }
+    });
+  </script>
 {% endblock %}
