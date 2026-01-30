@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import json
+from urllib.parse import urlsplit
 from urllib.parse import urlparse
 
 from fastapi import Request
@@ -52,8 +54,65 @@ def safe_url(value: str | None) -> str:
 templates.env.filters["safe_url"] = safe_url
 
 
+def pretty_json(value) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+    except Exception:
+        return ""
+
+
+templates.env.filters["pretty_json"] = pretty_json
+
+
+def public_origin(request: Request) -> str:
+    settings = request.app.state.settings
+
+    scheme = request.url.scheme or "http"
+    host = request.headers.get("host") or request.url.netloc
+
+    if settings.trust_proxy:
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+
+        if forwarded_proto:
+            scheme = forwarded_proto.split(",")[0].strip() or scheme
+        if forwarded_host:
+            host = forwarded_host.split(",")[0].strip() or host
+
+    if host:
+        return f"{scheme}://{host}".rstrip("/")
+
+    base = str(request.base_url).rstrip("/")
+    if base:
+        return base
+
+    parsed = urlsplit(str(request.url))
+    netloc = parsed.netloc or host
+    if netloc:
+        return f"{scheme}://{netloc}".rstrip("/")
+    return ""
+
+
 def template_context(request: Request, **extra):
     settings = request.app.state.settings
+    path = request.url.path or "/"
+    origin = public_origin(request)
+    canonical_url = f"{origin}{path}" if origin else path
+
+    meta_description = extra.get("meta_description")
+    if not meta_description:
+        if path == "/":
+            meta_description = (
+                "Audit-ready citation checks for journals, labs, and research teams. "
+                "Upload PDF/DOCX manuscripts, resolve references, and flag missing, retracted, or risky citations."
+            )
+        else:
+            meta_description = "Audit-ready citation checks with evidence-first reports."
+
+    robots = extra.get("robots")
+    if not robots:
+        robots = "index, follow" if path == "/" else "noindex, nofollow"
+
     return {
         "request": request,
         "current_user": getattr(request.state, "user", None),
@@ -63,5 +122,9 @@ def template_context(request: Request, **extra):
         "csp_nonce": getattr(request.state, "csp_nonce", ""),
         "maintenance_mode": settings.maintenance_mode,
         "maintenance_message": settings.maintenance_message,
+        "public_origin": origin,
+        "canonical_url": canonical_url,
+        "meta_description": meta_description,
+        "robots": robots,
         **extra,
     }

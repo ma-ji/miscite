@@ -2,14 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ title or "miscite" }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    {% set page_title = (title or "miscite")|trim %}
+    {% if page_title|lower in ["miscite", ""] %}
+      {% set full_title = "miscite — Real & Relevant Citations" %}
+    {% else %}
+      {% set full_title = page_title ~ " · miscite" %}
+    {% endif %}
+    <title>{{ full_title }}</title>
+    <meta name="description" content="{{ meta_description }}" />
+    <meta name="robots" content="{{ robots }}" />
+    <link rel="canonical" href="{{ canonical_url }}" />
+    <meta property="og:site_name" content="miscite" />
+    <meta property="og:type" content="{{ og_type|default('website') }}" />
+    <meta property="og:url" content="{{ canonical_url }}" />
+    <meta property="og:title" content="{{ full_title }}" />
+    <meta property="og:description" content="{{ meta_description }}" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="{{ twitter_card|default('summary') }}" />
+    <meta name="twitter:title" content="{{ full_title }}" />
+    <meta name="twitter:description" content="{{ meta_description }}" />
+    <meta name="application-name" content="miscite" />
+    <meta name="theme-color" content="#990000" />
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" />
     <meta name="color-scheme" content="light dark" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     <link rel="stylesheet" href="/static/styles.css" />
+    {% block head %}{% endblock %}
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -58,12 +80,18 @@
     </header>
     <main id="main" class="ds-container ds-main">
       {% if flash %}
-        <div class="ds-alert ds-alert--{{ flash.level|default('info') }}">
+        {% set flash_level = flash.level|default('info') %}
+        {% set flash_role = 'alert' if flash_level in ['red', 'error', 'warning', 'amber'] else 'status' %}
+        <div
+          class="ds-alert ds-alert--{{ flash_level }}"
+          role="{{ flash_role }}"
+          aria-live="{{ 'assertive' if flash_role == 'alert' else 'polite' }}"
+        >
           {{ flash.message }}
         </div>
       {% endif %}
       {% if maintenance_mode %}
-        <div class="ds-alert ds-alert--warning">
+        <div class="ds-alert ds-alert--warning" role="status" aria-live="polite">
           {{ maintenance_message }}
         </div>
       {% endif %}
@@ -132,6 +160,72 @@
             applyTheme(next);
           });
         }
+
+        var copyButtons = document.querySelectorAll("[data-copy-target]");
+        var fallbackCopy = function (text) {
+          var el = document.createElement("textarea");
+          el.value = text;
+          el.setAttribute("readonly", "true");
+          el.style.position = "absolute";
+          el.style.left = "-9999px";
+          document.body.appendChild(el);
+          el.select();
+          try {
+            document.execCommand("copy");
+          } catch (err) {
+            // ignore copy errors
+          }
+          document.body.removeChild(el);
+        };
+
+        var copyText = function (text) {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text);
+          }
+          return new Promise(function (resolve) {
+            fallbackCopy(text);
+            resolve();
+          });
+        };
+
+        copyButtons.forEach(function (button) {
+          button.addEventListener("click", function () {
+            var targetId = button.getAttribute("data-copy-target");
+            if (!targetId) return;
+            var target = document.getElementById(targetId);
+            if (!target) return;
+
+            var text = "";
+            if (typeof target.value === "string") {
+              text = target.value;
+              try {
+                target.focus();
+                target.select();
+              } catch (err) {
+                // ignore focus errors
+              }
+            } else {
+              text = target.textContent || "";
+            }
+
+            text = (text || "").trim();
+            if (!text) return;
+
+            copyText(text)
+              .then(function () {
+                var previous = button.textContent;
+                button.textContent = "Copied";
+                button.disabled = true;
+                window.setTimeout(function () {
+                  button.textContent = previous;
+                  button.disabled = false;
+                }, 900);
+              })
+              .catch(function () {
+                fallbackCopy(text);
+              });
+          });
+        });
       });
     </script>
   </body>

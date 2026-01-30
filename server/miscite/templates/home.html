@@ -1,4 +1,17 @@
 {% extends "base.html" %}
+{% block head %}
+  <script type="application/ld+json" nonce="{{ csp_nonce }}">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "miscite",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "{{ canonical_url }}",
+      "description": "{{ meta_description }}"
+    }
+  </script>
+{% endblock %}
 {% block content %}
   <section class="ds-section ds-section--hero landing-hero">
     <div class="ds-grid landing-hero-grid">

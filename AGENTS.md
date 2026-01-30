@@ -39,11 +39,13 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/prompts/schemas/`: JSON Schemas for LLM prompt outputs.
 - `server/miscite/sources/`: OpenAlex, Crossref, arXiv, datasets, optional APIs, sync helpers.
 - `server/miscite/routes/`: auth, dashboard, billing, health endpoints.
+- `server/miscite/routes/seo.py`: robots.txt + sitemap.xml + favicon redirect endpoints.
 - `server/miscite/email.py`: Mailgun email delivery helpers.
 - `server/miscite/turnstile.py`: Cloudflare Turnstile verification helper.
 - `server/miscite/templates/`: Jinja UI (job report page relies on report JSON shape).
 - `server/miscite/templates/report_access.html`: token-based public report access form.
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
+- `server/miscite/static/favicon.svg`: brand favicon (referenced in `base.html`).
 - `kb/`: research and promptbook material (not wired into the runtime app). Don't read or edit `promptbook.md`, it is for dev use.
 - `scripts/`: helper scripts (dev runner, Zotero helper).
 

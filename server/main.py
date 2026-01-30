@@ -13,7 +13,7 @@ from server.miscite.cli import add_runtime_args, apply_runtime_overrides
 from server.miscite.config import Settings
 from server.miscite.db import init_db
 from server.miscite.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
-from server.miscite.routes import auth, billing, dashboard, health
+from server.miscite.routes import auth, billing, dashboard, health, seo
 
 
 def create_app() -> FastAPI:
@@ -35,6 +35,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
 
     app.include_router(health.router)
+    app.include_router(seo.router)
     app.include_router(auth.router)
     app.include_router(dashboard.router)
     app.include_router(billing.router)

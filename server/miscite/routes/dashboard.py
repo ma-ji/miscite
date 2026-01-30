@@ -180,7 +180,7 @@ def root(request: Request, db: Session = Depends(db_session)):
         return RedirectResponse("/dashboard", status_code=303)
     return templates.TemplateResponse(
         "home.html",
-        template_context(request, title="miscite"),
+        template_context(request, title="Audit-ready citation checks"),
     )
 
 
@@ -255,6 +255,7 @@ def report_access_token(request: Request, token: str, db: Session = Depends(db_s
                 "access_token_hint": job.access_token_hint,
             },
             report=report,
+            report_token=token_value,
             methodology_md="",
             public_view=True,
             hide_report_access=True,
@@ -435,6 +436,11 @@ def job_page(
     job, doc = row
 
     report = _load_report(job)
+    data_sources = json.loads(job.sources_json) if job.sources_json else None
+    methodology_md = job.methodology_md or ""
+    if not settings.expose_sensitive_report_fields:
+        data_sources = _redact_sources(data_sources)
+        methodology_md = _redact_methodology(methodology_md)
 
     return templates.TemplateResponse(
         "job.html",
@@ -454,7 +460,8 @@ def job_page(
                 "access_token_expired": _token_expired(job),
             },
             report=report,
-            methodology_md=job.methodology_md or "",
+            data_sources=data_sources,
+            methodology_md=methodology_md,
             public_view=False,
             hide_report_access=True,
         ),
@@ -498,6 +505,11 @@ def job_access_token(
     db.commit()
 
     report = _load_report(job)
+    data_sources = json.loads(job.sources_json) if job.sources_json else None
+    methodology_md = job.methodology_md or ""
+    if not settings.expose_sensitive_report_fields:
+        data_sources = _redact_sources(data_sources)
+        methodology_md = _redact_methodology(methodology_md)
 
     return templates.TemplateResponse(
         "job.html",
@@ -517,7 +529,8 @@ def job_access_token(
                 "access_token_expired": _token_expired(job),
             },
             report=report,
-            methodology_md=job.methodology_md or "",
+            data_sources=data_sources,
+            methodology_md=methodology_md,
             access_token=token,
             public_view=False,
             hide_report_access=True,
@@ -584,6 +597,33 @@ def _require_access_job(db: Session, token_hash: str) -> AnalysisJob:
     if job.access_token_expires_at is None or job.access_token_expires_at < now:
         raise HTTPException(status_code=403, detail="Access token expired.")
     return job
+
+
+@router.get("/api/reports/{token}")
+def report_api(
+    request: Request,
+    token: str,
+    db: Session = Depends(db_session),
+):
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="api-reports",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    token_hash = hash_token(token.strip())
+    job = _require_access_job(db, token_hash)
+    return {
+        "id": job.id,
+        "status": job.status,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        "error_message": _safe_error_message(settings, job.error_message),
+        "report": json.loads(job.report_json) if job.report_json else None,
+    }
 
 
 @router.get("/api/jobs/{job_id}/events")

@@ -495,6 +495,12 @@ textarea {
   }
 }
 
+@media (max-width: 720px) {
+  .app-tag {
+    display: none;
+  }
+}
+
 .ds-button {
   --btn-shadow: none;
   display: inline-flex;
@@ -955,6 +961,7 @@ h6 {
   margin: 0 0 var(--space-3);
   line-height: 1.2;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 h1 {
@@ -1725,6 +1732,22 @@ pre {
 
 .pre-wrap {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ds-pre-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.ds-disclosure-body pre {
+  margin: 0;
+}
+
+input[readonly] {
+  background: var(--surface-2);
+  border-color: var(--border-soft, var(--border));
 }
 
 .miscite-muted {
@@ -1941,7 +1964,7 @@ pre {
 
 .ds-severity-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -1999,7 +2022,7 @@ pre {
   }
 
   .ds-severity-grid {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

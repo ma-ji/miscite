@@ -21,7 +21,15 @@
             <form method="post" action="/reports/access" class="ds-stack">
               <div class="form-field">
                 <label class="form-label" for="token">Access token</label>
-                <input id="token" name="token" type="text" required autocomplete="off" />
+                <input
+                  id="token"
+                  name="token"
+                  type="text"
+                  required
+                  autocomplete="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
                 <p class="form-help">Tokens are case-sensitive and expire after {{ access_token_days }} days.</p>
               </div>
               <button class="ds-button ds-button--primary" type="submit">Get report</button>

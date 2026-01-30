@@ -3,8 +3,12 @@
   <section class="ds-section">
     <div class="ds-card">
       <div class="card-content">
-        <div class="ds-alert ds-alert--warning">
-          Checkout canceled. You can return to <a href="/billing">billing</a>.
+        <div class="ds-alert ds-alert--warning" role="status" aria-live="polite">
+          Checkout canceled.
+        </div>
+        <div class="hero-actions">
+          <a class="ds-button ds-button--primary" href="/billing">Return to billing</a>
+          <a class="ds-button ds-button--secondary" href="/dashboard">Go to dashboard</a>
         </div>
       </div>
     </div>

@@ -32,8 +32,34 @@
                 This view is shared via access token and can show live progress until the report is ready.
                 Get access to manage jobs and exports.
               </p>
-              <div class="ds-stack">
-                <a class="ds-button ds-button--primary" href="/login">Get access</a>
+              <div class="ds-stack ds-stack--tight">
+                <div class="hero-actions">
+                  <a class="ds-button ds-button--primary" href="/login">Get access</a>
+                  {% if report_token %}
+                    <a
+                      class="ds-button ds-button--secondary ds-button--sm"
+                      href="/api/reports/{{ report_token }}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open JSON
+                    </a>
+                  {% endif %}
+                </div>
+                <div class="ds-input-row">
+                  <div class="form-field">
+                    <label class="form-label" for="shared-report-link">Share link</label>
+                    <input id="shared-report-link" class="miscite-mono" type="text" readonly value="{{ canonical_url }}" />
+                  </div>
+                  <button
+                    class="ds-button ds-button--secondary ds-button--sm"
+                    type="button"
+                    data-copy-target="shared-report-link"
+                  >
+                    Copy link
+                  </button>
+                </div>
+                <p class="form-help">Anyone with this link can view the report until it expires.</p>
               </div>
             </div>
           </div>
@@ -48,7 +74,45 @@
                 <div class="ds-panel-body">
                   {% if access_token %}
                     <p class="miscite-muted">Copy and share this token. It is shown once.</p>
-                    <p class="ds-quote miscite-mono">{{ access_token }}</p>
+                    <div class="ds-input-row">
+                      <div class="form-field">
+                        <label class="form-label" for="access-token-value">Access token</label>
+                        <input
+                          id="access-token-value"
+                          class="miscite-mono"
+                          type="text"
+                          readonly
+                          value="{{ access_token }}"
+                        />
+                      </div>
+                      <button
+                        class="ds-button ds-button--secondary ds-button--sm"
+                        type="button"
+                        data-copy-target="access-token-value"
+                      >
+                        Copy token
+                      </button>
+                    </div>
+                    <div class="ds-input-row ds-mt-4">
+                      <div class="form-field">
+                        <label class="form-label" for="access-link-value">Share link</label>
+                        <input
+                          id="access-link-value"
+                          class="miscite-mono"
+                          type="text"
+                          readonly
+                          value="{{ public_origin }}/reports/{{ access_token }}"
+                        />
+                      </div>
+                      <button
+                        class="ds-button ds-button--secondary ds-button--sm"
+                        type="button"
+                        data-copy-target="access-link-value"
+                      >
+                        Copy link
+                      </button>
+                    </div>
+                    <p class="form-help">Anyone with this link can view the report until it expires.</p>
                     {% if job.access_token_expires_at_human %}
                       <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
                     {% endif %}
@@ -85,6 +149,41 @@
                       </button>
                     </form>
                   {% endif %}
+                </div>
+              </div>
+              <div class="ds-panel ds-panel--compact ds-mt-4">
+                <div class="ds-panel-body">
+                  <p class="eyebrow">Exports</p>
+                  <div class="ds-input-row">
+                    <div class="form-field">
+                      <label class="form-label" for="job-json-url">Report JSON</label>
+                      <input
+                        id="job-json-url"
+                        class="miscite-mono"
+                        type="text"
+                        readonly
+                        value="{{ public_origin }}/api/jobs/{{ job.id }}"
+                      />
+                    </div>
+                    <button
+                      class="ds-button ds-button--secondary ds-button--sm"
+                      type="button"
+                      data-copy-target="job-json-url"
+                    >
+                      Copy URL
+                    </button>
+                  </div>
+                  <p class="form-help">Fetch report JSON for downstream review and exports.</p>
+                  <div class="hero-actions">
+                    <a
+                      class="ds-button ds-button--secondary ds-button--sm"
+                      href="/api/jobs/{{ job.id }}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open JSON
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -208,7 +307,7 @@
                   </button>
                 </div>
               {% endif %}
-    {% if report.issues|length == 0 %}
+              {% if report.issues|length == 0 %}
                 <div class="ds-empty">
                   <h4>No issues flagged</h4>
                   <p class="miscite-muted">This report did not surface any flagged citations.</p>
@@ -356,130 +455,160 @@
       </div>
     </section>
 
-	    {% if report.deep_analysis %}
-	      <section class="ds-section">
-	        <div class="ds-card">
-	          <div class="card-content">
-	            <h3>Recommendations</h3>
-	            <p class="miscite-muted">
-	              Proprietary relevance analysis suggests additional references and improvement opportunities.
-	              Use the <span class="miscite-mono">[R#]</span> markers to jump to the reference list for this section.
-	            </p>
+    {% if report.deep_analysis %}
+      <section class="ds-section">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Recommendations</h3>
+            <p class="miscite-muted">
+              Proprietary relevance analysis suggests additional references and improvement opportunities.
+              Use the <span class="miscite-mono">[R#]</span> markers to jump to the reference list for this section.
+            </p>
 
-	            {% if report.deep_analysis.status == "completed" %}
-	              {% set da = report.deep_analysis %}
-	              {% set sug = da.suggestions %}
-	              {% if sug and sug.status == "completed" %}
-	                {% if sug.overview %}
-	                  <p class="ds-issue-guidance">{{ sug.overview|da_cite }}</p>
-	                {% endif %}
-	                {% if sug.note %}
-	                  <p class="miscite-muted">{{ sug.note }}</p>
-	                {% endif %}
-	                {% if sug.sections %}
-	                  <div class="ds-stack ds-mt-4">
-	                    {% for section in sug.sections %}
-	                      <div>
-	                        <h4>{{ section.title }}</h4>
-	                        {% if section.bullets %}
-	                          <ul class="ds-list ds-mt-3">
-	                            {% for bullet in section.bullets %}
-	                              <li>{{ bullet|da_cite }}</li>
-	                            {% endfor %}
-	                          </ul>
-	                        {% endif %}
-	                      </div>
-	                    {% endfor %}
-	                  </div>
-	                {% endif %}
-	              {% else %}
-	                <p class="miscite-muted">No recommendations were generated for this run.</p>
-	              {% endif %}
+            {% if report.deep_analysis.status == "completed" %}
+              {% set da = report.deep_analysis %}
+              {% set sug = da.suggestions %}
 
-	              {% if da.citation_groups and da.references %}
-	                <h4 class="ds-mt-5">Shortlists</h4>
-	                <p class="miscite-muted">Quick lists used by the suggestions above (each item links to the master reference list).</p>
-	                <div class="ds-grid ds-mt-4">
-	                  {% for group in da.citation_groups %}
-	                    <div class="span-6 ds-mt-4">
-	                      <details class="ds-disclosure ds-disclosure--low" open>
-	                        <summary>{{ group.title }}</summary>
-	                        <ul class="ds-list ds-mt-3">
-	                          {% for rid in group.rids|default([]) %}
-	                            {% set ref = da.references.get(rid) %}
-	                            {% if ref %}
-	                              <li>
-	                                <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>
-	                                {{ ref.title|default("Untitled") }}
-	                                {% if ref.year %} ({{ ref.year }}){% endif %}
-                                {% if ref.in_paper %}<span class="ds-chip ds-chip--success">Already cited</span>{% endif %}
-	                              </li>
-	                            {% endif %}
-	                          {% endfor %}
-	                        </ul>
-	                      </details>
-	                    </div>
-	                  {% endfor %}
-	                </div>
-	              {% endif %}
+              {% if sug and sug.status == "completed" %}
+                {% if sug.overview %}
+                  <p class="ds-issue-guidance">{{ sug.overview|da_cite }}</p>
+                {% endif %}
+                {% if sug.note %}
+                  <p class="miscite-muted">{{ sug.note }}</p>
+                {% endif %}
+                {% if sug.sections %}
+                  <div class="ds-stack ds-mt-4">
+                    {% for section in sug.sections %}
+                      <div>
+                        <h4>{{ section.title }}</h4>
+                        {% if section.bullets %}
+                          <ul class="ds-list ds-mt-3">
+                            {% for bullet in section.bullets %}
+                              <li>{{ bullet|da_cite }}</li>
+                            {% endfor %}
+                          </ul>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              {% else %}
+                <p class="miscite-muted">No recommendations were generated for this run.</p>
+              {% endif %}
 
-	              {% if da.reference_groups and da.references %}
-	                <h4 class="ds-mt-5">Reference list for this section</h4>
-	                <p class="miscite-muted">Each reference appears once (grouped); click <span class="miscite-mono">[R#]</span> anywhere above to jump here.</p>
-	                <div class="ds-stack ds-mt-4">
-	                  {% for group in da.reference_groups %}
-	                    <details class="ds-disclosure ds-disclosure--low" {% if loop.index <= 2 %}open{% endif %}>
-	                      <summary>{{ group.title }}</summary>
-	                      <ol class="ds-list ds-mt-3">
-	                        {% for rid in group.rids|default([]) %}
-	                          {% set ref = da.references.get(rid) %}
-	                          {% if ref %}
-	                            <li id="da-ref-{{ rid }}">
-	                              <div>
-	                                <span class="miscite-mono">[{{ rid }}]</span>
-	                                {{ ref.apa_base }}
-	                              </div>
-	                              <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
-                                {% if ref.doi %}
-                                  <a
-                                    class="ds-chip miscite-mono"
-                                    href="https://doi.org/{{ ref.doi }}"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    DOI: {{ ref.doi }}
-                                  </a>
-                                {% else %}
-                                  {% set safe_url = ref.official_url|safe_url %}
-                                  {% if safe_url %}
+              {% if da.citation_groups and da.references %}
+                <h4 class="ds-mt-5">Shortlists</h4>
+                <p class="miscite-muted">
+                  Quick lists used by the suggestions above (each item links to the master reference list).
+                </p>
+                <div class="ds-grid ds-mt-4">
+                  {% for group in da.citation_groups %}
+                    {% set rids = group.rids|default([]) %}
+                    <div class="span-6 ds-mt-4">
+                      <details class="ds-disclosure ds-disclosure--low" open>
+                        <summary class="ds-disclosure-summary">
+                          <i class="material-icons ds-disclosure-icon" aria-hidden="true">bookmark</i>
+                          <span class="ds-disclosure-type">List</span>
+                          <span class="ds-disclosure-title">{{ group.title }}</span>
+                          <span class="ds-severity">{{ rids|length }} refs</span>
+                          <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                        </summary>
+                        <div class="ds-disclosure-body">
+                          <ul class="ds-list">
+                            {% for rid in rids %}
+                              {% set ref = da.references.get(rid) %}
+                              {% if ref %}
+                                <li>
+                                  <div>
+                                    <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>
+                                    {{ ref.title|default("Untitled") }}
+                                    {% if ref.year %} ({{ ref.year }}){% endif %}
+                                  </div>
+                                  {% if ref.in_paper %}
+                                    <div class="ds-chip-row ds-mt-3" aria-label="Reference status">
+                                      <span class="ds-chip ds-chip--success">Already cited</span>
+                                    </div>
+                                  {% endif %}
+                                </li>
+                              {% endif %}
+                            {% endfor %}
+                          </ul>
+                        </div>
+                      </details>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              {% if da.reference_groups and da.references %}
+                <h4 class="ds-mt-5">Reference list for this section</h4>
+                <p class="miscite-muted">
+                  Each reference appears once (grouped); click <span class="miscite-mono">[R#]</span> anywhere above to jump
+                  here.
+                </p>
+                <div class="ds-stack ds-mt-4">
+                  {% for group in da.reference_groups %}
+                    {% set rids = group.rids|default([]) %}
+                    <details class="ds-disclosure ds-disclosure--low" {% if loop.index <= 2 %}open{% endif %}>
+                      <summary class="ds-disclosure-summary">
+                        <i class="material-icons ds-disclosure-icon" aria-hidden="true">menu_book</i>
+                        <span class="ds-disclosure-type">Group</span>
+                        <span class="ds-disclosure-title">{{ group.title }}</span>
+                        <span class="ds-severity">{{ rids|length }} refs</span>
+                        <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                      </summary>
+                      <div class="ds-disclosure-body">
+                        <ol class="ds-list">
+                          {% for rid in rids %}
+                            {% set ref = da.references.get(rid) %}
+                            {% if ref %}
+                              <li id="da-ref-{{ rid }}">
+                                <div>
+                                  <span class="miscite-mono">[{{ rid }}]</span>
+                                  {{ ref.apa_base }}
+                                </div>
+                                <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
+                                  {% if ref.doi %}
                                     <a
                                       class="ds-chip miscite-mono"
-                                      href="{{ safe_url }}"
+                                      href="https://doi.org/{{ ref.doi }}"
                                       target="_blank"
                                       rel="noopener noreferrer"
                                     >
-                                      URL: {{ safe_url }}
+                                      DOI: {{ ref.doi }}
+                                    </a>
+                                  {% else %}
+                                    {% set safe_url = ref.official_url|safe_url %}
+                                    {% if safe_url %}
+                                      <a
+                                        class="ds-chip miscite-mono"
+                                        href="{{ safe_url }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        URL: {{ safe_url }}
+                                      </a>
+                                    {% endif %}
+                                  {% endif %}
+                                  {% set safe_pdf = ref.oa_pdf_url|safe_url %}
+                                  {% if safe_pdf %}
+                                    <a class="ds-chip" href="{{ safe_pdf }}" target="_blank" rel="noopener noreferrer">
+                                      Open PDF
                                     </a>
                                   {% endif %}
-                                {% endif %}
-                                {% set safe_pdf = ref.oa_pdf_url|safe_url %}
-                                {% if safe_pdf %}
-                                  <a class="ds-chip" href="{{ safe_pdf }}" target="_blank" rel="noopener noreferrer">
-                                    Open PDF
-                                  </a>
-                                {% endif %}
-	                                {% if ref.in_paper %}
-	                                  <span class="ds-chip ds-chip--success">Already cited</span>
-	                                {% endif %}
-	                              </div>
-	                            </li>
-	                          {% endif %}
-	                        {% endfor %}
-	                      </ol>
-	                    </details>
-	                  {% endfor %}
-	                </div>
-	              {% endif %}
+                                  {% if ref.in_paper %}
+                                    <span class="ds-chip ds-chip--success">Already cited</span>
+                                  {% endif %}
+                                </div>
+                              </li>
+                            {% endif %}
+                          {% endfor %}
+                        </ol>
+                      </div>
+                    </details>
+                  {% endfor %}
+                </div>
+              {% endif %}
 
             {% elif report.deep_analysis.status == "skipped" %}
               <p class="miscite-muted">{{ report.deep_analysis.reason|default("Recommendations were skipped.") }}</p>
@@ -517,6 +646,66 @@
                 </li>
               {% endfor %}
             </ol>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if not public_view %}
+      <section class="ds-section">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Audit trail</h3>
+            <p class="miscite-muted">
+              Sources, methodology notes, and exports for traceability and downstream review.
+            </p>
+            <div class="ds-disclosure-list ds-mt-4">
+              {% if data_sources %}
+                <details class="ds-disclosure ds-disclosure--low">
+                  <summary class="ds-disclosure-summary">
+                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">database</i>
+                    <span class="ds-disclosure-type">Sources</span>
+                    <span class="ds-disclosure-title">Data sources used</span>
+                    <span class="ds-severity">{{ data_sources|length }}</span>
+                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                  </summary>
+                  <div class="ds-disclosure-body">
+                    <dl class="ds-meta">
+                      {% for src in data_sources %}
+                        <dt>{{ src.name }}</dt>
+                        <dd>{{ src.detail }}</dd>
+                      {% endfor %}
+                    </dl>
+                  </div>
+                </details>
+              {% endif %}
+
+              {% if methodology_md %}
+                <details class="ds-disclosure ds-disclosure--low">
+                  <summary class="ds-disclosure-summary">
+                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">description</i>
+                    <span class="ds-disclosure-type">Method</span>
+                    <span class="ds-disclosure-title">Methodology notes</span>
+                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                  </summary>
+                  <div class="ds-disclosure-body">
+                    <pre class="pre-wrap ds-pre-scroll">{{ methodology_md }}</pre>
+                  </div>
+                </details>
+              {% endif %}
+
+              <details class="ds-disclosure ds-disclosure--low">
+                <summary class="ds-disclosure-summary">
+                  <i class="material-icons ds-disclosure-icon" aria-hidden="true">data_object</i>
+                  <span class="ds-disclosure-type">Export</span>
+                  <span class="ds-disclosure-title">Raw report JSON</span>
+                  <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                </summary>
+                <div class="ds-disclosure-body">
+                  <pre class="pre-wrap ds-pre-scroll">{{ report|pretty_json }}</pre>
+                </div>
+              </details>
+            </div>
           </div>
         </div>
       </section>

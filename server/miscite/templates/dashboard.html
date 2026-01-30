@@ -14,14 +14,14 @@
   <section class="ds-section ds-section--hero">
     <div class="ds-grid">
       <div class="span-8">
-        <div class="ds-stack ds-stack--lg">
+          <div class="ds-stack ds-stack--lg">
           <div>
             <p class="eyebrow">Workspace</p>
-          <h1>Analyze citations</h1>
-          <p class="lead">
+            <h1>Analyze citations</h1>
+            <p class="lead">
               Run checks against vetted metadata registries and integrity watchlists. Our proprietary
               relevance engine suggests additional references and improvements.
-          </p>
+            </p>
             <p class="miscite-muted">Files are processed securely; reports are workspace-scoped.</p>
           </div>
           <div class="ds-card ds-card--hero" id="upload-module">
@@ -50,6 +50,7 @@
                   <div
                     class="ds-dropzone {{ 'is-disabled' if (billing_required and not subscription_active) or maintenance_mode else '' }}"
                     data-dropzone
+                    aria-disabled="{{ 'true' if (billing_required and not subscription_active) or maintenance_mode else 'false' }}"
                   >
                     <input
                       id="file"
@@ -57,6 +58,7 @@
                       type="file"
                       name="file"
                       accept=".pdf,.docx"
+                      required
                       aria-describedby="upload-constraints upload-selected"
                       {{ "disabled" if (billing_required and not subscription_active) or maintenance_mode else "" }}
                     />
