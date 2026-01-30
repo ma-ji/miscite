@@ -47,6 +47,16 @@ class UserSession(Base):
     user: Mapped["User"] = relationship(back_populates="sessions")
 
 
+class LoginCode(Base):
+    __tablename__ = "login_codes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime, index=True)
+
+
 class Document(Base):
     __tablename__ = "documents"
 

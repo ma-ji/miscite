@@ -18,6 +18,7 @@ from server.miscite.models import User, UserSession
 
 _COOKIE_NAME = "miscite_session"
 _CSRF_COOKIE_NAME = "miscite_csrf"
+_DEFAULT_MAX_AGE = object()
 
 
 def _sha256_hex(value: str) -> str:
@@ -25,6 +26,10 @@ def _sha256_hex(value: str) -> str:
 
 
 def hash_token(value: str) -> str:
+    return _sha256_hex(value)
+
+
+def hash_login_code(value: str) -> str:
     return _sha256_hex(value)
 
 
@@ -108,26 +113,42 @@ def get_csrf_cookie(request: Request) -> str | None:
     return token if token else None
 
 
-def set_session_cookie(response, *, token: str, settings: Settings) -> None:
+def set_session_cookie(
+    response,
+    *,
+    token: str,
+    settings: Settings,
+    max_age_seconds: int | None | object = _DEFAULT_MAX_AGE,
+) -> None:
+    if max_age_seconds is _DEFAULT_MAX_AGE:
+        max_age_seconds = int(dt.timedelta(days=settings.session_days).total_seconds())
     response.set_cookie(
         _COOKIE_NAME,
         token,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
-        max_age=int(dt.timedelta(days=settings.session_days).total_seconds()),
+        max_age=max_age_seconds,
         path="/",
     )
 
 
-def set_csrf_cookie(response, *, token: str, settings: Settings) -> None:
+def set_csrf_cookie(
+    response,
+    *,
+    token: str,
+    settings: Settings,
+    max_age_seconds: int | None | object = _DEFAULT_MAX_AGE,
+) -> None:
+    if max_age_seconds is _DEFAULT_MAX_AGE:
+        max_age_seconds = int(dt.timedelta(days=settings.session_days).total_seconds())
     response.set_cookie(
         _CSRF_COOKIE_NAME,
         token,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
-        max_age=int(dt.timedelta(days=settings.session_days).total_seconds()),
+        max_age=max_age_seconds,
         path="/",
     )
 

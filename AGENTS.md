@@ -34,6 +34,8 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/prompts/schemas/`: JSON Schemas for LLM prompt outputs.
 - `server/miscite/sources/`: OpenAlex, Crossref, arXiv, datasets, optional APIs, sync helpers.
 - `server/miscite/routes/`: auth, dashboard, billing, health endpoints.
+- `server/miscite/email.py`: Mailgun email delivery helpers.
+- `server/miscite/turnstile.py`: Cloudflare Turnstile verification helper.
 - `server/miscite/templates/`: Jinja UI (job report page relies on report JSON shape).
 - `server/miscite/templates/report_access.html`: token-based public report access form.
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
@@ -60,6 +62,7 @@ The report JSON returned by `analysis/pipeline.py` is rendered in `server/miscit
 ## Data model (SQLAlchemy)
 Defined in `server/miscite/models.py`:
 - `User` / `UserSession`: auth + session cookies.
+- `LoginCode`: short-lived email sign-in codes.
 - `Document`: uploaded file metadata.
 - `AnalysisJob`: status, report JSON, methodology markdown, access-token hash/hint for shared report access.
 - `AnalysisJobEvent`: streaming progress events for SSE.
@@ -73,9 +76,12 @@ Settings live in `server/miscite/config.py` and `.env.example`. Critical env key
 - Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate, deep analysis).
+- Auth email: `MISCITE_MAILGUN_API_KEY`, `MISCITE_MAILGUN_DOMAIN`, `MISCITE_MAILGUN_SENDER`, `MISCITE_LOGIN_CODE_TTL_MINUTES`.
+- Bot protection: `MISCITE_TURNSTILE_SITE_KEY`, `MISCITE_TURNSTILE_SECRET_KEY`.
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys and flags.
 - Ops/security: maintenance mode, load shedding, rate limits, upload scan, job reaper, access-token TTL.
+- Email login: Mailgun API keys + login code TTL/length.
 
 If you add new env vars:
 - Update `server/miscite/config.py`.
@@ -89,6 +95,8 @@ If you add new env vars:
 - **Retraction Watch**: local CSV dataset; sync via `server/sync_retractionwatch.py`.
 - **Predatory lists**: local CSV or Google Sheets sync; optional custom API.
 - **Stripe**: optional subscription gating in `server/miscite/routes/billing.py`.
+- **Mailgun**: email-based sign-in code delivery.
+- **Cloudflare Turnstile**: bot protection on login/register step.
 
 ## UI and design system
 - Templates: `server/miscite/templates/`.
@@ -117,5 +125,5 @@ If you add new env vars:
 - Deep analysis tweaks: `analysis/deep_analysis.py` (watch LLM budget and OpenAlex usage limits).
 
 ## Security notes
-- Auth uses PBKDF2-SHA256 with session + CSRF cookies (`server/miscite/security.py`).
+- Auth uses email login codes + session + CSRF cookies (`server/miscite/security.py`).
 - Set `MISCITE_COOKIE_SECURE=true` for HTTPS deployments.

@@ -55,6 +55,9 @@ cp .env.example .env
 3) Set required keys in `.env`:
 
 - `OPENROUTER_API_KEY`
+- `MISCITE_MAILGUN_API_KEY`
+- `MISCITE_MAILGUN_DOMAIN`
+- `MISCITE_MAILGUN_SENDER`
 
 4) Run the web app:
 
@@ -129,6 +132,15 @@ Copy `.env.example` to `.env` and edit. Key settings:
 - `MISCITE_MAX_BODY_MB` (default: `55`)
 - `MISCITE_MAX_UNPACKED_MB` (default: `250`)
 - `MISCITE_SESSION_DAYS` (default: `14`)
+- `MISCITE_LOGIN_CODE_TTL_MINUTES` (default: `15`)
+- `MISCITE_LOGIN_CODE_LENGTH` (default: `6`)
+- `MISCITE_MAILGUN_API_KEY`
+- `MISCITE_MAILGUN_DOMAIN`
+- `MISCITE_MAILGUN_SENDER`
+- `MISCITE_MAILGUN_BASE_URL` (default: `https://api.mailgun.net/v3`)
+- `MISCITE_TURNSTILE_SITE_KEY`
+- `MISCITE_TURNSTILE_SECRET_KEY`
+- `MISCITE_TURNSTILE_VERIFY_URL` (default: `https://challenges.cloudflare.com/turnstile/v0/siteverify`)
 - `MISCITE_LOG_LEVEL` (default: `INFO`)
 - `MISCITE_API_TIMEOUT_SECONDS` (default: `20`)
 - `MISCITE_TEXT_EXTRACT_BACKEND` (default: `markitdown`, options: `markitdown|docling`)
@@ -165,7 +177,7 @@ Config values are validated at startup; out-of-range values raise errors. Key bo
 
 - `MISCITE_RATE_LIMIT_ENABLED` (default: `true`)
 - `MISCITE_RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
-- `MISCITE_RATE_LIMIT_LOGIN`, `MISCITE_RATE_LIMIT_REGISTER`, `MISCITE_RATE_LIMIT_UPLOAD`
+- `MISCITE_RATE_LIMIT_LOGIN_REQUEST`, `MISCITE_RATE_LIMIT_LOGIN_VERIFY`, `MISCITE_RATE_LIMIT_UPLOAD`
 - `MISCITE_RATE_LIMIT_REPORT_ACCESS`, `MISCITE_RATE_LIMIT_EVENTS`, `MISCITE_RATE_LIMIT_STREAM`, `MISCITE_RATE_LIMIT_API`
 
 ### Job health

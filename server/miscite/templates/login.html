@@ -3,10 +3,10 @@
   <section class="ds-section">
     <div class="ds-grid">
       <div class="span-6">
-        <p class="eyebrow">Welcome back</p>
-        <h1>Sign in to keep citation reviews moving.</h1>
+        <p class="eyebrow">Welcome</p>
+        <h1>Sign in with a secure email code.</h1>
         <p class="lead">
-          miscite keeps your analysis history, evidence trail, and reports in one calm workspace.
+          Enter your email, get a short code, and jump back into your citation workspace.
         </p>
         <ul class="ds-list">
           <li>Resume recent jobs instantly</li>
@@ -19,25 +19,88 @@
       <div class="span-6">
         <div class="ds-card">
           <div class="card-content">
-            <h3>Sign in</h3>
-            <form method="post" action="/login" class="ds-stack">
+            <h3>Get a sign-in code</h3>
+            <form method="post" action="/login/request" class="ds-stack">
               <div class="form-field">
                 <label class="form-label" for="email">Email</label>
-                <input id="email" name="email" type="email" required autocomplete="email" />
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  value="{{ login_email }}"
+                />
               </div>
               <div class="form-field">
-                <label class="form-label" for="password">Password</label>
-                <input id="password" name="password" type="password" required autocomplete="current-password" />
+                <label class="form-label" for="session-length">Stay signed in for</label>
+                <select id="session-length" name="session_length">
+                  <option value="session" {{ "selected" if session_choice == "session" else "" }}>
+                    This browser session
+                  </option>
+                  <option value="7" {{ "selected" if session_choice == "7" else "" }}>7 days</option>
+                  <option value="30" {{ "selected" if session_choice == "30" else "" }}>30 days</option>
+                </select>
+                <p class="form-help">
+                  We will email a {{ login_code_length }}-digit code. It expires in {{ login_code_ttl_minutes }} minutes.
+                </p>
               </div>
-              <button class="ds-button ds-button--primary" type="submit">Sign in</button>
+              <div class="form-field">
+                <div
+                  class="cf-turnstile"
+                  data-sitekey="{{ turnstile_site_key }}"
+                  data-theme="auto"
+                ></div>
+              </div>
+              <button class="ds-button ds-button--primary" type="submit">Email code</button>
             </form>
           </div>
           <div class="card-action">
-            <span class="miscite-muted">No account yet?</span>
-            <a href="/register">Create one</a>
+            <span class="miscite-muted">Have a code?</span>
+            <span>Enter it below.</span>
+          </div>
+          <div class="card-content">
+            <h3>Enter your code</h3>
+            <form method="post" action="/login/verify" class="ds-stack">
+              <div class="form-field">
+                <label class="form-label" for="verify-email">Email</label>
+                <input
+                  id="verify-email"
+                  name="email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  value="{{ login_email }}"
+                />
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="code">Sign-in code</label>
+                <input
+                  id="code"
+                  name="code"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="{{ login_code_length }}"
+                  required
+                />
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="verify-session-length">Stay signed in for</label>
+                <select id="verify-session-length" name="session_length">
+                  <option value="session" {{ "selected" if session_choice == "session" else "" }}>
+                    This browser session
+                  </option>
+                  <option value="7" {{ "selected" if session_choice == "7" else "" }}>7 days</option>
+                  <option value="30" {{ "selected" if session_choice == "30" else "" }}>30 days</option>
+                </select>
+              </div>
+              <button class="ds-button ds-button--secondary" type="submit">Sign in</button>
+            </form>
           </div>
         </div>
       </div>
     </div>
   </section>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 {% endblock %}

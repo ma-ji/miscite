@@ -30,7 +30,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         BodySizeLimitMiddleware,
         max_body_bytes=settings.max_body_mb * 1024 * 1024,
-        include_paths=("/upload", "/register", "/login", "/reports/access", "/billing", "/jobs"),
+        include_paths=("/upload", "/login", "/reports/access", "/billing", "/jobs"),
     )
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
 

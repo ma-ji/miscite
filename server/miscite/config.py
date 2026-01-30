@@ -88,6 +88,15 @@ class Settings:
     max_body_mb: int
     max_unpacked_mb: int
     session_days: int
+    login_code_ttl_minutes: int
+    login_code_length: int
+    mailgun_api_key: str
+    mailgun_domain: str
+    mailgun_sender: str
+    mailgun_base_url: str
+    turnstile_site_key: str
+    turnstile_secret_key: str
+    turnstile_verify_url: str
 
     log_level: str
     text_extract_backend: str
@@ -181,8 +190,8 @@ class Settings:
 
     rate_limit_enabled: bool
     rate_limit_window_seconds: int
-    rate_limit_login: int
-    rate_limit_register: int
+    rate_limit_login_request: int
+    rate_limit_login_verify: int
     rate_limit_upload: int
     rate_limit_report_access: int
     rate_limit_events: int
@@ -206,6 +215,18 @@ class Settings:
         max_body_mb = _env_int("MISCITE_MAX_BODY_MB", max_upload_mb + 5, min_value=1, max_value=4000)
         max_unpacked_mb = _env_int("MISCITE_MAX_UNPACKED_MB", max(200, max_upload_mb * 5), min_value=10, max_value=20000)
         session_days = _env_int("MISCITE_SESSION_DAYS", 14, min_value=1, max_value=3650)
+        login_code_ttl_minutes = _env_int("MISCITE_LOGIN_CODE_TTL_MINUTES", 15, min_value=5, max_value=60)
+        login_code_length = _env_int("MISCITE_LOGIN_CODE_LENGTH", 6, min_value=4, max_value=10)
+        mailgun_api_key = _env_str("MISCITE_MAILGUN_API_KEY", "")
+        mailgun_domain = _env_str("MISCITE_MAILGUN_DOMAIN", "")
+        mailgun_sender = _env_str("MISCITE_MAILGUN_SENDER", "")
+        mailgun_base_url = _env_str("MISCITE_MAILGUN_BASE_URL", "https://api.mailgun.net/v3")
+        turnstile_site_key = _env_str("MISCITE_TURNSTILE_SITE_KEY", "")
+        turnstile_secret_key = _env_str("MISCITE_TURNSTILE_SECRET_KEY", "")
+        turnstile_verify_url = _env_str(
+            "MISCITE_TURNSTILE_VERIFY_URL",
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        )
 
         log_level = _env_str("MISCITE_LOG_LEVEL", "INFO")
         text_extract_backend = _env_str("MISCITE_TEXT_EXTRACT_BACKEND", "markitdown").lower()
@@ -341,8 +362,8 @@ class Settings:
 
         rate_limit_enabled = _env_bool("MISCITE_RATE_LIMIT_ENABLED", True)
         rate_limit_window_seconds = _env_int("MISCITE_RATE_LIMIT_WINDOW_SECONDS", 60, min_value=1, max_value=3600)
-        rate_limit_login = _env_int("MISCITE_RATE_LIMIT_LOGIN", 12, min_value=1, max_value=1000)
-        rate_limit_register = _env_int("MISCITE_RATE_LIMIT_REGISTER", 6, min_value=1, max_value=1000)
+        rate_limit_login_request = _env_int("MISCITE_RATE_LIMIT_LOGIN_REQUEST", 12, min_value=1, max_value=1000)
+        rate_limit_login_verify = _env_int("MISCITE_RATE_LIMIT_LOGIN_VERIFY", 12, min_value=1, max_value=1000)
         rate_limit_upload = _env_int("MISCITE_RATE_LIMIT_UPLOAD", 6, min_value=1, max_value=1000)
         rate_limit_report_access = _env_int("MISCITE_RATE_LIMIT_REPORT_ACCESS", 20, min_value=1, max_value=1000)
         rate_limit_events = _env_int("MISCITE_RATE_LIMIT_EVENTS", 120, min_value=1, max_value=5000)
@@ -374,6 +395,15 @@ class Settings:
             max_body_mb=max_body_mb,
             max_unpacked_mb=max_unpacked_mb,
             session_days=session_days,
+            login_code_ttl_minutes=login_code_ttl_minutes,
+            login_code_length=login_code_length,
+            mailgun_api_key=mailgun_api_key,
+            mailgun_domain=mailgun_domain,
+            mailgun_sender=mailgun_sender,
+            mailgun_base_url=mailgun_base_url,
+            turnstile_site_key=turnstile_site_key,
+            turnstile_secret_key=turnstile_secret_key,
+            turnstile_verify_url=turnstile_verify_url,
             log_level=log_level,
             text_extract_backend=text_extract_backend,
             text_extract_timeout_seconds=text_extract_timeout_seconds,
@@ -451,8 +481,8 @@ class Settings:
             expose_sensitive_report_fields=expose_sensitive_report_fields,
             rate_limit_enabled=rate_limit_enabled,
             rate_limit_window_seconds=rate_limit_window_seconds,
-            rate_limit_login=rate_limit_login,
-            rate_limit_register=rate_limit_register,
+            rate_limit_login_request=rate_limit_login_request,
+            rate_limit_login_verify=rate_limit_login_verify,
             rate_limit_upload=rate_limit_upload,
             rate_limit_report_access=rate_limit_report_access,
             rate_limit_events=rate_limit_events,

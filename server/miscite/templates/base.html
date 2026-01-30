@@ -16,7 +16,9 @@
     {% if not pdf_view %}
       <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     {% endif %}
-    <link rel="stylesheet" href="/static/styles.css" />
+    {% if not pdf_view %}
+      <link rel="stylesheet" href="/static/styles.css" />
+    {% endif %}
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -53,8 +55,7 @@
               <button class="ds-button ds-button--secondary ds-button--sm" type="submit">Logout</button>
             </form>
           {% else %}
-            <a class="ds-button ds-button--secondary ds-button--sm" href="/login">Sign in</a>
-            <a class="ds-button ds-button--primary ds-button--sm" href="/register">Join</a>
+            <a class="ds-button ds-button--primary ds-button--sm" href="/login">Get access</a>
           {% endif %}
           <label class="ds-toggle app-theme-switch" aria-label="Toggle theme">
             <i class="material-icons app-theme-icon" aria-hidden="true">brightness_6</i>
