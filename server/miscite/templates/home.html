@@ -1,50 +1,90 @@
 {% extends "base.html" %}
 {% block content %}
-  <section class="hero">
-    <div class="ds-grid">
-      <div class="span-7">
-        <p class="eyebrow">Transparent citation checks</p>
-        <h1>Make every reference defensible in minutes.</h1>
-        <p class="lead">
-          miscite scans manuscripts for missing citations, retractions, and risky venues with
-          explainable signals. Clear steps, clean reports, no black box.
-        </p>
-        <div class="hero-actions">
-          <a class="ds-button ds-button--primary" href="/register">Start a free check</a>
-          <a class="ds-button ds-button--secondary" href="/login">Sign in</a>
+  <section class="ds-section ds-section--hero landing-hero">
+    <div class="ds-grid landing-hero-grid">
+      <div class="span-7 ds-stack ds-stack--lg landing-hero-copy">
+        <div class="landing-reveal" data-delay="1">
+          <p class="eyebrow">Commercial citation intelligence</p>
+          <h1>Audit-ready citation checks for journals, labs, and research teams.</h1>
+          <p class="lead">
+            miscite scans PDF and DOCX manuscripts, resolves every reference against trusted metadata
+            sources, and flags missing, retracted, or risky citations with a traceable report.
+          </p>
         </div>
-        <div class="hero-meta">
-          <span class="ds-badge">PDF + DOCX</span>
-          <span class="ds-pill">OpenAlex, Crossref, arXiv</span>
-          <span class="ds-pill">Retraction Watch dataset</span>
+        <div class="landing-reveal" data-delay="2">
+          <div class="hero-actions">
+            <a class="ds-button ds-button--primary" href="/register">Start a check</a>
+            <a class="ds-button ds-button--secondary" href="#report">View sample report</a>
+          </div>
+          <div class="hero-meta">
+            <span class="ds-badge">PDF + DOCX</span>
+            <span class="ds-pill">OpenAlex + Crossref + arXiv</span>
+            <span class="ds-pill">Retraction Watch + predatory lists</span>
+          </div>
+        </div>
+        <div class="landing-proof landing-reveal" data-delay="3">
+          <div class="landing-proof-item">
+            <span class="ds-status ds-status--success">
+              <i class="material-icons" aria-hidden="true">fact_check</i>
+              Evidence-first
+            </span>
+            <p>Every issue includes source metadata, context, and a rationale you can audit.</p>
+          </div>
+          <div class="landing-proof-item">
+            <span class="ds-status ds-status--processing">
+              <i class="material-icons" aria-hidden="true">autorenew</i>
+              Decision-ready
+            </span>
+            <p>Summaries, severity buckets, and exportable JSON keep reviews consistent.</p>
+          </div>
+          <div class="landing-proof-item">
+            <span class="ds-status">
+              <i class="material-icons" aria-hidden="true">group</i>
+              Team-ready
+            </span>
+            <p>Share results with editors, authors, and compliance teams in minutes.</p>
+          </div>
         </div>
       </div>
-      <div class="span-5">
-        <div class="ds-card">
+      <div class="span-5 landing-reveal" data-delay="2">
+        <div class="ds-card ds-card--hero ds-card--highlight landing-report" id="report">
           <div class="card-content">
             <div class="ds-card-header">
-              <p class="eyebrow">Live preview</p>
-              <h3>Manuscript snapshot</h3>
-              <p class="miscite-muted">A quick view of what the report highlights.</p>
+              <p class="eyebrow">Report preview</p>
+              <h3>Evidence you can audit.</h3>
+              <p class="miscite-muted">Sample output from a manuscript check.</p>
             </div>
-            <div class="ds-stat-grid">
-              <div class="ds-stat">
-                <div class="ds-stat-value">128</div>
-                <div class="ds-stat-label">Citations parsed</div>
+            <div class="ds-severity-grid">
+              <div class="ds-severity-card ds-severity-card--high">
+                <div class="ds-severity-count">7</div>
+                <div class="ds-severity-label">Missing refs</div>
               </div>
-              <div class="ds-stat">
-                <div class="ds-stat-value">7</div>
-                <div class="ds-stat-label">Missing references</div>
+              <div class="ds-severity-card ds-severity-card--medium">
+                <div class="ds-severity-count">3</div>
+                <div class="ds-severity-label">Risky venues</div>
               </div>
-              <div class="ds-stat">
-                <div class="ds-stat-value">2</div>
-                <div class="ds-stat-label">Retraction matches</div>
+              <div class="ds-severity-card ds-severity-card--low">
+                <div class="ds-severity-count">2</div>
+                <div class="ds-severity-label">Retractions</div>
               </div>
+            </div>
+            <dl class="ds-meta">
+              <dt>Coverage</dt>
+              <dd>Reference resolution across three metadata sources.</dd>
+              <dt>Checks</dt>
+              <dd>Missing refs, retractions, predatory venues, context review.</dd>
+              <dt>Report</dt>
+              <dd>Summary counts, evidence links, and methodology notes.</dd>
+            </dl>
+            <div class="ds-chip-row">
+              <span class="ds-chip">Traceable sources</span>
+              <span class="ds-chip">Audit trail</span>
+              <span class="ds-chip">Export JSON</span>
             </div>
           </div>
           <div class="card-action">
-            <a href="/login">View report layout</a>
-            <span class="miscite-muted">Sample preview</span>
+            <a href="/register">Run a live report</a>
+            <span class="miscite-muted">See the full workflow</span>
           </div>
         </div>
       </div>
@@ -52,56 +92,83 @@
   </section>
 
   <section id="features" class="ds-section">
-    <div class="section-header">
-      <p class="eyebrow">Features</p>
-      <h2>Designed for clarity from upload to report.</h2>
+    <div class="section-header landing-reveal">
+      <p class="eyebrow">Capabilities</p>
+      <h2>Commercial-grade coverage for every citation.</h2>
       <p class="lead">
-        Every section is structured to help you scan, verify, and act quickly.
+        miscite combines metadata resolution, risk flags, and context-aware checks so your team can
+        approve submissions with confidence.
       </p>
     </div>
-    <div class="ds-grid">
-      <div class="span-4">
-        <div class="ds-card">
+    <div class="ds-grid landing-feature-grid">
+      <div class="span-3 landing-reveal" data-delay="1">
+        <div class="ds-card landing-feature-card">
           <div class="card-content">
-            <h3>Structured flags</h3>
+            <div class="landing-feature-icon">
+              <i class="material-icons" aria-hidden="true">search</i>
+            </div>
+            <h3>Reference resolution</h3>
             <p class="miscite-muted">
-              Surface missing citations, unresolved references, and retracted sources with a
-              single glance.
+              Match DOI, title, and author metadata across OpenAlex, Crossref, and arXiv.
             </p>
             <ul class="ds-list">
-              <li>Issue type and context</li>
-              <li>Traceable data sources</li>
-              <li>Exportable JSON reports</li>
+              <li>Multi-source matching</li>
+              <li>Conflict detection</li>
+              <li>Duplicate spotting</li>
             </ul>
           </div>
         </div>
       </div>
-      <div class="span-4">
-        <div class="ds-card">
+      <div class="span-3 landing-reveal" data-delay="2">
+        <div class="ds-card landing-feature-card">
           <div class="card-content">
-            <h3>Fast review loop</h3>
+            <div class="landing-feature-icon">
+              <i class="material-icons" aria-hidden="true">warning</i>
+            </div>
+            <h3>Risk flags</h3>
             <p class="miscite-muted">
-              Run checks in seconds and share clean summaries with collaborators.
+              Surface missing bibliography items, retractions, and predatory venues instantly.
             </p>
             <ul class="ds-list">
-              <li>Clear status updates</li>
-              <li>Repeatable methodology</li>
-              <li>Consistent formatting</li>
+              <li>Retraction Watch signals</li>
+              <li>Predatory venue lists</li>
+              <li>Unresolved references</li>
             </ul>
           </div>
         </div>
       </div>
-      <div class="span-4">
-        <div class="ds-card">
+      <div class="span-3 landing-reveal" data-delay="3">
+        <div class="ds-card landing-feature-card">
           <div class="card-content">
-            <h3>Built for teams</h3>
+            <div class="landing-feature-icon">
+              <i class="material-icons" aria-hidden="true">insights</i>
+            </div>
+            <h3>Context checks</h3>
             <p class="miscite-muted">
-              Keep decisions transparent with a calm UI that stays focused on the essentials.
+              Compare citation context to metadata to surface potentially inappropriate references.
             </p>
             <ul class="ds-list">
-              <li>Keyboard friendly</li>
-              <li>Accessible contrast</li>
-              <li>Dark and light themes</li>
+              <li>Context-aware review</li>
+              <li>Rationale summaries</li>
+              <li>Prioritized severity</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="span-3 landing-reveal" data-delay="4">
+        <div class="ds-card landing-feature-card">
+          <div class="card-content">
+            <div class="landing-feature-icon">
+              <i class="material-icons" aria-hidden="true">description</i>
+            </div>
+            <h3>Audit-ready reporting</h3>
+            <p class="miscite-muted">
+              Every report includes a methodology trail your team can cite back to.
+            </p>
+            <ul class="ds-list">
+              <li>Exportable JSON</li>
+              <li>Methodology notes</li>
+              <li>Shareable summaries</li>
             </ul>
           </div>
         </div>
@@ -110,45 +177,65 @@
   </section>
 
   <section id="workflow" class="ds-section">
-    <div class="ds-card ds-card--subtle">
+    <div class="ds-card ds-card--subtle landing-workflow-card">
       <div class="card-content">
-        <div class="ds-grid">
-          <div class="span-6">
-            <p class="eyebrow">Workflow</p>
-            <h2>Search, validate, and move on.</h2>
-            <p class="lead">
-              Use the search row to explore references before you run a full upload.
-            </p>
+        <div class="ds-grid landing-workflow-grid">
+          <div class="span-6 ds-stack landing-reveal">
+            <div>
+              <p class="eyebrow">Workflow</p>
+              <h2>From upload to decision-ready report.</h2>
+              <p class="lead">
+                Keep your editorial review tight with a repeatable pipeline that turns manuscripts
+                into actionable citation intelligence.
+              </p>
+            </div>
+            <ul class="ds-list">
+              <li>Upload PDF or DOCX files in seconds.</li>
+              <li>Parse citations and bibliography entries automatically.</li>
+              <li>Resolve metadata and flag issues by severity.</li>
+              <li>Review the methodology trail and export findings.</li>
+            </ul>
+            <div class="hero-actions">
+              <a class="ds-button ds-button--primary" href="/register">Run a check</a>
+              <a class="ds-button ds-button--ghost" href="#trust">See trust controls</a>
+            </div>
           </div>
-          <div class="span-6">
-            <div class="ds-input-row">
-              <div class="form-field">
-                <label for="search" class="form-label">Search references</label>
-                <div class="ds-input-with-icon">
-                  <i class="material-icons" aria-hidden="true">search</i>
-                  <input
-                    id="search"
-                    type="search"
-                    placeholder="Try a DOI, title, or author"
-                    aria-label="Search references"
-                  />
+          <div class="span-6 landing-reveal" data-delay="1">
+            <div class="ds-panel landing-workflow-panel">
+              <div class="ds-panel-header">
+                <div>
+                  <p class="eyebrow">Signal pipeline</p>
+                  <h3>Every step writes to the report.</h3>
+                  <p class="miscite-muted">Track progress and document each decision.</p>
                 </div>
+                <span class="ds-status ds-status--processing">
+                  <i class="material-icons" aria-hidden="true">autorenew</i>
+                  Running
+                </span>
               </div>
-              <div class="form-field">
-                <label for="source" class="form-label">Source</label>
-                <select id="source">
-                  <option>OpenAlex</option>
-                  <option>Crossref</option>
-                  <option>arXiv</option>
-                  <option>Retraction Watch</option>
-                </select>
-              </div>
-              <label class="ds-toggle">
-                <input type="checkbox" checked />
-                <span class="ds-toggle-track"></span>
-                <span>Strict matching</span>
-              </label>
-              <button class="ds-button ds-button--primary" type="button">Run check</button>
+              <ol class="ds-stepper">
+                <li class="ds-stepper-step is-complete">
+                  <span class="ds-stepper-bullet"></span>
+                  Extract manuscript text
+                </li>
+                <li class="ds-stepper-step is-complete">
+                  <span class="ds-stepper-bullet"></span>
+                  Parse citations + bibliography
+                </li>
+                <li class="ds-stepper-step is-active">
+                  <span class="ds-stepper-bullet"></span>
+                  Resolve metadata sources
+                </li>
+                <li class="ds-stepper-step">
+                  <span class="ds-stepper-bullet"></span>
+                  Flag risks and context issues
+                </li>
+                <li class="ds-stepper-step">
+                  <span class="ds-stepper-bullet"></span>
+                  Publish report + methodology
+                </li>
+              </ol>
+              <div class="ds-progress-inline" aria-hidden="true"></div>
             </div>
           </div>
         </div>
@@ -157,40 +244,59 @@
   </section>
 
   <section id="trust" class="ds-section">
-    <div class="section-header">
-      <p class="eyebrow">States</p>
-      <h2>Empty and loading states built in.</h2>
+    <div class="section-header landing-reveal">
+      <p class="eyebrow">Trust</p>
+      <h2>Transparent signals you can share with stakeholders.</h2>
       <p class="lead">
-        Clear messaging keeps teams aligned, even when there is nothing to show yet.
+        miscite keeps the evidence trail visible so editors, authors, and compliance teams know why
+        each issue was flagged.
       </p>
     </div>
-    <div class="ds-grid">
-      <div class="span-6">
+    <div class="ds-grid landing-trust-grid">
+      <div class="span-6 landing-reveal" data-delay="1">
         <div class="ds-card">
           <div class="card-content">
-            <h3>Empty state</h3>
-            <div class="ds-empty">
-              <h4>No analyses yet</h4>
-              <p class="miscite-muted">
-                Upload a manuscript to generate a citation report.
-              </p>
-              <a class="ds-button ds-button--secondary" href="/register">Start an analysis</a>
+            <h3>Verified data sources</h3>
+            <p class="miscite-muted">
+              Resolve references across multiple metadata providers and record where each signal
+              originated.
+            </p>
+            <div class="ds-chip-row">
+              <span class="ds-chip">OpenAlex</span>
+              <span class="ds-chip">Crossref</span>
+              <span class="ds-chip">arXiv</span>
+              <span class="ds-chip">Retraction Watch</span>
+              <span class="ds-chip">Predatory datasets</span>
             </div>
+            <ul class="ds-list ds-mt-4">
+              <li>Multi-source matches reduce false negatives.</li>
+              <li>Conflicting metadata is surfaced for review.</li>
+              <li>Every citation keeps its evidence trail.</li>
+            </ul>
           </div>
         </div>
       </div>
-      <div class="span-6">
+      <div class="span-6 landing-reveal" data-delay="2">
         <div class="ds-card">
           <div class="card-content">
-            <h3>Loading</h3>
-            <div class="ds-skeleton" aria-hidden="true">
-              <div class="skeleton-line"></div>
-              <div class="skeleton-line"></div>
-              <div class="skeleton-line short"></div>
-            </div>
-            <p class="miscite-muted ds-mt-4">
-              Parsing citations and checking sources.
+            <h3>Governed review process</h3>
+            <p class="miscite-muted">
+              Flagging is only half the story. miscite helps teams document how decisions were made.
             </p>
+            <ul class="ds-list">
+              <li>Severity scoring for quick triage.</li>
+              <li>Methodology notes included with every report.</li>
+              <li>Exportable JSON for audit trails and downstream review.</li>
+            </ul>
+            <div class="ds-panel ds-panel--compact ds-mt-4">
+              <div class="ds-panel-body">
+                <p class="eyebrow">Audit trail</p>
+                <p class="miscite-muted">
+                  Keep an immutable trail of checks, sources, and reviewer actions for submission
+                  records.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -198,13 +304,125 @@
   </section>
 
   <section class="ds-section">
-    <div class="ds-card ds-card--highlight">
+    <div class="section-header landing-reveal">
+      <p class="eyebrow">Who it helps</p>
+      <h2>Built for high-volume editorial workflows.</h2>
+      <p class="lead">
+        Use miscite to standardize citation quality checks across every submission you handle.
+      </p>
+    </div>
+    <div class="ds-grid landing-use-grid">
+      <div class="span-4 landing-reveal" data-delay="1">
+        <div class="ds-card landing-use-card">
+          <div class="card-content">
+            <h3>Journal editors</h3>
+            <p class="miscite-muted">
+              Catch retractions and missing references before peer review begins.
+            </p>
+            <ul class="ds-list">
+              <li>Desk review support</li>
+              <li>Consistent reviewer packets</li>
+              <li>Reduced compliance risk</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="span-4 landing-reveal" data-delay="2">
+        <div class="ds-card landing-use-card">
+          <div class="card-content">
+            <h3>Research offices</h3>
+            <p class="miscite-muted">
+              Protect institutional reputation with centralized citation governance.
+            </p>
+            <ul class="ds-list">
+              <li>Standardized checks</li>
+              <li>Shareable audit trails</li>
+              <li>Fast turnaround</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="span-4 landing-reveal" data-delay="3">
+        <div class="ds-card landing-use-card">
+          <div class="card-content">
+            <h3>Lab teams</h3>
+            <p class="miscite-muted">
+              Submit confidently with a clear record of citation integrity.
+            </p>
+            <ul class="ds-list">
+              <li>Pre-submission checks</li>
+              <li>Clean collaboration handoffs</li>
+              <li>Actionable fixes</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="section-header landing-reveal">
+      <p class="eyebrow">FAQ</p>
+      <h2>Questions teams ask before deploying.</h2>
+      <p class="lead">Clear answers so you can move quickly.</p>
+    </div>
+    <div class="ds-disclosure-list landing-faq">
+      <details class="ds-disclosure ds-disclosure--low">
+        <summary class="ds-disclosure-summary">
+          <i class="material-icons ds-disclosure-icon" aria-hidden="true">description</i>
+          <span class="ds-disclosure-type">Formats</span>
+          <span class="ds-disclosure-title">What files can I check?</span>
+          <span class="ds-severity">PDF + DOCX</span>
+          <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+        </summary>
+        <div class="ds-disclosure-body">
+          <p class="miscite-muted">
+            Upload standard PDF or DOCX manuscripts. miscite extracts citations, bibliography
+            entries, and inline references without requiring reformatting.
+          </p>
+        </div>
+      </details>
+      <details class="ds-disclosure ds-disclosure--medium">
+        <summary class="ds-disclosure-summary">
+          <i class="material-icons ds-disclosure-icon" aria-hidden="true">link</i>
+          <span class="ds-disclosure-type">Evidence</span>
+          <span class="ds-disclosure-title">How are citations verified?</span>
+          <span class="ds-severity">Multi-source</span>
+          <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+        </summary>
+        <div class="ds-disclosure-body">
+          <p class="miscite-muted">
+            References are matched against OpenAlex, Crossref, and arXiv metadata, plus retraction
+            and predatory lists. Each match is recorded alongside its data source.
+          </p>
+        </div>
+      </details>
+      <details class="ds-disclosure ds-disclosure--high">
+        <summary class="ds-disclosure-summary">
+          <i class="material-icons ds-disclosure-icon" aria-hidden="true">gavel</i>
+          <span class="ds-disclosure-type">Governance</span>
+          <span class="ds-disclosure-title">Who makes the final decision?</span>
+          <span class="ds-severity">Human-led</span>
+          <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+        </summary>
+        <div class="ds-disclosure-body">
+          <p class="miscite-muted">
+            miscite provides evidence and severity scoring, but final decisions stay with your
+            editorial team. Reports are designed to support human review.
+          </p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="ds-section">
+    <div class="ds-card ds-card--highlight landing-cta">
       <div class="card-content">
         <div class="ds-grid">
           <div class="span-8">
-            <h2>Ready to run your first check?</h2>
+            <h2>Ready to protect every submission?</h2>
             <p class="lead">
-              Upload a PDF or DOCX and get a transparent report you can trust.
+              Run a citation check today and keep every review grounded in evidence.
             </p>
           </div>
           <div class="span-4 hero-actions">

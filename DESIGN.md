@@ -113,4 +113,5 @@ IU palette reference:
 ## Starter page
 
 The public landing page is `server/miscite/templates/home.html` and demonstrates the system:
-hero, feature cards, input row, empty state, skeleton, and CTA.
+hero + proof tiles, report preview, feature grid, workflow stepper, trust section, use-case cards,
+FAQ disclosures, and CTA.
