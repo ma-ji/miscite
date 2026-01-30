@@ -108,6 +108,75 @@ class CitationInstance:
     context: str
 
 
+_AY_YEAR_RE = re.compile(r"\b(19|20)\d{2}[a-z]?\b", re.IGNORECASE)
+_AY_AUTHOR_RE = re.compile(r"[A-Za-z][A-Za-z'’\-]+")
+_AY_LEADING_RE = re.compile(r"^(see|see also|cf\.|cf|e\.g\.|eg)\s+", re.IGNORECASE)
+_AY_SPLIT_RE = re.compile(r"\s*;\s*")
+
+
+def split_multi_citations(citations: list[CitationInstance]) -> list[CitationInstance]:
+    out: list[CitationInstance] = []
+    for cit in citations:
+        if cit.kind == "numeric":
+            out.extend(_split_numeric_citation(cit))
+        elif cit.kind == "author_year":
+            out.extend(_split_author_year_citation(cit))
+        else:
+            out.append(cit)
+    return out
+
+
+def _split_numeric_citation(cit: CitationInstance) -> list[CitationInstance]:
+    raw = (cit.raw or "").strip()
+    if not raw:
+        return [cit]
+    body = raw
+    if body.startswith("[") and body.endswith("]"):
+        body = body[1:-1]
+    if body.startswith("(") and body.endswith(")"):
+        body = body[1:-1]
+    if not any(ch in body for ch in [",", "-", "–", ";"]):
+        return [cit]
+    numbers = _expand_numeric_citation_body(body)
+    if len(numbers) <= 1:
+        return [cit]
+    return [
+        CitationInstance(kind="numeric", raw=f"[{num}]", locator=str(num), context=cit.context) for num in numbers
+    ]
+
+
+def _split_author_year_citation(cit: CitationInstance) -> list[CitationInstance]:
+    raw = (cit.raw or "").strip()
+    if not raw:
+        return [cit]
+    year_hits = list(_AY_YEAR_RE.finditer(raw))
+    if ";" not in raw and len(year_hits) <= 1:
+        return [cit]
+    body = raw
+    if body.startswith("(") and body.endswith(")"):
+        body = body[1:-1]
+    parts = [p.strip() for p in _AY_SPLIT_RE.split(body) if p.strip()]
+    if len(parts) <= 1:
+        return [cit]
+    out: list[CitationInstance] = []
+    for part in parts:
+        year_match = _AY_YEAR_RE.search(part)
+        if not year_match:
+            continue
+        year = year_match.group(0).lower()
+        author_part = part[: year_match.start()].strip()
+        author_part = _AY_LEADING_RE.sub("", author_part).strip()
+        author_part = author_part.rstrip(",;")
+        author_match = _AY_AUTHOR_RE.search(author_part)
+        if not author_match:
+            continue
+        author = author_match.group(0).lower()
+        locator = f"{author}-{year}"
+        raw_piece = f"({part.strip()})" if raw.startswith("(") and raw.endswith(")") else part.strip()
+        out.append(CitationInstance(kind="author_year", raw=raw_piece, locator=locator, context=cit.context))
+    return out if out else [cit]
+
+
 _NUMERIC_CIT_RE = re.compile(r"\[(?P<body>\s*\d+(?:\s*[-–]\s*\d+)?(?:\s*,\s*\d+(?:\s*[-–]\s*\d+)?)*)\s*\]")
 _NARRATIVE_AY_RE = re.compile(
     r"\b(?P<author>[A-Z][A-Za-z'’\-]+)(?:\s+et\s+al\.)?\s*\(\s*(?P<year>(?:19|20)\d{2}[a-z]?)\s*\)"

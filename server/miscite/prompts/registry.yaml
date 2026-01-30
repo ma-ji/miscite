@@ -71,4 +71,5 @@ prompts:
     inputs:
       - excerpt
       - groups_payload
+      - section_order
     output_schema: schemas/deep_suggestions.schema.json

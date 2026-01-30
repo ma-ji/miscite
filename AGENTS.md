@@ -72,7 +72,7 @@ Settings live in `server/miscite/config.py` and `.env.example`. Critical env key
 - Required: `OPENROUTER_API_KEY`.
 - Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
-- LLM: model names and call limits (parse, match, inappropriate).
+- LLM: model names and call limits (parse, match, inappropriate, deep analysis).
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys and flags.
 - Ops/security: maintenance mode, load shedding, rate limits, upload scan, job reaper, access-token TTL.

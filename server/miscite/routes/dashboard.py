@@ -4,11 +4,13 @@ import asyncio
 import datetime as dt
 import json
 import re
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
+from weasyprint import CSS, HTML
 
 from server.miscite.config import Settings
 from server.miscite.db import db_session, get_sessionmaker
@@ -33,6 +35,14 @@ def _human_date(ts: dt.datetime | None) -> str:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=dt.UTC)
     return f"{ts.strftime('%b')} {ts.day}, {ts.year}"
+
+
+def _human_datetime(ts: dt.datetime | None) -> str:
+    if ts is None:
+        return ""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=dt.UTC)
+    return f"{ts.strftime('%b')} {ts.day}, {ts.year} at {ts.strftime('%H:%M')} UTC"
 
 
 def _relative_time(ts: dt.datetime | None) -> str:
@@ -225,6 +235,7 @@ def report_access(request: Request, token: str = Form(""), db: Session = Depends
             report=report,
             methodology_md="",
             public_view=True,
+            hide_report_access=True,
         ),
     )
 
@@ -415,12 +426,92 @@ def job_page(
                 "error_message": _safe_error_message(settings, job.error_message),
                 "access_token_hint": job.access_token_hint,
                 "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
+                "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
+                if job.access_token_expires_at
+                else None,
                 "access_token_expired": _token_expired(job),
             },
             report=report,
             methodology_md=job.methodology_md or "",
             public_view=False,
+            hide_report_access=True,
         ),
+    )
+
+
+@router.get("/jobs/{job_id}/report.pdf")
+def job_report_pdf(
+    request: Request,
+    job_id: str,
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-pdf",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+
+    row = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404)
+    job, doc = row
+
+    report = _load_report(job)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not available.")
+
+    ctx = template_context(
+        request,
+        title="Report PDF",
+        job={
+            "id": job.id,
+            "status": job.status,
+            "filename": doc.original_filename,
+            "error_message": _safe_error_message(settings, job.error_message),
+            "access_token_hint": job.access_token_hint,
+            "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
+            "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
+            if job.access_token_expires_at
+            else None,
+            "access_token_expired": _token_expired(job),
+        },
+        report=report,
+        methodology_md=job.methodology_md or "",
+        public_view=False,
+        pdf_view=True,
+        hide_report_access=True,
+    )
+
+    html = templates.get_template("job.html").render(ctx)
+    css_path = Path(__file__).resolve().parents[1] / "static" / "styles.css"
+    pdf_css = CSS(
+        string="""
+@page { size: letter; margin: 18mm; }
+body { background: #fff; }
+.app-header, .ds-footer, .skip-link { display: none !important; }
+.ds-main { padding-top: 0 !important; }
+"""
+    )
+    pdf_bytes = HTML(string=html, base_url=str(request.base_url)).write_pdf(
+        stylesheets=[CSS(filename=str(css_path)), pdf_css]
+    )
+
+    stem = Path(doc.original_filename).stem or "miscite-report"
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-") or "miscite-report"
+    filename = f"{safe_stem}-report.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -474,12 +565,16 @@ def job_access_token(
                 "error_message": _safe_error_message(settings, job.error_message),
                 "access_token_hint": job.access_token_hint,
                 "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
+                "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
+                if job.access_token_expires_at
+                else None,
                 "access_token_expired": _token_expired(job),
             },
             report=report,
             methodology_md=job.methodology_md or "",
             access_token=token,
             public_view=False,
+            hide_report_access=True,
         ),
     )
 

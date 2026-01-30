@@ -245,6 +245,7 @@ You can use different LLM models for different tasks:
 - `MISCITE_LLM_MODEL`: inappropriate-citation classification
 - `MISCITE_LLM_PARSE_MODEL`: citation/bibliography parsing
 - `MISCITE_LLM_MATCH_MODEL`: OpenAlex/Crossref/arXiv match disambiguation
+- `MISCITE_LLM_DEEP_ANALYSIS_MODEL`: deep-analysis key-reference selection + recommendation drafting
 
 ### Deep analysis (optional)
 

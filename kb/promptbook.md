@@ -253,3 +253,39 @@ THINK HARD: Add a Deep Analysis pipeline after the flagging process:
 11. Use parallel processing to speedup, pay attention to OOM and rate limit.
 
 ======
+
+THINK HARD: For the report page and related processes:
+
+1. In-text citation can have mulitple in one place, such as (Merton 1988; Rigney 2010; Bol, De Vaan, and Van De Rijt 2018), make sure they are split before matching.
+
+2. Enable download the report as a PDF file, not JSON.
+
+3. Remove unnecessary buttons on this page, e.g., Get report, Use an access token, etc.
+
+4. After token generation, shows when the token expires.
+
+For the deep analysis:
+
+1. Use a speperate model for writing the deep analysis report.
+
+2. Organize the suggestions by the order of the article's major sections.
+
+3. Summarize major recommendations with priorities in narrative format with APA style in-text citation (cross-referenced to the reference list).
+
+4. List all references alphabetically, (1) By group, as it is right now; (2) In one reference section at the very end of the report.
+
+5. For "Already cited" label, use a green-like UI-consistent color.
+
+In the end:
+
+1. Double check the design of this page adhere to UI principles and user demands.
+
+====
+
+THINK HARD: Work on the email delivery system and user system:
+
+1. Use Mailgun API for email.
+2. Simplify register process: enter email, send a random code to email, use that code as login credential. User can select remain signed in for: current window session, 7 days, 30 days.
+3. Merge the sign in and register buttons elsewhere given the new simplified process. Keep using the color for register.
+
+4. Access token is generated automatically once a job is started and sent to email, with related information. Use can use this token to check the progress or access the report.

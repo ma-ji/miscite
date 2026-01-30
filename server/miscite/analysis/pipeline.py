@@ -9,6 +9,7 @@ from pathlib import Path
 from server.miscite.analysis.citation_parsing import (
     CitationInstance,
     ReferenceEntry,
+    split_multi_citations,
     split_references,
 )
 from server.miscite.analysis.deep_analysis import run_deep_analysis
@@ -492,6 +493,7 @@ def analyze_document(
         max_chars_candidates=settings.llm_citation_parse_max_candidate_chars,
     )
     parse_notes["citations"].extend(notes)
+    citations = split_multi_citations(citations)
     _progress("parse", f"Parsed {len(citations)} in-text citations", 0.38)
 
     numeric_map: dict[str, ReferenceEntry] = {}
@@ -591,6 +593,7 @@ def analyze_document(
     if not settings.enable_llm_inappropriate:
         raise RuntimeError("MISCITE_ENABLE_LLM_INAPPROPRIATE must be true (no heuristic fallback).")
     llm_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_model)
+    llm_deep_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_deep_analysis_model)
     llm_used = False
     used_sources.append({"name": "OpenRouter", "detail": f"LLM-assisted inappropriate-citation checks via {settings.llm_model}."})
 
@@ -1256,7 +1259,7 @@ def analyze_document(
         deep_budget = max(0, llm_max_calls - llm_calls)
         deep_result = run_deep_analysis(
             settings=settings,
-            llm_client=llm_client,
+            llm_client=llm_deep_client,
             openalex=openalex,
             references=references,
             resolved_by_ref_id=resolved_by_ref_id,

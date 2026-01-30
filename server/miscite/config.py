@@ -133,6 +133,7 @@ class Settings:
 
     llm_parse_model: str
     llm_match_model: str
+    llm_deep_analysis_model: str
     llm_match_max_calls: int
     llm_bib_parse_max_chars: int
     llm_bib_parse_max_refs: int
@@ -280,6 +281,7 @@ class Settings:
 
         llm_parse_model = _env_str("MISCITE_LLM_PARSE_MODEL", llm_model)
         llm_match_model = _env_str("MISCITE_LLM_MATCH_MODEL", llm_model)
+        llm_deep_analysis_model = _env_str("MISCITE_LLM_DEEP_ANALYSIS_MODEL", llm_model)
         llm_match_max_calls = _env_int("MISCITE_LLM_MATCH_MAX_CALLS", 50, min_value=0, max_value=200)
         llm_bib_parse_max_chars = _env_int("MISCITE_LLM_BIB_PARSE_MAX_CHARS", 120_000, min_value=1000, max_value=500_000)
         llm_bib_parse_max_refs = _env_int("MISCITE_LLM_BIB_PARSE_MAX_REFS", 400, min_value=1, max_value=2000)
@@ -407,6 +409,7 @@ class Settings:
             llm_max_calls=llm_max_calls,
             llm_parse_model=llm_parse_model,
             llm_match_model=llm_match_model,
+            llm_deep_analysis_model=llm_deep_analysis_model,
             llm_match_max_calls=llm_match_max_calls,
             llm_bib_parse_max_chars=llm_bib_parse_max_chars,
             llm_bib_parse_max_refs=llm_bib_parse_max_refs,

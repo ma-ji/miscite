@@ -29,6 +29,9 @@
   --severity-low: #072332;
   --severity-low-soft: rgba(7, 35, 50, 0.08);
   --severity-low-border: rgba(7, 35, 50, 0.25);
+  --success: #1f7a4a;
+  --success-soft: rgba(31, 122, 74, 0.12);
+  --success-border: rgba(31, 122, 74, 0.35);
   --bg-gradient-1: rgba(153, 0, 0, 0.12);
   --bg-gradient-2: rgba(7, 35, 50, 0.06);
   --skeleton-base: rgba(7, 35, 50, 0.06);
@@ -96,6 +99,9 @@
     --severity-low: #b9c1c6;
     --severity-low-soft: rgba(185, 193, 198, 0.16);
     --severity-low-border: rgba(185, 193, 198, 0.35);
+    --success: #7ad7a8;
+    --success-soft: rgba(122, 215, 168, 0.18);
+    --success-border: rgba(122, 215, 168, 0.4);
     --bg-gradient-1: rgba(244, 28, 64, 0.16);
     --bg-gradient-2: rgba(248, 239, 226, 0.12);
     --skeleton-base: rgba(248, 239, 226, 0.1);
@@ -137,6 +143,9 @@
   --severity-low: #072332;
   --severity-low-soft: rgba(7, 35, 50, 0.08);
   --severity-low-border: rgba(7, 35, 50, 0.25);
+  --success: #1f7a4a;
+  --success-soft: rgba(31, 122, 74, 0.12);
+  --success-border: rgba(31, 122, 74, 0.35);
   --bg-gradient-1: rgba(153, 0, 0, 0.12);
   --bg-gradient-2: rgba(7, 35, 50, 0.06);
   --skeleton-base: rgba(7, 35, 50, 0.06);
@@ -177,6 +186,9 @@
   --severity-low: #b9c1c6;
   --severity-low-soft: rgba(185, 193, 198, 0.16);
   --severity-low-border: rgba(185, 193, 198, 0.35);
+  --success: #7ad7a8;
+  --success-soft: rgba(122, 215, 168, 0.18);
+  --success-border: rgba(122, 215, 168, 0.4);
   --bg-gradient-1: rgba(244, 28, 64, 0.16);
   --bg-gradient-2: rgba(248, 239, 226, 0.12);
   --skeleton-base: rgba(248, 239, 226, 0.1);
@@ -1903,6 +1915,12 @@ pre {
   color: var(--text);
 }
 
+.ds-chip--success {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
 .ds-raw {
   margin-top: var(--space-3);
 }
@@ -1920,11 +1938,23 @@ pre {
 }
 
 .ds-severity-card {
+  appearance: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-soft, var(--border));
   padding: var(--space-3);
   background: var(--surface-2);
-  text-align: center;
+}
+
+.ds-severity-card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.ds-severity-card.is-active {
+  box-shadow: var(--shadow-2);
 }
 
 .ds-severity-card--high {

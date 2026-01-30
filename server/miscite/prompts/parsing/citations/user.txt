@@ -7,10 +7,11 @@ Return a JSON object with keys:
   - locator:
     - for numeric: the referenced number as a string (e.g., '12')
     - for author_year: '<family>-<year>' lowercased (e.g., 'smith-2020')
-  - context: the surrounding sentence (or line) where the citation occurs
+- context: the surrounding sentence (or line) where the citation occurs
 - notes: array of strings
 
 Do not invent missing author names. If you cannot derive a locator, omit that citation.
+If a single parenthetical contains multiple citations (e.g., separated by semicolons), output one item per citation.
 
 TEXT:
 $text

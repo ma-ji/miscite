@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
   {% set has_error = job.error_message or job.has_error %}
+  {% set pdf_view = pdf_view|default(false) %}
   <section class="ds-section">
     <div class="ds-grid">
-      <div class="span-8">
+      <div class="span-{{ 12 if pdf_view else 7 }}">
         <p class="eyebrow">Report</p>
         <h1>{{ job.filename }}</h1>
         <p class="lead">
@@ -23,7 +24,8 @@
           {% endif %}
         </div>
       </div>
-      <div class="span-4">
+      {% if not pdf_view %}
+      <div class="span-5">
         {% if public_view %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
@@ -41,10 +43,9 @@
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
               <h3>Quick actions</h3>
-              <p class="miscite-muted">Download or refresh this report.</p>
+              <p class="miscite-muted">Download this report.</p>
               <div class="ds-stack">
-                <a class="ds-button ds-button--secondary" href="/api/jobs/{{ job.id }}">Download JSON</a>
-                <a class="ds-button ds-button--ghost" href="/jobs/{{ job.id }}">Refresh</a>
+                <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}/report.pdf">Download PDF</a>
               </div>
               <div class="ds-panel ds-panel--compact ds-mt-4">
                 <div class="ds-panel-body">
@@ -52,11 +53,17 @@
                   {% if access_token %}
                     <p class="miscite-muted">Copy and share this token. It is shown once.</p>
                     <p class="ds-quote miscite-mono">{{ access_token }}</p>
+                    {% if job.access_token_expires_at_human %}
+                      <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
+                    {% endif %}
                   {% elif job.access_token_hint %}
                     {% if job.access_token_expired %}
                       <p class="miscite-muted">
                         Access token expired. Generate a new token to share this report.
                       </p>
+                      {% if job.access_token_expires_at_human %}
+                        <p class="miscite-muted">Expired {{ job.access_token_expires_at_human }}.</p>
+                      {% endif %}
                       <form method="post" action="/jobs/{{ job.id }}/access-token">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <button class="ds-button ds-button--secondary ds-button--sm" type="submit">Generate token</button>
@@ -65,6 +72,9 @@
                       <p class="miscite-muted">
                         Active token ending in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
                       </p>
+                      {% if job.access_token_expires_at_human %}
+                        <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
+                      {% endif %}
                       <form method="post" action="/jobs/{{ job.id }}/access-token">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <button class="ds-button ds-button--ghost ds-button--sm" type="submit">Rotate token</button>
@@ -82,13 +92,10 @@
                 </div>
               </div>
             </div>
-            <div class="card-action">
-              <a href="/reports/access">Get report</a>
-              <span class="miscite-muted">Use an access token</span>
-            </div>
           </div>
         {% endif %}
       </div>
+      {% endif %}
     </div>
     {% if job.error_message and not public_view %}
       <div class="ds-alert ds-alert--error ds-mt-5">
@@ -101,7 +108,7 @@
     {% endif %}
   </section>
 
-  {% if not public_view and job.status != "COMPLETED" %}
+  {% if not public_view and not pdf_view and job.status != "COMPLETED" %}
     <section class="ds-section" id="job-progress-section" data-job-id="{{ job.id }}">
       <div class="ds-card">
         <div class="card-content">
@@ -131,60 +138,79 @@
         {% set severity_counts.medium = severity_counts.medium + 1 %}
       {% endif %}
     {% endfor %}
+    {% set summary = report.summary or {} %}
     <section class="ds-section">
       <div class="ds-grid">
-        <div class="span-4">
+        <div class="span-5">
           <div class="ds-card">
             <div class="card-content">
               <h3>Summary</h3>
               <div class="ds-stat-grid">
                 <div class="ds-stat">
-                  <div class="ds-stat-value">{{ report.summary.total_citations }}</div>
+                  <div class="ds-stat-value">{{ summary.total_citations|default(0) }}</div>
                   <div class="ds-stat-label">Citations parsed</div>
                 </div>
                 <div class="ds-stat">
-                  <div class="ds-stat-value">{{ report.summary.missing_bibliography_refs }}</div>
+                  <div class="ds-stat-value">{{ summary.missing_bibliography_refs|default(0) }}</div>
                   <div class="ds-stat-label">Missing refs</div>
                 </div>
                 <div class="ds-stat">
-                  <div class="ds-stat-value">{{ report.summary.unresolved_references }}</div>
+                  <div class="ds-stat-value">{{ summary.unresolved_references|default(0) }}</div>
                   <div class="ds-stat-label">Unresolved</div>
                 </div>
                 <div class="ds-stat">
-                  <div class="ds-stat-value">{{ report.summary.retracted_references }}</div>
+                  <div class="ds-stat-value">{{ summary.retracted_references|default(0) }}</div>
                   <div class="ds-stat-label">Retractions</div>
                 </div>
                 <div class="ds-stat">
-                  <div class="ds-stat-value">{{ report.summary.predatory_matches }}</div>
+                  <div class="ds-stat-value">{{ summary.predatory_matches|default(0) }}</div>
                   <div class="ds-stat-label">Venue risk</div>
                 </div>
                 <div class="ds-stat">
-                  <div class="ds-stat-value">{{ report.summary.potentially_inappropriate }}</div>
+                  <div class="ds-stat-value">{{ summary.potentially_inappropriate|default(0) }}</div>
                   <div class="ds-stat-label">Potential issues</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <div class="span-8">
+        <div class="span-7">
           <div class="ds-card">
             <div class="card-content">
               <h3>Flags</h3>
               <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
               {% if report.issues|length > 0 %}
                 <div class="ds-severity-grid ds-mt-4">
-                  <div class="ds-severity-card ds-severity-card--high">
+                  <button
+                    type="button"
+                    class="ds-severity-card ds-severity-card--high js-severity-filter"
+                    data-severity-filter="high"
+                    aria-pressed="false"
+                    aria-label="Filter to high severity issues"
+                  >
                     <div class="ds-severity-count">{{ severity_counts.high }}</div>
                     <div class="ds-severity-label">High severity</div>
-                  </div>
-                  <div class="ds-severity-card ds-severity-card--medium">
+                  </button>
+                  <button
+                    type="button"
+                    class="ds-severity-card ds-severity-card--medium js-severity-filter"
+                    data-severity-filter="medium"
+                    aria-pressed="false"
+                    aria-label="Filter to medium severity issues"
+                  >
                     <div class="ds-severity-count">{{ severity_counts.medium }}</div>
                     <div class="ds-severity-label">Medium severity</div>
-                  </div>
-                  <div class="ds-severity-card ds-severity-card--low">
+                  </button>
+                  <button
+                    type="button"
+                    class="ds-severity-card ds-severity-card--low js-severity-filter"
+                    data-severity-filter="low"
+                    aria-pressed="false"
+                    aria-label="Filter to low severity issues"
+                  >
                     <div class="ds-severity-count">{{ severity_counts.low }}</div>
                     <div class="ds-severity-label">Low severity</div>
-                  </div>
+                  </button>
                 </div>
               {% endif %}
     {% if report.issues|length == 0 %}
@@ -228,7 +254,10 @@
                       {% set issue_description = "Automated checks could not verify this citation." %}
                       {% set issue_action = "Review the citation manually for accuracy." %}
                     {% endif %}
-                    <details class="ds-disclosure ds-disclosure--{{ severity }}">
+                    <details
+                      class="ds-disclosure ds-disclosure--{{ severity }} js-issue"
+                      data-severity="{{ severity }}"
+                    >
                       <summary class="ds-disclosure-summary">
                         <i class="material-icons ds-disclosure-icon" aria-hidden="true">flag</i>
                         <span class="ds-severity" aria-label="Severity {{ severity }}">{{ severity }}</span>
@@ -388,7 +417,7 @@
 	                                <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>
 	                                {{ ref.title|default("Untitled") }}
 	                                {% if ref.year %} ({{ ref.year }}){% endif %}
-	                                {% if ref.in_paper %}<span class="ds-chip">Already cited</span>{% endif %}
+                                {% if ref.in_paper %}<span class="ds-chip ds-chip--success">Already cited</span>{% endif %}
 	                              </li>
 	                            {% endif %}
 	                          {% endfor %}
@@ -445,7 +474,7 @@
                                   </a>
                                 {% endif %}
 	                                {% if ref.in_paper %}
-	                                  <span class="ds-chip">Already cited</span>
+	                                  <span class="ds-chip ds-chip--success">Already cited</span>
 	                                {% endif %}
 	                              </div>
 	                            </li>
@@ -469,43 +498,34 @@
       </section>
     {% endif %}
 
-    <section class="ds-section">
-      <div class="ds-grid">
-        <div class="span-6">
-          <div class="ds-card">
-            <div class="card-content">
-              <h3>Evidence coverage</h3>
-              <p class="miscite-muted">
-                Sources are vetted and managed privately to protect detection integrity.
-              </p>
-              <ul class="ds-list ds-mt-4">
-                <li>Scholarly metadata registries</li>
-                <li>Publisher and venue records</li>
-                <li>Retraction registries and integrity watchlists</li>
-                <li>Internal quality signals and consistency checks</li>
-              </ul>
-              <p class="miscite-muted ds-mt-4">
-                Need a source attestation? Request a compliance summary from your account team.
-              </p>
-            </div>
+
+    {% if report.deep_analysis and report.deep_analysis.status == "completed" and report.deep_analysis.references %}
+      {% set da = report.deep_analysis %}
+      <section class="ds-section">
+        <div class="ds-card">
+          <div class="card-content">
+            <h3>Complete reference list</h3>
+            <p class="miscite-muted">All deep-analysis references, alphabetized by author.</p>
+            {% set all_refs = da.references.values()|list|sort(attribute='apa_base') %}
+            <ol class="ds-list ds-mt-3">
+              {% for ref in all_refs %}
+                <li>
+                  <div>
+                    <span class="miscite-mono">[{{ ref.rid }}]</span>
+                    {{ ref.apa_base }}
+                  </div>
+                  {% if ref.in_paper %}
+                    <div class="ds-chip-row ds-mt-3" aria-label="Reference status">
+                      <span class="ds-chip ds-chip--success">Already cited</span>
+                    </div>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ol>
           </div>
         </div>
-        <div class="span-6">
-          <div class="ds-card">
-            <div class="card-content">
-              <h3>Review process</h3>
-              <p class="miscite-muted">A concise overview of how this check was performed.</p>
-              <ul class="ds-list ds-mt-4">
-                <li>Extract citation text and bibliography entries.</li>
-                <li>Normalize references and resolve metadata across vetted registries.</li>
-                <li>Cross-check integrity signals and venue risk indicators.</li>
-                <li>Summarize findings with evidence context and reviewer-ready notes.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+      </section>
+    {% endif %}
   {% else %}
     <section class="ds-section">
       <div class="ds-empty">
@@ -519,7 +539,7 @@
       </div>
     </section>
   {% endif %}
-  {% if not public_view %}
+  {% if not public_view and not pdf_view %}
     <script nonce="{{ csp_nonce }}">
       (function () {
         var section = document.getElementById("job-progress-section");
@@ -670,6 +690,67 @@
       };
 
         connect();
+      })();
+    </script>
+  {% endif %}
+  {% if not pdf_view %}
+    <script nonce="{{ csp_nonce }}">
+      (function () {
+        var buttons = document.querySelectorAll("[data-severity-filter]");
+        if (!buttons.length) {
+          return;
+        }
+        var issues = document.querySelectorAll(".js-issue[data-severity]");
+        var active = null;
+
+        var setActive = function (severity) {
+          active = severity;
+          buttons.forEach(function (btn) {
+            var isActive = btn.getAttribute("data-severity-filter") === severity;
+            btn.classList.toggle("is-active", isActive);
+            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+          });
+          issues.forEach(function (issue) {
+            var match = issue.getAttribute("data-severity") === severity;
+            issue.hidden = !match;
+          });
+        };
+
+        var clearActive = function () {
+          active = null;
+          buttons.forEach(function (btn) {
+            btn.classList.remove("is-active");
+            btn.setAttribute("aria-pressed", "false");
+          });
+          issues.forEach(function (issue) {
+            issue.hidden = false;
+          });
+        };
+
+        buttons.forEach(function (btn) {
+          btn.addEventListener("click", function (event) {
+            event.stopPropagation();
+            var severity = btn.getAttribute("data-severity-filter");
+            if (!severity) {
+              return;
+            }
+            if (active === severity) {
+              clearActive();
+            } else {
+              setActive(severity);
+            }
+          });
+        });
+
+        document.addEventListener("click", function (event) {
+          if (!active) {
+            return;
+          }
+          if (event.target.closest("[data-severity-filter]")) {
+            return;
+          }
+          clearActive();
+        });
       })();
     </script>
   {% endif %}

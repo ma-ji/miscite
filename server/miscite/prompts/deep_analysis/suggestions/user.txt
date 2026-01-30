@@ -1,18 +1,29 @@
 You will receive groups of papers with short ids.
 
 Return JSON with keys:
-- overview: short paragraph
+- overview: short narrative paragraph with priorities (Priority 1/2/3)
 - sections: array of objects with keys {title, bullets}
   - title: string
   - bullets: array of short strings
 
 Rules:
 - Use plain language.
-- Do NOT repeat full reference details; only cite papers using [R#] markers.
+- Organize sections in the exact order given in SECTION ORDER; omit sections with no bullets.
+- Do NOT repeat full reference details; cite papers using APA-style in-text citations plus [R#] markers.
+- For overview: each priority sentence must include an APA in-text citation (e.g., "Merton (1988)" or "(Merton, 1988)") and the matching [R#] marker.
 - Start each bullet with the [R#] marker.
-- Make bullets concrete: where to add (intro / literature review / methods / discussion) and what to do.
+- Under each section, group and order bullets by:
+  1) Core background refs
+  2) Refs connecting ideas (and how)
+  3) Refs to add (why and how)
+  4) Refs to consider removing
+- In every bullet, label the group and include a priority tag: High for not yet covered (in_paper=false), Low for already covered (in_paper=true).
+- Make bullets concrete: mention the section and what to do.
 - For each group below, write one bullet per item in that group.
 - Do not put raw newline characters inside strings.
+
+SECTION ORDER (use these titles exactly, in order):
+$section_order
 
 PAPER EXCERPT:
 $excerpt
@@ -23,6 +34,12 @@ GROUP KEY MEANINGS:
 - bridge_papers: works that can help connect ideas across subtopics
 - core_papers: core background that should be clearly positioned
 - tangential_citations: citations in the paper that may need justification or removal
+
+GROUP MAPPING FOR BULLET LABELS:
+- Core background refs -> core_papers
+- Refs connecting ideas -> bridge_papers
+- Refs to add -> highly_connected + bibliographic_coupling
+- Refs to consider removing -> tangential_citations
 
 GROUPS:
 $groups_payload
