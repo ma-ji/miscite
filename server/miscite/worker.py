@@ -29,6 +29,14 @@ class _AccessTokenEmail:
     expires_at: dt.datetime
 
 
+def _as_utc(ts: dt.datetime | None) -> dt.datetime | None:
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=dt.UTC)
+    return ts.astimezone(dt.UTC)
+
+
 def _claim_next_job(db: Session) -> str | None:
     job_id = db.scalar(
         select(AnalysisJob.id)
@@ -80,7 +88,8 @@ def _ensure_access_token(settings: Settings, job_id: str) -> _AccessTokenEmail |
             return None
         job, doc, user = row
         now = dt.datetime.now(dt.UTC)
-        if job.access_token_hash and job.access_token_expires_at and job.access_token_expires_at >= now:
+        expires_at = _as_utc(job.access_token_expires_at)
+        if job.access_token_hash and expires_at and expires_at >= now:
             return None
         token = generate_access_token()
         job.access_token_hash = hash_token(token)

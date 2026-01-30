@@ -28,27 +28,32 @@ def _subscription_active(account: BillingAccount | None) -> bool:
     return account.subscription_status in {"active", "trialing"}
 
 
+def _as_utc(ts: dt.datetime | None) -> dt.datetime | None:
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=dt.UTC)
+    return ts.astimezone(dt.UTC)
+
+
 def _human_date(ts: dt.datetime | None) -> str:
+    ts = _as_utc(ts)
     if ts is None:
         return ""
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=dt.UTC)
     return f"{ts.strftime('%b')} {ts.day}, {ts.year}"
 
 
 def _human_datetime(ts: dt.datetime | None) -> str:
+    ts = _as_utc(ts)
     if ts is None:
         return ""
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=dt.UTC)
     return f"{ts.strftime('%b')} {ts.day}, {ts.year} at {ts.strftime('%H:%M')} UTC"
 
 
 def _relative_time(ts: dt.datetime | None) -> str:
+    ts = _as_utc(ts)
     if ts is None:
         return ""
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=dt.UTC)
     now = dt.datetime.now(dt.UTC)
     delta = now - ts
     seconds = max(0, int(delta.total_seconds()))
@@ -85,9 +90,10 @@ def _load_report(job: AnalysisJob) -> dict | None:
 
 
 def _token_expired(job: AnalysisJob) -> bool:
-    if job.access_token_hash and job.access_token_expires_at is None:
+    expires_at = _as_utc(job.access_token_expires_at)
+    if job.access_token_hash and expires_at is None:
         return True
-    if job.access_token_expires_at and job.access_token_expires_at < dt.datetime.now(dt.UTC):
+    if expires_at and expires_at < dt.datetime.now(dt.UTC):
         return True
     return False
 
@@ -112,7 +118,8 @@ def _resolve_access_token(
 
     job, doc = row
     now = dt.datetime.now(dt.UTC)
-    if job.access_token_expires_at is None or job.access_token_expires_at < now:
+    expires_at = _as_utc(job.access_token_expires_at)
+    if expires_at is None or expires_at < now:
         return None, "That token has expired. Request a new token from the report owner."
     return (job, doc), None
 
@@ -594,7 +601,8 @@ def _require_access_job(db: Session, token_hash: str) -> AnalysisJob:
     if not job:
         raise HTTPException(status_code=404)
     now = dt.datetime.now(dt.UTC)
-    if job.access_token_expires_at is None or job.access_token_expires_at < now:
+    expires_at = _as_utc(job.access_token_expires_at)
+    if expires_at is None or expires_at < now:
         raise HTTPException(status_code=403, detail="Access token expired.")
     return job
 
