@@ -137,18 +137,21 @@ class PredatoryVenueDataset:
     def __init__(self, csv_path: Path):
         self.csv_path = csv_path
         self._records: list[PredatoryRecord] | None = None
+        self._by_issn: dict[str, PredatoryRecord] | None = None
+        self._by_journal_name: dict[str, PredatoryRecord] | None = None
+        self._by_publisher_name: dict[str, PredatoryRecord] | None = None
 
     def _load(self) -> None:
         records: list[PredatoryRecord] = []
         if not self.csv_path.exists():
-            self._records = []
-            _PREDATORY_CACHE[self.csv_path] = (-1.0, self._records)
+            self._build_indexes([])
+            _PREDATORY_CACHE[self.csv_path] = (-1.0, self._records or [])
             return
 
         mtime = self.csv_path.stat().st_mtime
         cached = _PREDATORY_CACHE.get(self.csv_path)
         if cached and cached[0] == mtime:
-            self._records = cached[1]
+            self._build_indexes(list(cached[1]))
             return
         with self.csv_path.open("r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
@@ -207,8 +210,30 @@ class PredatoryVenueDataset:
                             notes=notes,
                         )
                     )
-        self._records = records
+        self._build_indexes(records)
         _PREDATORY_CACHE[self.csv_path] = (mtime, records)
+
+    def _build_indexes(self, records: list[PredatoryRecord]) -> None:
+        by_issn: dict[str, PredatoryRecord] = {}
+        by_journal: dict[str, PredatoryRecord] = {}
+        by_publisher: dict[str, PredatoryRecord] = {}
+
+        for rec in records:
+            issn_n = (rec.issn or "").replace("-", "").strip().lower()
+            if issn_n and issn_n not in by_issn:
+                by_issn[issn_n] = rec
+            name_n = self._norm(rec.name or "")
+            if not name_n:
+                continue
+            if rec.venue_type == "journal":
+                by_journal.setdefault(name_n, rec)
+            elif rec.venue_type == "publisher":
+                by_publisher.setdefault(name_n, rec)
+
+        self._records = records
+        self._by_issn = by_issn
+        self._by_journal_name = by_journal
+        self._by_publisher_name = by_publisher
 
     @staticmethod
     def _norm(s: str) -> str:
@@ -222,16 +247,16 @@ class PredatoryVenueDataset:
         publisher_n = self._norm(publisher or "")
         issn_n = (issn or "").replace("-", "").strip().lower()
 
-        for rec in self._records or []:
-            if issn_n and rec.issn:
-                if issn_n == rec.issn.replace("-", "").strip().lower():
-                    return PredatoryMatch(record=rec, match_type="issn_exact", confidence=1.0)
-            if rec.venue_type == "journal" and journal_n and rec.name:
-                name_n = self._norm(rec.name)
-                if journal_n == name_n:
-                    return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
-            if rec.venue_type == "publisher" and publisher_n and rec.name:
-                name_n = self._norm(rec.name)
-                if publisher_n == name_n:
-                    return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
+        if issn_n and self._by_issn:
+            rec = self._by_issn.get(issn_n)
+            if rec:
+                return PredatoryMatch(record=rec, match_type="issn_exact", confidence=1.0)
+        if journal_n and self._by_journal_name:
+            rec = self._by_journal_name.get(journal_n)
+            if rec:
+                return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
+        if publisher_n and self._by_publisher_name:
+            rec = self._by_publisher_name.get(publisher_n)
+            if rec:
+                return PredatoryMatch(record=rec, match_type="name_exact", confidence=0.85)
         return None

@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 
 import json_repair
 import requests
@@ -18,6 +19,14 @@ class OpenRouterClient:
     model: str
     timeout_seconds: float = 45.0
     cache: Cache | None = None
+    _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
+
+    def _client(self) -> requests.Session:
+        session = getattr(self._session_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._session_local.session = session
+        return session
 
     def chat_json(self, *, system: str, user: str) -> dict:
         if not self.api_key:
@@ -49,7 +58,7 @@ class OpenRouterClient:
         last_err: Exception | None = None
         for attempt in range(3):
             try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
+                resp = self._client().post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json() or {}
                 content = _extract_message_content(data)

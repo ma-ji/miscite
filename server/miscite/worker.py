@@ -115,15 +115,16 @@ def _ensure_access_token(settings: Settings, job_id: str) -> _AccessTokenEmail |
 def _process_job(settings: Settings, job_id: str) -> None:
     SessionLocal = get_sessionmaker(settings)
     db = SessionLocal()
+    progress_db = SessionLocal()
     try:
         row = _load_job(db, job_id)
         if not row:
             return
         job, doc = row
-        _record_progress(settings, job_id, "started", "Job started", 0.02)
+        _record_progress(settings, job_id, "started", "Job started", 0.02, db=progress_db)
 
         def progress_cb(stage: str, message: str | None, progress: float | None) -> None:
-            _record_progress(settings, job_id, stage, message, progress)
+            _record_progress(settings, job_id, stage, message, progress, db=progress_db)
 
         report, sources, methodology_md = analyze_document(
             Path(doc.storage_path),
@@ -138,7 +139,7 @@ def _process_job(settings: Settings, job_id: str) -> None:
         job.status = JobStatus.completed.value
         job.finished_at = dt.datetime.now(dt.UTC)
         db.commit()
-        _record_progress(settings, job_id, "completed", "Report ready", 1.0)
+        _record_progress(settings, job_id, "completed", "Report ready", 1.0, db=progress_db)
     except Exception as e:
         try:
             row = _load_job(db, job_id)
@@ -148,12 +149,13 @@ def _process_job(settings: Settings, job_id: str) -> None:
                 job.error_message = str(e)
                 job.finished_at = dt.datetime.now(dt.UTC)
                 db.commit()
-                _record_progress(settings, job_id, "failed", str(e), 1.0)
+                _record_progress(settings, job_id, "failed", str(e), 1.0, db=progress_db)
         except Exception:
             db.rollback()
         raise
     finally:
         db.close()
+        progress_db.close()
 
 
 def _record_progress(
@@ -162,9 +164,14 @@ def _record_progress(
     stage: str,
     message: str | None = None,
     progress: float | None = None,
+    *,
+    db: Session | None = None,
 ) -> None:
     SessionLocal = get_sessionmaker(settings)
-    db = SessionLocal()
+    owns_session = False
+    if db is None:
+        db = SessionLocal()
+        owns_session = True
     try:
         now = dt.datetime.now(dt.UTC)
         db.add(
@@ -184,7 +191,8 @@ def _record_progress(
     except Exception:
         db.rollback()
     finally:
-        db.close()
+        if owns_session:
+            db.close()
 
 
 def _reap_stale_jobs(settings: Settings) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 
@@ -79,3 +80,18 @@ class LocalNliModel:
 
         best = max(label_map.items(), key=lambda kv: kv[1])
         return NliVerdict(label=best[0], confidence=best[1], probs=label_map)
+
+
+_NLI_CACHE: dict[tuple[str, str], LocalNliModel] = {}
+_NLI_CACHE_LOCK = threading.Lock()
+
+
+def get_local_nli(model_name: str, *, accelerator: str) -> LocalNliModel:
+    key = (model_name, accelerator)
+    with _NLI_CACHE_LOCK:
+        cached = _NLI_CACHE.get(key)
+        if cached is not None:
+            return cached
+        model = LocalNliModel(model_name, accelerator=accelerator)
+        _NLI_CACHE[key] = model
+        return model

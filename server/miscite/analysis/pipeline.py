@@ -21,7 +21,7 @@ from server.miscite.analysis.llm_parsing import (
     parse_citations_with_llm,
     parse_references_with_llm,
 )
-from server.miscite.analysis.local_nli import LocalNliModel
+from server.miscite.analysis.local_nli import get_local_nli
 from server.miscite.analysis.methodology import build_methodology_md
 from server.miscite.analysis.normalize import (
     content_tokens,
@@ -520,26 +520,43 @@ def analyze_document(
 
     reference_records: dict[str, dict] = {}
     _progress("parse", "Parsing bibliography entries", 0.18)
-    references, reference_records, notes = parse_references_with_llm(
-        llm_parse_client,
-        refs_text,
-        max_chars=settings.llm_bib_parse_max_chars,
-        max_refs=settings.llm_bib_parse_max_refs,
-    )
-    parse_notes["references"].extend(notes)
+    _progress("parse", "Parsing in-text citations", None)
+    fut_refs = None
+    fut_cits = None
+    try:
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            fut_refs = ex.submit(
+                parse_references_with_llm,
+                llm_parse_client,
+                refs_text,
+                max_chars=settings.llm_bib_parse_max_chars,
+                max_refs=settings.llm_bib_parse_max_refs,
+            )
+            fut_cits = ex.submit(
+                parse_citations_with_llm,
+                llm_parse_client,
+                main_text,
+                max_chars_full=settings.llm_citation_parse_max_chars,
+                max_lines=settings.llm_citation_parse_max_lines,
+                max_chars_candidates=settings.llm_citation_parse_max_candidate_chars,
+            )
+            references, reference_records, notes_refs = fut_refs.result()
+            citations, notes_cits = fut_cits.result()
+    except Exception:
+        for fut in [fut_refs, fut_cits]:
+            try:
+                if fut is not None:
+                    fut.cancel()
+            except Exception:
+                pass
+        raise
+
+    parse_notes["references"].extend(notes_refs)
     if not references:
         raise RuntimeError("LLM did not return any bibliography entries.")
     _progress("parse", f"Parsed {len(references)} bibliography entries", 0.28)
 
-    _progress("parse", "Parsing in-text citations", 0.32)
-    citations, notes = parse_citations_with_llm(
-        llm_parse_client,
-        main_text,
-        max_chars_full=settings.llm_citation_parse_max_chars,
-        max_lines=settings.llm_citation_parse_max_lines,
-        max_chars_candidates=settings.llm_citation_parse_max_candidate_chars,
-    )
-    parse_notes["citations"].extend(notes)
+    parse_notes["citations"].extend(notes_cits)
     citations = normalize_llm_citations(citations)
     _progress("parse", f"Parsed {len(citations)} in-text citations", 0.38)
 
@@ -691,7 +708,7 @@ def analyze_document(
 
     local_nli = None
     if settings.enable_local_nli:
-        local_nli = LocalNliModel(
+        local_nli = get_local_nli(
             settings.local_nli_model, accelerator=settings.accelerator
         )
         used_sources.append(
@@ -716,7 +733,7 @@ def analyze_document(
         first_author = ref.first_author
         year = ref.year
 
-        doi_from_ref = normalize_doi(ref.doi or "")
+        doi_from_ref = normalize_doi(ref.doi or "") or normalize_doi(ref.raw or "")
         doi = doi_from_ref
         if doi:
             with resolution_cache_lock:
