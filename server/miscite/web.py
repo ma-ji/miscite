@@ -107,7 +107,9 @@ def template_context(request: Request, **extra):
                 "Upload PDF/DOCX manuscripts, resolve references, and flag missing, retracted, or risky citations."
             )
         else:
-            meta_description = "Audit-ready citation checks with evidence-first reports."
+            meta_description = (
+                "Audit-ready citation checks with evidence-first reports."
+            )
 
     robots = extra.get("robots")
     if not robots:
@@ -117,7 +119,7 @@ def template_context(request: Request, **extra):
         "request": request,
         "current_user": getattr(request.state, "user", None),
         "csrf_token": get_csrf_cookie(request) or "",
-        "record_estimate": "250M+",
+        "record_estimate": "455M+",
         "access_token_days": settings.access_token_days,
         "csp_nonce": getattr(request.state, "csp_nonce", ""),
         "maintenance_mode": settings.maintenance_mode,

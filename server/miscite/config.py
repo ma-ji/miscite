@@ -156,6 +156,9 @@ class Settings:
     llm_citation_parse_max_lines: int
     llm_citation_parse_max_candidate_chars: int
 
+    resolve_max_workers: int
+    inappropriate_max_workers: int
+
     enable_local_nli: bool
     local_nli_model: str
 
@@ -326,6 +329,9 @@ class Settings:
             "MISCITE_LLM_CITATION_PARSE_MAX_CANDIDATE_CHARS", 60_000, min_value=1000, max_value=200_000
         )
 
+        resolve_max_workers = _env_int("MISCITE_RESOLVE_MAX_WORKERS", 8, min_value=1, max_value=64)
+        inappropriate_max_workers = _env_int("MISCITE_INAPPROPRIATE_MAX_WORKERS", 4, min_value=1, max_value=64)
+
         enable_local_nli = _env_bool("MISCITE_ENABLE_LOCAL_NLI", False)
         local_nli_model = _env_str("MISCITE_LOCAL_NLI_MODEL", "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli")
 
@@ -399,6 +405,8 @@ class Settings:
             enable_deep_analysis_llm_suggestions = False
             llm_max_calls = min(llm_max_calls, 5)
             llm_match_max_calls = min(llm_match_max_calls, 10)
+            resolve_max_workers = min(resolve_max_workers, 2)
+            inappropriate_max_workers = min(inappropriate_max_workers, 2)
 
         return cls(
             db_url=db_url,
@@ -463,6 +471,8 @@ class Settings:
             llm_citation_parse_max_chars=llm_citation_parse_max_chars,
             llm_citation_parse_max_lines=llm_citation_parse_max_lines,
             llm_citation_parse_max_candidate_chars=llm_citation_parse_max_candidate_chars,
+            resolve_max_workers=resolve_max_workers,
+            inappropriate_max_workers=inappropriate_max_workers,
             enable_local_nli=enable_local_nli,
             local_nli_model=local_nli_model,
             enable_deep_analysis=enable_deep_analysis,

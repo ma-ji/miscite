@@ -356,6 +356,8 @@ Settings:
 - `MISCITE_LLM_MATCH_MAX_CALLS` (default: `50`) – caps per-document LLM calls used for match disambiguation
 - `MISCITE_LLM_BIB_PARSE_MAX_CHARS`, `MISCITE_LLM_BIB_PARSE_MAX_REFS`
 - `MISCITE_LLM_CITATION_PARSE_MAX_CHARS`, `MISCITE_LLM_CITATION_PARSE_MAX_LINES`, `MISCITE_LLM_CITATION_PARSE_MAX_CANDIDATE_CHARS`
+- `MISCITE_RESOLVE_MAX_WORKERS` (default: `8`) – concurrent reference-resolution workers per document
+- `MISCITE_INAPPROPRIATE_MAX_WORKERS` (default: `4`) – concurrent inappropriate-citation checks per document
 
 #### Reference linking (OpenAlex → Crossref → arXiv)
 

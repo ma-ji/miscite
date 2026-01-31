@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -622,7 +624,9 @@ def analyze_document(
         used_sources.append({"name": "Local NLI model", "detail": settings.local_nli_model})
 
     resolution_cache: dict[str, ResolvedWork] = {}
+    resolution_cache_lock = threading.Lock()
     match_llm_calls = 0
+    match_llm_calls_lock = threading.Lock()
 
     def resolve_ref(ref: ReferenceEntry) -> ResolvedWork:
         nonlocal match_llm_calls
@@ -635,8 +639,11 @@ def analyze_document(
 
         doi_from_ref = normalize_doi(ref.doi or "")
         doi = doi_from_ref
-        if doi and doi in resolution_cache:
-            return resolution_cache[doi]
+        if doi:
+            with resolution_cache_lock:
+                cached = resolution_cache.get(doi)
+            if cached is not None:
+                return cached
 
         openalex_work: dict | None = None
         openalex_match: dict | None = None
@@ -661,9 +668,10 @@ def analyze_document(
             candidates = [c for c in candidates if isinstance(c, dict) and c.get("id")]
             if not candidates:
                 return None, 0.0, f"No {source_label} candidates with ids."
-            if match_llm_calls >= settings.llm_match_max_calls:
-                raise RuntimeError("LLM match call limit exceeded; increase MISCITE_LLM_MATCH_MAX_CALLS.")
-            match_llm_calls += 1
+            with match_llm_calls_lock:
+                if match_llm_calls >= settings.llm_match_max_calls:
+                    raise RuntimeError("LLM match call limit exceeded; increase MISCITE_LLM_MATCH_MAX_CALLS.")
+                match_llm_calls += 1
 
             payload = llm_match_client.chat_json(
                 system=render_prompt("matching/candidate/system", source_label=source_label),
@@ -1038,18 +1046,37 @@ def analyze_document(
             resolution_notes=notes,
         )
         if doi:
-            resolution_cache[doi] = resolved
+            with resolution_cache_lock:
+                resolution_cache[doi] = resolved
         return resolved
 
     resolved_by_ref_id: dict[str, ResolvedWork] = {}
     total_refs = len(references)
     _progress("resolve", f"Resolving {total_refs} references", 0.42)
     step = max(1, total_refs // 10) if total_refs else 1
-    for idx, ref in enumerate(references, start=1):
-        resolved_by_ref_id[ref.ref_id] = resolve_ref(ref)
-        if total_refs and (idx == 1 or idx % step == 0 or idx == total_refs):
-            pct = 0.42 + 0.28 * (idx / total_refs)
-            _progress("resolve", f"Resolved {idx}/{total_refs} references", pct)
+    resolve_workers = max(1, int(settings.resolve_max_workers))
+    if resolve_workers == 1 or total_refs <= 1:
+        for idx, ref in enumerate(references, start=1):
+            resolved_by_ref_id[ref.ref_id] = resolve_ref(ref)
+            if total_refs and (idx == 1 or idx % step == 0 or idx == total_refs):
+                pct = 0.42 + 0.28 * (idx / total_refs)
+                _progress("resolve", f"Resolved {idx}/{total_refs} references", pct)
+    else:
+        with ThreadPoolExecutor(max_workers=resolve_workers) as ex:
+            futures = {ex.submit(resolve_ref, ref): ref for ref in references}
+            completed = 0
+            try:
+                for fut in as_completed(futures):
+                    ref = futures[fut]
+                    resolved_by_ref_id[ref.ref_id] = fut.result()
+                    completed += 1
+                    if total_refs and (completed == 1 or completed % step == 0 or completed == total_refs):
+                        pct = 0.42 + 0.28 * (completed / total_refs)
+                        _progress("resolve", f"Resolved {completed}/{total_refs} references", pct)
+            except Exception:
+                for fut in futures:
+                    fut.cancel()
+                raise
 
     resolved_count = sum(1 for w in resolved_by_ref_id.values() if w.source)
     if resolved_count < len(references):
@@ -1177,47 +1204,41 @@ def analyze_document(
     llm_max_calls = settings.llm_max_calls
     llm_calls = 0
 
-    total_citations = len(citation_to_ref)
-    step_citations = max(1, total_citations // 10) if total_citations else 1
-    for idx, (cit, ref) in enumerate(citation_to_ref, start=1):
-        if ref is None:
-            continue
-        work = resolved_by_ref_id.get(ref.ref_id)
-        if not work or not work.title:
-            continue
+    llm_calls_lock = threading.Lock()
+    local_nli_lock = threading.Lock() if local_nli else None
 
-        evidence_text = (work.title or "") + "\n" + (work.abstract or "")
-        score = _token_overlap_score(cit.context, evidence_text)
-        if score >= 0.06:
-            continue
+    def _check_one_inappropriate(
+        cit: CitationInstance, ref: ReferenceEntry, work: ResolvedWork
+    ) -> tuple[list[dict], bool]:
+        nonlocal llm_calls
 
-        potentially_inappropriate += 1
-
-        if local_nli and work.abstract:
-            verdict = local_nli.classify(premise=work.abstract, hypothesis=cit.context)
-            if verdict.label == "entailment" and verdict.confidence >= 0.85:
-                # Evidence suggests the citation is plausible even if token overlap is low.
-                continue
-            if verdict.label == "contradiction" and verdict.confidence >= 0.85:
-                issues.append(
-                    {
-                        "type": "potentially_inappropriate",
-                        "title": f"NLI contradiction against abstract ({verdict.confidence:.2f})",
-                        "severity": "high",
-                        "details": {
-                            "citation": cit.__dict__,
-                            "ref_id": ref.ref_id,
-                            "resolution": work.__dict__,
-                            "nli": verdict.__dict__,
-                        },
-                    }
+        if local_nli and local_nli_lock and work.abstract:
+            with local_nli_lock:
+                nli_verdict = local_nli.classify(premise=work.abstract, hypothesis=cit.context)
+            if nli_verdict.label == "entailment" and nli_verdict.confidence >= 0.85:
+                return [], False
+            if nli_verdict.label == "contradiction" and nli_verdict.confidence >= 0.85:
+                return (
+                    [
+                        {
+                            "type": "potentially_inappropriate",
+                            "title": f"NLI contradiction against abstract ({nli_verdict.confidence:.2f})",
+                            "severity": "high",
+                            "details": {
+                                "citation": cit.__dict__,
+                                "ref_id": ref.ref_id,
+                                "resolution": work.__dict__,
+                                "nli": nli_verdict.__dict__,
+                            },
+                        }
+                    ],
+                    False,
                 )
-                continue
 
-        if llm_calls >= llm_max_calls:
-            raise RuntimeError("LLM call limit exceeded; increase MISCITE_LLM_MAX_CALLS.")
-        llm_calls += 1
-        llm_used = True
+        with llm_calls_lock:
+            if llm_calls >= llm_max_calls:
+                raise RuntimeError("LLM call limit exceeded; increase MISCITE_LLM_MAX_CALLS.")
+            llm_calls += 1
 
         verdict = llm_client.chat_json(
             system=_INAPPROPRIATE_SYSTEM,
@@ -1233,36 +1254,87 @@ def analyze_document(
             raise RuntimeError("Invalid LLM confidence (expected number 0..1).") from e
 
         if label == "inappropriate" and conf_f >= 0.6:
-            issues.append(
-                {
-                    "type": "potentially_inappropriate",
-                    "title": f"LLM flagged inappropriate citation ({conf_f:.2f})",
-                    "severity": "medium",
-                    "details": {
-                        "citation": cit.__dict__,
-                        "ref_id": ref.ref_id,
-                        "resolution": work.__dict__,
-                        "llm": verdict,
-                    },
-                }
+            return (
+                [
+                    {
+                        "type": "potentially_inappropriate",
+                        "title": f"LLM flagged inappropriate citation ({conf_f:.2f})",
+                        "severity": "medium",
+                        "details": {
+                            "citation": cit.__dict__,
+                            "ref_id": ref.ref_id,
+                            "resolution": work.__dict__,
+                            "llm": verdict,
+                        },
+                    }
+                ],
+                True,
             )
-        elif label == "uncertain":
-            issues.append(
-                {
-                    "type": "needs_manual_review",
-                    "title": "LLM could not verify citation from metadata",
-                    "severity": "low",
-                    "details": {
-                        "citation": cit.__dict__,
-                        "ref_id": ref.ref_id,
-                        "resolution": work.__dict__,
-                        "llm": verdict,
-                    },
-                }
+
+        if label == "uncertain":
+            return (
+                [
+                    {
+                        "type": "needs_manual_review",
+                        "title": "LLM could not verify citation from metadata",
+                        "severity": "low",
+                        "details": {
+                            "citation": cit.__dict__,
+                            "ref_id": ref.ref_id,
+                            "resolution": work.__dict__,
+                            "llm": verdict,
+                        },
+                    }
+                ],
+                True,
             )
-        if total_citations and (idx == 1 or idx % step_citations == 0 or idx == total_citations):
-            pct = 0.86 + 0.1 * (idx / total_citations)
-            _progress("nli", f"Checked {idx}/{total_citations} citations", pct)
+
+        return [], True
+
+    checks: list[tuple[CitationInstance, ReferenceEntry, ResolvedWork]] = []
+    for cit, ref in citation_to_ref:
+        if ref is None:
+            continue
+        work = resolved_by_ref_id.get(ref.ref_id)
+        if not work or not work.title:
+            continue
+        evidence_text = (work.title or "") + "\n" + (work.abstract or "")
+        if _token_overlap_score(cit.context, evidence_text) >= 0.06:
+            continue
+        potentially_inappropriate += 1
+        checks.append((cit, ref, work))
+
+    total_checks = len(checks)
+    if total_checks:
+        inappropriate_workers = max(1, int(settings.inappropriate_max_workers))
+        step_checks = max(1, total_checks // 10)
+        if inappropriate_workers == 1 or total_checks <= 1:
+            for idx, (cit, ref, work) in enumerate(checks, start=1):
+                new_issues, used_llm = _check_one_inappropriate(cit, ref, work)
+                if used_llm:
+                    llm_used = True
+                issues.extend(new_issues)
+                if idx == 1 or idx % step_checks == 0 or idx == total_checks:
+                    pct = 0.86 + 0.1 * (idx / total_checks)
+                    _progress("nli", f"Checked {idx}/{total_checks} citations", pct)
+        else:
+            with ThreadPoolExecutor(max_workers=inappropriate_workers) as ex:
+                futures = {ex.submit(_check_one_inappropriate, cit, ref, work): (cit, ref) for cit, ref, work in checks}
+                completed = 0
+                try:
+                    for fut in as_completed(futures):
+                        new_issues, used_llm = fut.result()
+                        if used_llm:
+                            llm_used = True
+                        issues.extend(new_issues)
+                        completed += 1
+                        if completed == 1 or completed % step_checks == 0 or completed == total_checks:
+                            pct = 0.86 + 0.1 * (completed / total_checks)
+                            _progress("nli", f"Checked {completed}/{total_checks} citations", pct)
+                except Exception:
+                    for fut in futures:
+                        fut.cancel()
+                    raise
 
     summary = {
         "total_citations": len(citations),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import xml.etree.ElementTree as ET
+import threading
 
 import requests
 
@@ -82,12 +83,14 @@ class ArxivClient:
     timeout_seconds: float = 20.0
     user_agent: str = "miscite/0.1"
     cache: Cache | None = None
-    _session: requests.Session | None = field(default=None, init=False, repr=False)
+    _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
-        if self._session is None:
-            self._session = requests.Session()
-        return self._session
+        session = getattr(self._session_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._session_local.session = session
+        return session
 
     def _headers(self) -> dict[str, str]:
         return {"User-Agent": self.user_agent}
