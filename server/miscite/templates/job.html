@@ -32,23 +32,13 @@
                 This view is shared via access token and can show live progress until the report is ready.
                 Get access to manage jobs and exports.
               </p>
-              <div class="ds-stack ds-stack--tight">
-                <div class="hero-actions">
-                  <a class="ds-button ds-button--primary" href="/login">Get access</a>
-                  {% if report_token %}
-                    <a
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      href="/api/reports/{{ report_token }}"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Open JSON
-                    </a>
-                  {% endif %}
-                </div>
-                <div class="ds-input-row">
-                  <div class="form-field">
-                    <label class="form-label" for="shared-report-link">Share link</label>
+	                <div class="ds-stack ds-stack--tight">
+	                  <div class="hero-actions">
+	                    <a class="ds-button ds-button--primary" href="/login">Get access</a>
+	                  </div>
+	                  <div class="ds-input-row">
+	                    <div class="form-field">
+	                      <label class="form-label" for="shared-report-link">Share link</label>
                     <input id="shared-report-link" class="miscite-mono" type="text" readonly value="{{ canonical_url }}" />
                   </div>
                   <button
@@ -172,22 +162,12 @@
                     >
                       Copy URL
                     </button>
-                  </div>
-                  <p class="form-help">Fetch report JSON for downstream review and exports.</p>
-                  <div class="hero-actions">
-                    <a
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      href="/api/jobs/{{ job.id }}"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Open JSON
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+	                  </div>
+	                  <p class="form-help">Fetch report JSON for downstream review and exports.</p>
+	                </div>
+	              </div>
+	            </div>
+	          </div>
         {% endif %}
       </div>
     </div>
@@ -218,65 +198,78 @@
         </div>
       </div>
     </section>
-  {% endif %}
-
-  {% if report %}
-    {% set severity_counts = namespace(high=0, medium=0, low=0) %}
-    {% for issue in report.issues %}
-      {% set sev = issue.severity|default('medium')|lower %}
-      {% if sev == 'high' %}
-        {% set severity_counts.high = severity_counts.high + 1 %}
-      {% elif sev == 'low' %}
-        {% set severity_counts.low = severity_counts.low + 1 %}
-      {% else %}
-        {% set severity_counts.medium = severity_counts.medium + 1 %}
-      {% endif %}
-    {% endfor %}
-    {% set summary = report.summary or {} %}
-    <section class="ds-section">
-      <div class="ds-grid">
+	  {% endif %}
+	
+	  {% if report %}
+	    {% set issues = report.issues|default([]) %}
+	    {% set severity_counts = namespace(high=0, medium=0, low=0) %}
+	    {% set summary_counts = namespace(missing=0, unresolved=0, retracted=0, predatory=0, potential=0) %}
+	    {% for issue in issues %}
+	      {% set sev = issue.severity|default('medium')|lower %}
+	      {% if sev == 'high' %}
+	        {% set severity_counts.high = severity_counts.high + 1 %}
+	      {% elif sev == 'low' %}
+	        {% set severity_counts.low = severity_counts.low + 1 %}
+	      {% else %}
+	        {% set severity_counts.medium = severity_counts.medium + 1 %}
+	      {% endif %}
+	      {% if issue.type == 'missing_bibliography_ref' %}
+	        {% set summary_counts.missing = summary_counts.missing + 1 %}
+	      {% elif issue.type == 'unresolved_reference' %}
+	        {% set summary_counts.unresolved = summary_counts.unresolved + 1 %}
+	      {% elif issue.type == 'retracted_article' %}
+	        {% set summary_counts.retracted = summary_counts.retracted + 1 %}
+	      {% elif issue.type == 'predatory_venue_match' %}
+	        {% set summary_counts.predatory = summary_counts.predatory + 1 %}
+	      {% elif issue.type in ['potentially_inappropriate', 'needs_manual_review'] %}
+	        {% set summary_counts.potential = summary_counts.potential + 1 %}
+	      {% endif %}
+	    {% endfor %}
+	    {% set summary = report.summary or {} %}
+	    <section class="ds-section">
+	      <div class="ds-grid">
         <div class="span-5">
           <div class="ds-card">
             <div class="card-content">
               <h3>Summary</h3>
-              <div class="ds-stat-grid">
-                <div class="ds-stat">
-                  <div class="ds-stat-value">{{ summary.total_citations|default(0) }}</div>
-                  <div class="ds-stat-label">Citations parsed</div>
-                </div>
-                <div class="ds-stat">
-                  <div class="ds-stat-value">{{ summary.missing_bibliography_refs|default(0) }}</div>
-                  <div class="ds-stat-label">Missing refs</div>
-                </div>
-                <div class="ds-stat">
-                  <div class="ds-stat-value">{{ summary.unresolved_references|default(0) }}</div>
-                  <div class="ds-stat-label">Unresolved</div>
-                </div>
-                <div class="ds-stat">
-                  <div class="ds-stat-value">{{ summary.retracted_references|default(0) }}</div>
-                  <div class="ds-stat-label">Retractions</div>
-                </div>
-                <div class="ds-stat">
-                  <div class="ds-stat-value">{{ summary.predatory_matches|default(0) }}</div>
-                  <div class="ds-stat-label">Venue risk</div>
-                </div>
-                <div class="ds-stat">
-                  <div class="ds-stat-value">{{ summary.potentially_inappropriate|default(0) }}</div>
-                  <div class="ds-stat-label">Potential issues</div>
-                </div>
-              </div>
+	              <div class="ds-stat-grid">
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary.total_citations|default(0) }}</div>
+	                  <div class="ds-stat-label">Citations parsed</div>
+	                </div>
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary_counts.missing }}</div>
+	                  <div class="ds-stat-label">Missing refs</div>
+	                </div>
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary_counts.unresolved }}</div>
+	                  <div class="ds-stat-label">Unresolved</div>
+	                </div>
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary_counts.retracted }}</div>
+	                  <div class="ds-stat-label">Retractions</div>
+	                </div>
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary_counts.predatory }}</div>
+	                  <div class="ds-stat-label">Venue risk</div>
+	                </div>
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary_counts.potential }}</div>
+	                  <div class="ds-stat-label">Potential issues</div>
+	                </div>
+	              </div>
             </div>
           </div>
         </div>
         <div class="span-7">
           <div class="ds-card">
-            <div class="card-content">
-              <h3>Flags</h3>
-              <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
-              {% if report.issues|length > 0 %}
-                <div class="ds-severity-grid ds-mt-4">
-                  <button
-                    type="button"
+	            <div class="card-content">
+	              <h3>Flags</h3>
+	              <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
+	              {% if issues|length > 0 %}
+	                <div class="ds-severity-grid ds-mt-4">
+	                  <button
+	                    type="button"
                     class="ds-severity-card ds-severity-card--high js-severity-filter"
                     data-severity-filter="high"
                     aria-pressed="false"
@@ -304,20 +297,20 @@
                   >
                     <div class="ds-severity-count">{{ severity_counts.low }}</div>
                     <div class="ds-severity-label">Low severity</div>
-                  </button>
-                </div>
-              {% endif %}
-              {% if report.issues|length == 0 %}
-                <div class="ds-empty">
-                  <h4>No issues flagged</h4>
-                  <p class="miscite-muted">This report did not surface any flagged citations.</p>
-                </div>
-              {% else %}
-                <div class="ds-disclosure-list">
-                  {% for issue in report.issues %}
-                    {% set raw_severity = issue.severity|default('medium')|lower %}
-                    {% set severity = raw_severity if raw_severity in ['high', 'medium', 'low'] else 'medium' %}
-                    {% set details = issue.details or {} %}
+	                  </button>
+	                </div>
+	              {% endif %}
+	              {% if issues|length == 0 %}
+	                <div class="ds-empty">
+	                  <h4>No issues flagged</h4>
+	                  <p class="miscite-muted">This report did not surface any flagged citations.</p>
+	                </div>
+	              {% else %}
+	                <div class="ds-disclosure-list">
+	                  {% for issue in issues %}
+	                    {% set raw_severity = issue.severity|default('medium')|lower %}
+	                    {% set severity = raw_severity if raw_severity in ['high', 'medium', 'low'] else 'medium' %}
+	                    {% set details = issue.details or {} %}
                     {% set citation = details.citation or {} %}
                     {% set resolution = details.resolution or {} %}
                     {% set issue_label = issue.type %}

@@ -84,9 +84,22 @@ def _load_report(job: AnalysisJob) -> dict | None:
     if not job.report_json:
         return None
     try:
-        return json.loads(job.report_json)
+        report = json.loads(job.report_json)
     except Exception:
         return None
+    if isinstance(report, dict):
+        issues = report.get("issues")
+        if isinstance(issues, list):
+            severity_rank = {"high": 0, "medium": 1, "low": 2}
+
+            def _sort_key(item: object) -> int:
+                if not isinstance(item, dict):
+                    return severity_rank["medium"]
+                sev = str(item.get("severity") or "medium").strip().lower()
+                return severity_rank.get(sev, severity_rank["medium"])
+
+            issues.sort(key=_sort_key)
+    return report
 
 
 def _token_expired(job: AnalysisJob) -> bool:
