@@ -126,6 +126,61 @@ def split_multi_citations(citations: list[CitationInstance]) -> list[CitationIns
     return out
 
 
+def normalize_llm_citations(citations: list[CitationInstance]) -> list[CitationInstance]:
+    groups: dict[tuple[str, str, str], list[CitationInstance]] = {}
+    order: list[tuple[str, str, str]] = []
+    for cit in citations:
+        key = (cit.kind, (cit.raw or "").strip(), (cit.context or "").strip())
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(cit)
+
+    out: list[CitationInstance] = []
+    for key in order:
+        kind, raw_key, context_key = key
+        group = groups[key]
+        cit = group[0]
+
+        if kind == "numeric":
+            locators = [(c.locator or "").strip() for c in group]
+            locator_set = {l for l in locators if l}
+            raw = raw_key
+            body = raw_key
+            if body.startswith("[") and body.endswith("]"):
+                body = body[1:-1]
+            if body.startswith("(") and body.endswith(")"):
+                body = body[1:-1]
+            raw_has_multi = any(ch in body for ch in [",", "-", "–", ";"])
+
+            if raw_has_multi and len(locator_set) <= 1:
+                numbers = _expand_numeric_citation_body(body)
+                if numbers:
+                    for num in numbers:
+                        out.append(CitationInstance(kind="numeric", raw=f"[{num}]", locator=str(num), context=context_key))
+                    continue
+
+            for c in group:
+                locator = (c.locator or "").strip()
+                if locator.isdigit() and raw_has_multi:
+                    out.append(CitationInstance(kind="numeric", raw=f"[{locator}]", locator=locator, context=c.context))
+                else:
+                    out.append(c)
+            continue
+
+        if kind == "author_year":
+            raw = raw_key
+            if ";" in raw_key and len(group) == 1:
+                out.extend(_split_author_year_citation(cit))
+            else:
+                out.extend(group)
+            continue
+
+        out.extend(group)
+
+    return out
+
+
 def _split_numeric_citation(cit: CitationInstance) -> list[CitationInstance]:
     raw = (cit.raw or "").strip()
     if not raw:

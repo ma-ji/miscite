@@ -33,9 +33,6 @@
                 Get access to manage jobs and exports.
               </p>
 	                <div class="ds-stack ds-stack--tight">
-	                  <div class="hero-actions">
-	                    <a class="ds-button ds-button--primary" href="/login">Get access</a>
-	                  </div>
 	                  <div class="ds-input-row">
 	                    <div class="form-field">
 	                      <label class="form-label" for="shared-report-link">Share link</label>
@@ -242,16 +239,16 @@
 	                  <div class="ds-stat-label">Missing refs</div>
 	                </div>
 	                <div class="ds-stat">
-	                  <div class="ds-stat-value">{{ summary_counts.unresolved }}</div>
-	                  <div class="ds-stat-label">Unresolved</div>
-	                </div>
-	                <div class="ds-stat">
 	                  <div class="ds-stat-value">{{ summary_counts.retracted }}</div>
 	                  <div class="ds-stat-label">Retractions</div>
 	                </div>
 	                <div class="ds-stat">
 	                  <div class="ds-stat-value">{{ summary_counts.predatory }}</div>
 	                  <div class="ds-stat-label">Venue risk</div>
+	                </div>
+	                <div class="ds-stat">
+	                  <div class="ds-stat-value">{{ summary_counts.unresolved }}</div>
+	                  <div class="ds-stat-label">Unresolved</div>
 	                </div>
 	                <div class="ds-stat">
 	                  <div class="ds-stat-value">{{ summary_counts.potential }}</div>

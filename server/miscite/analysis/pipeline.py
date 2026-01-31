@@ -12,7 +12,7 @@ from server.miscite.cache import Cache
 from server.miscite.analysis.citation_parsing import (
     CitationInstance,
     ReferenceEntry,
-    split_multi_citations,
+    normalize_llm_citations,
     split_references,
 )
 from server.miscite.analysis.deep_analysis import run_deep_analysis
@@ -511,7 +511,7 @@ def analyze_document(
         max_chars_candidates=settings.llm_citation_parse_max_candidate_chars,
     )
     parse_notes["citations"].extend(notes)
-    citations = split_multi_citations(citations)
+    citations = normalize_llm_citations(citations)
     _progress("parse", f"Parsed {len(citations)} in-text citations", 0.38)
 
     numeric_map: dict[str, ReferenceEntry] = {}
