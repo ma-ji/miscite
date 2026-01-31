@@ -1471,7 +1471,7 @@ def analyze_document(
                 [
                     {
                         "type": "needs_manual_review",
-                        "title": "Could not verify citation from metadata",
+                        "title": "Could not verify citation",
                         "severity": "low",
                         "details": {
                             "citation": cit.__dict__,
