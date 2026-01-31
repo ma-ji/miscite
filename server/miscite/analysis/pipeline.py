@@ -35,7 +35,10 @@ from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.prompts import get_prompt, render_prompt
 from server.miscite.sources.arxiv import ArxivClient
 from server.miscite.sources.crossref import CrossrefClient
-from server.miscite.sources.datasets import PredatoryVenueDataset, RetractionWatchDataset
+from server.miscite.sources.datasets import (
+    PredatoryVenueDataset,
+    RetractionWatchDataset,
+)
 from server.miscite.sources.openalex import OpenAlexClient
 from server.miscite.sources.predatory_api import PredatoryApiClient
 from server.miscite.sources.retraction_api import RetractionApiClient
@@ -254,7 +257,9 @@ def _openalex_first_author_family(work: dict | None) -> str | None:
     return None
 
 
-_ARXIV_URL_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(?P<id>[A-Za-z0-9.\-_/]+)", re.IGNORECASE)
+_ARXIV_URL_RE = re.compile(
+    r"arxiv\.org/(?:abs|pdf)/(?P<id>[A-Za-z0-9.\-_/]+)", re.IGNORECASE
+)
 _ARXIV_TAG_RE = re.compile(r"\barxiv\s*:?\s*(?P<id>[A-Za-z0-9.\-_/]+)", re.IGNORECASE)
 
 
@@ -377,7 +382,11 @@ def _summarize_openalex_work(work: dict) -> dict:
         "open_access": work.get("open_access"),
         "biblio": work.get("biblio"),
         "cited_by_count": work.get("cited_by_count"),
-        "referenced_works_count": len(work.get("referenced_works") or []) if isinstance(work.get("referenced_works"), list) else None,
+        "referenced_works_count": (
+            len(work.get("referenced_works") or [])
+            if isinstance(work.get("referenced_works"), list)
+            else None
+        ),
         "authorships": authors,
         "is_retracted": work.get("is_retracted"),
         "is_paratext": work.get("is_paratext"),
@@ -413,7 +422,13 @@ def analyze_document(
     last_progress = -1.0
     last_stage = ""
 
-    def _progress(stage: str, message: str | None = None, progress: float | None = None, *, force: bool = False) -> None:
+    def _progress(
+        stage: str,
+        message: str | None = None,
+        progress: float | None = None,
+        *,
+        force: bool = False,
+    ) -> None:
         nonlocal last_progress, last_stage
         if not progress_cb:
             return
@@ -436,7 +451,9 @@ def analyze_document(
     text: str | None = None
     text_cache_parts = [settings.text_extract_backend, str(path)]
     if settings.cache_text_ttl_days > 0:
-        hit, cached_text = doc_cache.get_text_file("text_extract", text_cache_parts, ttl_days=settings.cache_text_ttl_days)
+        hit, cached_text = doc_cache.get_text_file(
+            "text_extract", text_cache_parts, ttl_days=settings.cache_text_ttl_days
+        )
         if hit:
             text = cached_text
             _progress("extract", "Using cached extracted text", 0.08)
@@ -452,10 +469,20 @@ def analyze_document(
             doc_cache.set_text_file("text_extract", text_cache_parts, text)
         _progress("extract", "Text extracted", 0.08)
     if not settings.openrouter_api_key:
-        raise RuntimeError("OPENROUTER_API_KEY is required for LLM-based citation/bibliography parsing.")
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is required for LLM-based citation/bibliography parsing."
+        )
 
-    llm_parse_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_parse_model, cache=doc_cache)
-    llm_match_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_match_model, cache=doc_cache)
+    llm_parse_client = OpenRouterClient(
+        api_key=settings.openrouter_api_key,
+        model=settings.llm_parse_model,
+        cache=doc_cache,
+    )
+    llm_match_client = OpenRouterClient(
+        api_key=settings.openrouter_api_key,
+        model=settings.llm_match_model,
+        cache=doc_cache,
+    )
     llm_parsing_used = True
     llm_bib_used = True
     llm_citation_used = True
@@ -471,7 +498,9 @@ def analyze_document(
         if refs_text and refs_text in text:
             main_text = text.split(refs_text, 1)[0].strip()
         if not refs_text:
-            raise RuntimeError("LLM could not extract a References/Bibliography section; cannot parse bibliography.")
+            raise RuntimeError(
+                "LLM could not extract a References/Bibliography section; cannot parse bibliography."
+            )
 
     used_sources.append(
         {
@@ -534,7 +563,9 @@ def analyze_document(
             ref = numeric_map.get(cit.locator)
         else:
             key = normalize_author_year_locator(cit.locator) or cit.locator
-            candidates = author_year_map.get(key) or author_year_map.get(cit.locator) or []
+            candidates = (
+                author_year_map.get(key) or author_year_map.get(cit.locator) or []
+            )
             if len(candidates) == 1:
                 ref = candidates[0]
             elif len(candidates) > 1:
@@ -548,12 +579,21 @@ def analyze_document(
         cache=cache,
     )
     openalex = OpenAlexClient(timeout_seconds=settings.api_timeout_seconds, cache=cache)
-    arxiv = ArxivClient(timeout_seconds=settings.api_timeout_seconds, user_agent=settings.crossref_user_agent, cache=cache)
+    arxiv = ArxivClient(
+        timeout_seconds=settings.api_timeout_seconds,
+        user_agent=settings.crossref_user_agent,
+        cache=cache,
+    )
     rw = RetractionWatchDataset(settings.retractionwatch_csv)
     pred = PredatoryVenueDataset(settings.predatory_csv)
 
     if settings.crossref_mailto or settings.crossref_user_agent:
-        used_sources.append({"name": "Crossref REST API", "detail": "Resolve DOI and bibliographic metadata."})
+        used_sources.append(
+            {
+                "name": "Crossref REST API",
+                "detail": "Resolve DOI and bibliographic metadata.",
+            }
+        )
     used_sources.append(
         {
             "name": "OpenAlex API",
@@ -567,18 +607,34 @@ def analyze_document(
         }
     )
     if not settings.retractionwatch_csv.exists():
-        raise RuntimeError(f"Retraction Watch dataset file not found: {settings.retractionwatch_csv}")
-    used_sources.append({"name": "Retraction Watch dataset (local)", "detail": str(settings.retractionwatch_csv)})
+        raise RuntimeError(
+            f"Retraction Watch dataset file not found: {settings.retractionwatch_csv}"
+        )
+    used_sources.append(
+        {
+            "name": "Retraction Watch dataset (local)",
+            "detail": str(settings.retractionwatch_csv),
+        }
+    )
 
     if settings.predatory_csv.exists():
-        used_sources.append({"name": "Predatory venue dataset (local)", "detail": str(settings.predatory_csv)})
+        used_sources.append(
+            {
+                "name": "Predatory venue dataset (local)",
+                "detail": str(settings.predatory_csv),
+            }
+        )
     if not (settings.predatory_api_enabled or settings.predatory_csv.exists()):
-        raise RuntimeError("No predatory venue source configured (enable API or set MISCITE_PREDATORY_CSV).")
+        raise RuntimeError(
+            "No predatory venue source configured (enable API or set MISCITE_PREDATORY_CSV)."
+        )
 
     retraction_api = None
     if settings.retraction_api_enabled:
         if not settings.retraction_api_url:
-            raise RuntimeError("Retraction API enabled but MISCITE_RETRACTION_API_URL is empty.")
+            raise RuntimeError(
+                "Retraction API enabled but MISCITE_RETRACTION_API_URL is empty."
+            )
         retraction_api = RetractionApiClient(
             url=settings.retraction_api_url,
             token=settings.retraction_api_token,
@@ -596,7 +652,9 @@ def analyze_document(
     predatory_api = None
     if settings.predatory_api_enabled:
         if not settings.predatory_api_url:
-            raise RuntimeError("Predatory API enabled but MISCITE_PREDATORY_API_URL is empty.")
+            raise RuntimeError(
+                "Predatory API enabled but MISCITE_PREDATORY_API_URL is empty."
+            )
         predatory_api = PredatoryApiClient(
             url=settings.predatory_api_url,
             token=settings.predatory_api_token,
@@ -612,16 +670,33 @@ def analyze_document(
         )
 
     if not settings.enable_llm_inappropriate:
-        raise RuntimeError("MISCITE_ENABLE_LLM_INAPPROPRIATE must be true (no heuristic fallback).")
-    llm_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_model, cache=doc_cache)
-    llm_deep_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_deep_analysis_model, cache=doc_cache)
+        raise RuntimeError(
+            "MISCITE_ENABLE_LLM_INAPPROPRIATE must be true (no heuristic fallback)."
+        )
+    llm_client = OpenRouterClient(
+        api_key=settings.openrouter_api_key, model=settings.llm_model, cache=doc_cache
+    )
+    llm_deep_client = OpenRouterClient(
+        api_key=settings.openrouter_api_key,
+        model=settings.llm_deep_analysis_model,
+        cache=doc_cache,
+    )
     llm_used = False
-    used_sources.append({"name": "OpenRouter", "detail": f"LLM-assisted inappropriate-citation checks via {settings.llm_model}."})
+    used_sources.append(
+        {
+            "name": "OpenRouter",
+            "detail": f"LLM-assisted inappropriate-citation checks via {settings.llm_model}.",
+        }
+    )
 
     local_nli = None
     if settings.enable_local_nli:
-        local_nli = LocalNliModel(settings.local_nli_model, accelerator=settings.accelerator)
-        used_sources.append({"name": "Local NLI model", "detail": settings.local_nli_model})
+        local_nli = LocalNliModel(
+            settings.local_nli_model, accelerator=settings.accelerator
+        )
+        used_sources.append(
+            {"name": "Local NLI model", "detail": settings.local_nli_model}
+        )
 
     resolution_cache: dict[str, ResolvedWork] = {}
     resolution_cache_lock = threading.Lock()
@@ -633,7 +708,11 @@ def analyze_document(
 
         csl = reference_records.get(ref.ref_id)
         csl_title = csl.get("title") if isinstance(csl, dict) else None
-        title = str(csl_title).strip() if isinstance(csl_title, str) and csl_title.strip() else None
+        title = (
+            str(csl_title).strip()
+            if isinstance(csl_title, str) and csl_title.strip()
+            else None
+        )
         first_author = ref.first_author
         year = ref.year
 
@@ -656,25 +735,33 @@ def analyze_document(
         if isinstance(csl, dict):
             arxiv_id_from_ref = _extract_arxiv_id_from_text(str(csl.get("URL") or ""))
             if not arxiv_id_from_ref:
-                arxiv_id_from_ref = _extract_arxiv_id_from_text(str(csl.get("id") or ""))
+                arxiv_id_from_ref = _extract_arxiv_id_from_text(
+                    str(csl.get("id") or "")
+                )
         arxiv_id_from_ref = arxiv_id_from_ref or _extract_arxiv_id_from_text(ref.raw)
 
         def _clip_query(text_in: str, max_len: int = 180) -> str:
             cleaned = " ".join(text_in.replace('"', "").split())
             return cleaned[:max_len] if len(cleaned) > max_len else cleaned
 
-        def _choose_candidate_with_llm(source_label: str, candidates: list[dict]) -> tuple[str | None, float, str]:
+        def _choose_candidate_with_llm(
+            source_label: str, candidates: list[dict]
+        ) -> tuple[str | None, float, str]:
             nonlocal match_llm_calls
             candidates = [c for c in candidates if isinstance(c, dict) and c.get("id")]
             if not candidates:
                 return None, 0.0, f"No {source_label} candidates with ids."
             with match_llm_calls_lock:
                 if match_llm_calls >= settings.llm_match_max_calls:
-                    raise RuntimeError("LLM match call limit exceeded; increase MISCITE_LLM_MATCH_MAX_CALLS.")
+                    raise RuntimeError(
+                        "LLM match call limit exceeded; increase MISCITE_LLM_MATCH_MAX_CALLS."
+                    )
                 match_llm_calls += 1
 
             payload = llm_match_client.chat_json(
-                system=render_prompt("matching/candidate/system", source_label=source_label),
+                system=render_prompt(
+                    "matching/candidate/system", source_label=source_label
+                ),
                 user=render_prompt(
                     "matching/candidate/user",
                     ref_raw=ref.raw,
@@ -713,7 +800,9 @@ def analyze_document(
             return " ".join(parts)
 
         def _openalex_candidate_score(candidate: dict) -> float:
-            cand_title = str(candidate.get("display_name") or candidate.get("title") or "").strip()
+            cand_title = str(
+                candidate.get("display_name") or candidate.get("title") or ""
+            ).strip()
             score = _title_similarity(title or ref.raw, cand_title)
             if first_author:
                 cand_author = _openalex_first_author_family(candidate)
@@ -738,7 +827,11 @@ def analyze_document(
                     return work, {"method": "doi", "confidence": 1.0}
 
             candidates = openalex.search(_openalex_search_query(), rows=10)
-            scored = [(_openalex_candidate_score(c), c) for c in candidates if isinstance(c, dict) and c.get("id")]
+            scored = [
+                (_openalex_candidate_score(c), c)
+                for c in candidates
+                if isinstance(c, dict) and c.get("id")
+            ]
             scored.sort(key=lambda x: x[0], reverse=True)
             if scored:
                 top_score, top = scored[0]
@@ -756,16 +849,29 @@ def analyze_document(
                                 "title": cand.get("display_name") or cand.get("title"),
                                 "publication_year": cand.get("publication_year"),
                                 "first_author": _openalex_first_author_family(cand),
-                                "venue": (cand.get("host_venue") or {}).get("display_name")
-                                if isinstance(cand.get("host_venue"), dict)
-                                else None,
+                                "venue": (
+                                    (cand.get("host_venue") or {}).get("display_name")
+                                    if isinstance(cand.get("host_venue"), dict)
+                                    else None
+                                ),
                             }
                         )
-                    best_id, conf_f, rationale = _choose_candidate_with_llm("OpenAlex", packed)
+                    best_id, conf_f, rationale = _choose_candidate_with_llm(
+                        "OpenAlex", packed
+                    )
                     if best_id:
                         work = openalex.get_work_by_id(best_id)
-                        return work, {"method": "search_llm", "confidence": conf_f, "rationale": rationale}
-                    return None, {"method": "search_llm", "confidence": conf_f, "rationale": rationale, "no_match": True}
+                        return work, {
+                            "method": "search_llm",
+                            "confidence": conf_f,
+                            "rationale": rationale,
+                        }
+                    return None, {
+                        "method": "search_llm",
+                        "confidence": conf_f,
+                        "rationale": rationale,
+                        "no_match": True,
+                    }
             return None, None
 
         def _crossref_search_query() -> str:
@@ -803,7 +909,11 @@ def analyze_document(
                     return msg, {"method": "doi", "confidence": 1.0}
 
             candidates = crossref.search(_crossref_search_query(), rows=10)
-            scored = [(_crossref_candidate_score(c), c) for c in candidates if isinstance(c, dict) and _crossref_doi(c)]
+            scored = [
+                (_crossref_candidate_score(c), c)
+                for c in candidates
+                if isinstance(c, dict) and _crossref_doi(c)
+            ]
             scored.sort(key=lambda x: x[0], reverse=True)
             if scored:
                 top_score, top = scored[0]
@@ -824,14 +934,25 @@ def analyze_document(
                                 "publisher": cand.get("publisher"),
                             }
                         )
-                    best_id, conf_f, rationale = _choose_candidate_with_llm("Crossref", packed)
+                    best_id, conf_f, rationale = _choose_candidate_with_llm(
+                        "Crossref", packed
+                    )
                     if best_id:
                         msg = crossref.get_work_by_doi(best_id) or next(
                             (c for c in candidates if _crossref_doi(c) == best_id), None
                         )
                         if msg:
-                            return msg, {"method": "search_llm", "confidence": conf_f, "rationale": rationale}
-                    return None, {"method": "search_llm", "confidence": conf_f, "rationale": rationale, "no_match": True}
+                            return msg, {
+                                "method": "search_llm",
+                                "confidence": conf_f,
+                                "rationale": rationale,
+                            }
+                    return None, {
+                        "method": "search_llm",
+                        "confidence": conf_f,
+                        "rationale": rationale,
+                        "no_match": True,
+                    }
             return None, None
 
         def _arxiv_search_query() -> str:
@@ -876,7 +997,11 @@ def analyze_document(
                     return entry, {"method": "doi", "confidence": 1.0}
 
             candidates = arxiv.search(_arxiv_search_query(), rows=10)
-            scored = [(_arxiv_candidate_score(c), c) for c in candidates if isinstance(c, dict) and _arxiv_id(c)]
+            scored = [
+                (_arxiv_candidate_score(c), c)
+                for c in candidates
+                if isinstance(c, dict) and _arxiv_id(c)
+            ]
             scored.sort(key=lambda x: x[0], reverse=True)
             if scored:
                 top_score, top = scored[0]
@@ -896,12 +1021,25 @@ def analyze_document(
                                 "primary_category": cand.get("primary_category"),
                             }
                         )
-                    best_id, conf_f, rationale = _choose_candidate_with_llm("arXiv", packed)
+                    best_id, conf_f, rationale = _choose_candidate_with_llm(
+                        "arXiv", packed
+                    )
                     if best_id:
-                        entry = arxiv.get_work_by_id(best_id) or next((c for c in candidates if _arxiv_id(c) == best_id), None)
+                        entry = arxiv.get_work_by_id(best_id) or next(
+                            (c for c in candidates if _arxiv_id(c) == best_id), None
+                        )
                         if entry:
-                            return entry, {"method": "search_llm", "confidence": conf_f, "rationale": rationale}
-                    return None, {"method": "search_llm", "confidence": conf_f, "rationale": rationale, "no_match": True}
+                            return entry, {
+                                "method": "search_llm",
+                                "confidence": conf_f,
+                                "rationale": rationale,
+                            }
+                    return None, {
+                        "method": "search_llm",
+                        "confidence": conf_f,
+                        "rationale": rationale,
+                        "no_match": True,
+                    }
             return None, None
 
         match_notes: list[str] = []
@@ -947,7 +1085,11 @@ def analyze_document(
         elif crossref_msg:
             abstract = _crossref_abstract(crossref_msg)
 
-        openalex_id = str(openalex_work.get("id") or "") if isinstance(openalex_work, dict) and openalex_work.get("id") else None
+        openalex_id = (
+            str(openalex_work.get("id") or "")
+            if isinstance(openalex_work, dict) and openalex_work.get("id")
+            else None
+        )
         arxiv_id = _arxiv_id(arxiv_entry)
 
         is_retracted = None
@@ -970,8 +1112,19 @@ def analyze_document(
         resolved_year = year
         resolved_title = None
         if openalex_work:
-            resolved_title = str(openalex_work.get("display_name") or openalex_work.get("title") or "").strip() or None
-            resolved_year = openalex_work.get("publication_year") if isinstance(openalex_work.get("publication_year"), int) else year
+            resolved_title = (
+                str(
+                    openalex_work.get("display_name")
+                    or openalex_work.get("title")
+                    or ""
+                ).strip()
+                or None
+            )
+            resolved_year = (
+                openalex_work.get("publication_year")
+                if isinstance(openalex_work.get("publication_year"), int)
+                else year
+            )
             journal = _openalex_journal(openalex_work)
             publisher = _openalex_publisher(openalex_work)
             issn = _openalex_issn(openalex_work)
@@ -979,7 +1132,11 @@ def analyze_document(
             resolved_title = _crossref_title(crossref_msg)
             resolved_year = _crossref_year(crossref_msg) or year
             journal = _crossref_journal(crossref_msg)
-            publisher = crossref_msg.get("publisher") if isinstance(crossref_msg.get("publisher"), str) else None
+            publisher = (
+                crossref_msg.get("publisher")
+                if isinstance(crossref_msg.get("publisher"), str)
+                else None
+            )
             issn = _crossref_issn(crossref_msg)
         elif arxiv_entry:
             resolved_title = _arxiv_title(arxiv_entry)
@@ -1035,7 +1192,11 @@ def analyze_document(
             is_retracted=is_retracted,
             retraction_detail=retraction_detail,
             openalex_id=openalex_id,
-            openalex_record=_summarize_openalex_work(openalex_work) if isinstance(openalex_work, dict) else None,
+            openalex_record=(
+                _summarize_openalex_work(openalex_work)
+                if isinstance(openalex_work, dict)
+                else None
+            ),
             openalex_match=openalex_match,
             crossref_match=crossref_match,
             arxiv_id=arxiv_id,
@@ -1070,9 +1231,17 @@ def analyze_document(
                     ref = futures[fut]
                     resolved_by_ref_id[ref.ref_id] = fut.result()
                     completed += 1
-                    if total_refs and (completed == 1 or completed % step == 0 or completed == total_refs):
+                    if total_refs and (
+                        completed == 1
+                        or completed % step == 0
+                        or completed == total_refs
+                    ):
                         pct = 0.42 + 0.28 * (completed / total_refs)
-                        _progress("resolve", f"Resolved {completed}/{total_refs} references", pct)
+                        _progress(
+                            "resolve",
+                            f"Resolved {completed}/{total_refs} references",
+                            pct,
+                        )
             except Exception:
                 for fut in futures:
                     fut.cancel()
@@ -1119,7 +1288,11 @@ def analyze_document(
                     "type": "unresolved_reference",
                     "title": f"Bibliography item could not be confidently resolved: {ref.ref_id}",
                     "severity": "medium",
-                    "details": {"ref_id": ref.ref_id, "raw": ref.raw, "resolution": work.__dict__},
+                    "details": {
+                        "ref_id": ref.ref_id,
+                        "raw": ref.raw,
+                        "resolution": work.__dict__,
+                    },
                 }
             )
 
@@ -1138,12 +1311,22 @@ def analyze_document(
                     retraction_hits.append({"source": "retraction_api", "detail": rec})
             record = rw.get_by_doi(work.doi)
             if record:
-                retraction_hits.append({"source": "retractionwatch_csv", "detail": record.__dict__})
+                retraction_hits.append(
+                    {"source": "retractionwatch_csv", "detail": record.__dict__}
+                )
 
         if retraction_hits:
             retracted_refs += 1
-            strong_sources = {hit["source"] for hit in retraction_hits if hit["source"] in {"retractionwatch_csv", "retraction_api"}}
-            db_sources = {hit["source"] for hit in retraction_hits if hit["source"] in {"openalex", "crossref", "arxiv"}}
+            strong_sources = {
+                hit["source"]
+                for hit in retraction_hits
+                if hit["source"] in {"retractionwatch_csv", "retraction_api"}
+            }
+            db_sources = {
+                hit["source"]
+                for hit in retraction_hits
+                if hit["source"] in {"openalex", "crossref", "arxiv"}
+            }
             high_conf = bool(strong_sources) or len(db_sources) >= 2
             issues.append(
                 {
@@ -1161,14 +1344,20 @@ def analyze_document(
 
         predatory_hits: list[dict] = []
         if predatory_api:
-            rec = predatory_api.lookup(journal=work.journal, publisher=work.publisher, issn=work.issn)
+            rec = predatory_api.lookup(
+                journal=work.journal, publisher=work.publisher, issn=work.issn
+            )
             if rec:
                 predatory_hits.append({"source": "predatory_api", "detail": rec})
 
         if settings.predatory_csv.exists():
-            match = pred.match(journal=work.journal, publisher=work.publisher, issn=work.issn)
+            match = pred.match(
+                journal=work.journal, publisher=work.publisher, issn=work.issn
+            )
             if match:
-                predatory_hits.append({"source": "predatory_csv", "detail": match.as_dict()})
+                predatory_hits.append(
+                    {"source": "predatory_csv", "detail": match.as_dict()}
+                )
 
         if predatory_hits:
             predatory_matches += 1
@@ -1195,7 +1384,9 @@ def analyze_document(
                     },
                 }
             )
-        if total_refs_for_flags and (idx == 1 or idx % step_flags == 0 or idx == total_refs_for_flags):
+        if total_refs_for_flags and (
+            idx == 1 or idx % step_flags == 0 or idx == total_refs_for_flags
+        ):
             pct = 0.75 + 0.1 * (idx / total_refs_for_flags)
             _progress("flags", f"Checked {idx}/{total_refs_for_flags} references", pct)
 
@@ -1214,7 +1405,9 @@ def analyze_document(
 
         if local_nli and local_nli_lock and work.abstract:
             with local_nli_lock:
-                nli_verdict = local_nli.classify(premise=work.abstract, hypothesis=cit.context)
+                nli_verdict = local_nli.classify(
+                    premise=work.abstract, hypothesis=cit.context
+                )
             if nli_verdict.label == "entailment" and nli_verdict.confidence >= 0.85:
                 return [], False
             if nli_verdict.label == "contradiction" and nli_verdict.confidence >= 0.85:
@@ -1237,7 +1430,9 @@ def analyze_document(
 
         with llm_calls_lock:
             if llm_calls >= llm_max_calls:
-                raise RuntimeError("LLM call limit exceeded; increase MISCITE_LLM_MAX_CALLS.")
+                raise RuntimeError(
+                    "LLM call limit exceeded; increase MISCITE_LLM_MAX_CALLS."
+                )
             llm_calls += 1
 
         verdict = llm_client.chat_json(
@@ -1258,7 +1453,7 @@ def analyze_document(
                 [
                     {
                         "type": "potentially_inappropriate",
-                        "title": f"LLM flagged inappropriate citation ({conf_f:.2f})",
+                        "title": f"Inappropriate citation ({conf_f:.2f})",
                         "severity": "medium",
                         "details": {
                             "citation": cit.__dict__,
@@ -1276,7 +1471,7 @@ def analyze_document(
                 [
                     {
                         "type": "needs_manual_review",
-                        "title": "LLM could not verify citation from metadata",
+                        "title": "Could not verify citation from metadata",
                         "severity": "low",
                         "details": {
                             "citation": cit.__dict__,
@@ -1319,7 +1514,10 @@ def analyze_document(
                     _progress("nli", f"Checked {idx}/{total_checks} citations", pct)
         else:
             with ThreadPoolExecutor(max_workers=inappropriate_workers) as ex:
-                futures = {ex.submit(_check_one_inappropriate, cit, ref, work): (cit, ref) for cit, ref, work in checks}
+                futures = {
+                    ex.submit(_check_one_inappropriate, cit, ref, work): (cit, ref)
+                    for cit, ref, work in checks
+                }
                 completed = 0
                 try:
                     for fut in as_completed(futures):
@@ -1328,9 +1526,17 @@ def analyze_document(
                             llm_used = True
                         issues.extend(new_issues)
                         completed += 1
-                        if completed == 1 or completed % step_checks == 0 or completed == total_checks:
+                        if (
+                            completed == 1
+                            or completed % step_checks == 0
+                            or completed == total_checks
+                        ):
                             pct = 0.86 + 0.1 * (completed / total_checks)
-                            _progress("nli", f"Checked {completed}/{total_checks} citations", pct)
+                            _progress(
+                                "nli",
+                                f"Checked {completed}/{total_checks} citations",
+                                pct,
+                            )
                 except Exception:
                     for fut in futures:
                         fut.cancel()
@@ -1375,7 +1581,11 @@ def analyze_document(
                 "raw": ref.raw,
                 "parsed": ref.__dict__,
                 "standard_record": reference_records.get(ref.ref_id),
-                "resolution": resolved_by_ref_id.get(ref.ref_id).__dict__ if resolved_by_ref_id.get(ref.ref_id) else None,
+                "resolution": (
+                    resolved_by_ref_id.get(ref.ref_id).__dict__
+                    if resolved_by_ref_id.get(ref.ref_id)
+                    else None
+                ),
             }
             for ref in references
         ],
@@ -1400,7 +1610,9 @@ def analyze_document(
     return report, used_sources, methodology_md
 
 
-def _build_inappropriate_prompt(cit: CitationInstance, ref: ReferenceEntry, work: ResolvedWork) -> str:
+def _build_inappropriate_prompt(
+    cit: CitationInstance, ref: ReferenceEntry, work: ResolvedWork
+) -> str:
     abstract = (work.abstract or "").strip()
     if len(abstract) > 1500:
         abstract = abstract[:1500] + "…"
