@@ -138,32 +138,6 @@
                   {% endif %}
                 </div>
               </div>
-              <div class="ds-panel ds-panel--compact ds-mt-4">
-                <div class="ds-panel-body">
-                  <p class="eyebrow">Exports</p>
-                  <div class="ds-input-row">
-                    <div class="form-field">
-                      <label class="form-label" for="job-json-url">Report JSON</label>
-                      <input
-                        id="job-json-url"
-                        class="miscite-mono"
-                        type="text"
-                        readonly
-                        value="{{ public_origin }}/api/jobs/{{ job.id }}"
-                      />
-                    </div>
-                    <button
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      type="button"
-                      data-copy-target="job-json-url"
-                    >
-                      Copy URL
-                    </button>
-	                  </div>
-	                  <p class="form-help">Fetch report JSON for downstream review and exports.</p>
-	                </div>
-	              </div>
-	            </div>
 	          </div>
         {% endif %}
       </div>
@@ -641,65 +615,6 @@
       </section>
     {% endif %}
 
-    {% if not public_view %}
-      <section class="ds-section">
-        <div class="ds-card">
-          <div class="card-content">
-            <h3>Audit trail</h3>
-            <p class="miscite-muted">
-              Sources, methodology notes, and exports for traceability and downstream review.
-            </p>
-            <div class="ds-disclosure-list ds-mt-4">
-              {% if data_sources %}
-                <details class="ds-disclosure ds-disclosure--low">
-                  <summary class="ds-disclosure-summary">
-                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">database</i>
-                    <span class="ds-disclosure-type">Sources</span>
-                    <span class="ds-disclosure-title">Data sources used</span>
-                    <span class="ds-severity">{{ data_sources|length }}</span>
-                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-                  </summary>
-                  <div class="ds-disclosure-body">
-                    <dl class="ds-meta">
-                      {% for src in data_sources %}
-                        <dt>{{ src.name }}</dt>
-                        <dd>{{ src.detail }}</dd>
-                      {% endfor %}
-                    </dl>
-                  </div>
-                </details>
-              {% endif %}
-
-              {% if methodology_md %}
-                <details class="ds-disclosure ds-disclosure--low">
-                  <summary class="ds-disclosure-summary">
-                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">description</i>
-                    <span class="ds-disclosure-type">Method</span>
-                    <span class="ds-disclosure-title">Methodology notes</span>
-                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-                  </summary>
-                  <div class="ds-disclosure-body">
-                    <pre class="pre-wrap ds-pre-scroll">{{ methodology_md }}</pre>
-                  </div>
-                </details>
-              {% endif %}
-
-              <details class="ds-disclosure ds-disclosure--low">
-                <summary class="ds-disclosure-summary">
-                  <i class="material-icons ds-disclosure-icon" aria-hidden="true">data_object</i>
-                  <span class="ds-disclosure-type">Export</span>
-                  <span class="ds-disclosure-title">Raw report JSON</span>
-                  <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-                </summary>
-                <div class="ds-disclosure-body">
-                  <pre class="pre-wrap ds-pre-scroll">{{ report|pretty_json }}</pre>
-                </div>
-              </details>
-            </div>
-          </div>
-        </div>
-      </section>
-    {% endif %}
   {% else %}
     <section class="ds-section">
       <div class="ds-empty">
