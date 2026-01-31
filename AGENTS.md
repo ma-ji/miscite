@@ -20,6 +20,11 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - Combined: `bash scripts/dev.sh`.
   - Optional flags for both web/worker: `--blank-db`, `--text-backend {markitdown,docling}`, `--accelerator {cpu,gpu}`, `--debug`.
 
+## Quickstart (docker)
+
+- Build + run (web + worker): `docker compose up -d --build`
+- Dev override (bind mount + reload): `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
+
 ## High-level architecture
 
 - **Web app**: `server/main.py` creates FastAPI app, mounts routes and static assets.
@@ -30,6 +35,11 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 
 ## Repository map
 
+- `Dockerfile`: single image for web + worker.
+- `docker-compose.yml`: production-ish Compose stack (web + worker + `./data` bind mount).
+- `docker-compose.dev.yml`: dev override (bind mount code + reload/log level).
+- `docker-compose.caddy.yml`: optional Caddy reverse proxy (automatic TLS).
+- `deploy/`: deployment assets (`Caddyfile`, `miscite.service`, `monitoring.md`).
 - `server/main.py`: FastAPI entrypoint.
 - `server/worker.py`: worker process launcher.
 - `server/miscite/worker.py`: job loop, progress events, dataset auto-sync.
@@ -47,7 +57,8 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
 - `server/miscite/static/favicon.svg`: brand favicon (referenced in `base.html`).
 - `kb/`: research and promptbook material (not wired into the runtime app). Don't read or edit `promptbook.md`, it is for dev use.
-- `scripts/`: helper scripts (dev runner, nginx install, Zotero helper).
+- `deploy/monitoring.md`: deployment monitoring options.
+- `scripts/`: helper scripts (dev runner, nginx install, Docker install, VPS bootstrap, backups, Zotero helper).
 
 ## Runtime data flow
 
@@ -138,6 +149,12 @@ If you add new env vars:
 - `make sync-rw` / `python -m server.sync_retractionwatch`: sync retraction dataset.
 - `make sync-predatory` / `python -m server.sync_predatory`: sync predatory lists.
 - `bash scripts/install-nginx.sh`: install nginx and enable service.
+- `docker compose up -d --build`: run web + worker in Docker.
+- `docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build`: run with Caddy reverse proxy.
+- `bash scripts/backup-data.sh`: stop services and backup `./data` (excludes `./data/cache`).
+- `bash scripts/restore-data.sh ./backups/<file>.tar.gz --force`: restore `./data` from a backup archive.
+- `bash scripts/install-docker-ubuntu.sh`: install Docker Engine + Compose plugin on Ubuntu.
+- `DOMAIN=miscite.review bash scripts/bootstrap-vps-ubuntu.sh`: one-shot VPS bootstrap (Docker + Caddy + systemd).
 - `make check`: compile server modules.
 
 ## Extending the system

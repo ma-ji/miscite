@@ -1,0 +1,22 @@
+# Copy to: /etc/systemd/system/miscite.service
+#
+# Then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now miscite
+#
+# Update WorkingDirectory to your repo location (e.g. /opt/miscite).
+[Unit]
+Description=miscite (Docker Compose)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/miscite
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

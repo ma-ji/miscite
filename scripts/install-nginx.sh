@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOMAIN="miscite.review"
-UPSTREAM="http://127.0.0.1:8000"
+DOMAIN="${DOMAIN:-miscite.review}"
+UPSTREAM="${UPSTREAM:-http://127.0.0.1:8000}"
+CLIENT_MAX_BODY_SIZE="${CLIENT_MAX_BODY_SIZE:-10m}"
+PROXY_READ_TIMEOUT_SECONDS="${PROXY_READ_TIMEOUT_SECONDS:-3600}"
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -40,9 +42,28 @@ server {
   server_name ${DOMAIN};
   listen 80;
 
+  client_max_body_size ${CLIENT_MAX_BODY_SIZE};
+
+  # Server-sent events (progress streaming): disable buffering and allow long reads.
+  location ~* ^/api/(jobs|reports)/.+/stream$ {
+    proxy_pass ${UPSTREAM};
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Host \$host;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout ${PROXY_READ_TIMEOUT_SECONDS}s;
+    proxy_send_timeout ${PROXY_READ_TIMEOUT_SECONDS}s;
+  }
+
   location / {
     proxy_pass ${UPSTREAM};
+    proxy_http_version 1.1;
     proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

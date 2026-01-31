@@ -90,6 +90,75 @@ Or launch web + worker together:
 bash scripts/dev.sh
 ```
 
+## Deployment (single VPS, Docker + SQLite)
+
+This repo supports a simple single-machine deployment using Docker Compose. SQLite **must** live on one machine (no shared-NFS/multi-instance).
+
+### 0) Ubuntu 22.04 bootstrap (Docker + firewall)
+
+```bash
+sudo apt-get update -y
+bash scripts/install-docker-ubuntu.sh
+
+# Optional firewall (if not already configured)
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+```
+
+**One-shot bootstrap (recommended):**
+
+```bash
+DOMAIN=miscite.review bash scripts/bootstrap-vps-ubuntu.sh
+```
+
+### 1) Bring up the services
+
+On the VPS:
+
+```bash
+git clone https://github.com/ma-ji/miscite /opt/miscite
+cd /opt/miscite
+cp .env.example .env
+# edit .env and fill secrets (see VPS notes inside .env.example)
+mkdir -p data
+docker compose up -d --build
+curl -fsS http://127.0.0.1:8000/readyz
+```
+
+### 2) Reverse proxy + TLS
+
+Pick one:
+
+- **Caddy in Docker (recommended; automatic HTTPS)**:
+  - Edit `deploy/Caddyfile` to use your domain (not `:80`).
+  - Run: `docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build`
+  - Open ports 80/443 on the VPS security group / firewall.
+- **nginx on the host**:
+  - Keep `docker-compose.yml` as-is (binds `web` to `127.0.0.1:8000`).
+  - Run: `DOMAIN=your.domain scripts/install-nginx.sh`
+  - For HTTPS, add certs via your preferred tool (e.g. certbot) and keep `MISCITE_TRUST_PROXY=true`, `MISCITE_COOKIE_SECURE=true`.
+
+### 3) Backups + moving to a new VPS
+
+- Backup data: `bash scripts/backup-data.sh` (writes `./backups/*.tar.gz`; excludes `./data/cache`)
+- Restore data: `bash scripts/restore-data.sh ./backups/<file>.tar.gz --force`
+- Migration playbook:
+  1) Set `MISCITE_MAINTENANCE_MODE=true` to stop new uploads.
+  2) `bash scripts/backup-data.sh` on the old VPS.
+  3) Copy the backup archive + `.env` to the new VPS.
+  4) Bring the new VPS up with `docker compose up -d --build`, then restore the archive.
+  5) Update DNS to point at the new VPS.
+
+### 4) systemd (optional)
+
+For auto-start on boot, copy `deploy/miscite.service` to `/etc/systemd/system/miscite.service`, update `WorkingDirectory`, then enable it.
+
+### 5) Monitoring
+
+See `deploy/monitoring.md` for lightweight uptime + log options.
+
 ## Optional dependencies
 
 Some features require extra packages that are **not** installed by default:
