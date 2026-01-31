@@ -199,11 +199,11 @@
 	    {% set summary = report.summary or {} %}
 	    <section class="ds-section">
 	      <div class="ds-grid">
-        <div class="span-5">
-          <div class="ds-card">
-            <div class="card-content">
-              <h3>Summary</h3>
-	              <div class="ds-stat-grid">
+	        <div class="span-12">
+	          <div class="ds-card">
+	            <div class="card-content">
+	              <h3>Summary</h3>
+			              <div class="ds-stat-grid ds-stat-grid--cols">
 	                <div class="ds-stat">
 	                  <div class="ds-stat-value">{{ summary.total_citations|default(0) }}</div>
 	                  <div class="ds-stat-label">Citations parsed</div>
@@ -231,12 +231,12 @@
 	              </div>
             </div>
           </div>
-        </div>
-        <div class="span-7">
-          <div class="ds-card">
-	            <div class="card-content">
-	              <h3>Flags</h3>
-	              <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
+	        </div>
+	        <div class="span-12">
+	          <div class="ds-card">
+		            <div class="card-content">
+		              <h3>Flags</h3>
+		              <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
 	              {% if issues|length > 0 %}
 	                <div class="ds-severity-grid ds-mt-4">
 	                  <button
