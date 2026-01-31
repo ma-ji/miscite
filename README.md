@@ -143,6 +143,11 @@ Copy `.env.example` to `.env` and edit. Key settings:
 - `MISCITE_TURNSTILE_VERIFY_URL` (default: `https://challenges.cloudflare.com/turnstile/v0/siteverify`)
 - `MISCITE_LOG_LEVEL` (default: `INFO`)
 - `MISCITE_API_TIMEOUT_SECONDS` (default: `20`)
+- `MISCITE_CACHE_ENABLED` (default: `true`) – enables local caching for HTTP + LLM calls
+- `MISCITE_CACHE_DIR` (default: `./data/cache`) – on-disk cache directory
+- `MISCITE_CACHE_LLM_TTL_DAYS` (default: `30`) – TTL for cached OpenRouter JSON results
+- `MISCITE_CACHE_HTTP_TTL_DAYS` (default: `30`) – TTL baseline for cached metadata HTTP responses
+- `MISCITE_CACHE_TEXT_TTL_DAYS` (default: `30`) – TTL for cached extracted text
 - `MISCITE_TEXT_EXTRACT_BACKEND` (default: `markitdown`, options: `markitdown|docling`)
 - `MISCITE_TEXT_EXTRACT_TIMEOUT_SECONDS` (default: `120`)
 - `MISCITE_TEXT_EXTRACT_SUBPROCESS` (default: `true`)

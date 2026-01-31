@@ -135,6 +135,12 @@ class Settings:
 
     api_timeout_seconds: float
 
+    cache_enabled: bool
+    cache_dir: Path
+    cache_llm_ttl_days: int
+    cache_http_ttl_days: int
+    cache_text_ttl_days: int
+
     openrouter_api_key: str
     llm_model: str
     enable_llm_inappropriate: bool
@@ -295,6 +301,12 @@ class Settings:
 
         api_timeout_seconds = _env_float("MISCITE_API_TIMEOUT_SECONDS", 20.0, min_value=2.0, max_value=120.0)
 
+        cache_enabled = _env_bool("MISCITE_CACHE_ENABLED", True)
+        cache_dir = Path(_env_str("MISCITE_CACHE_DIR", "./data/cache"))
+        cache_llm_ttl_days = _env_int("MISCITE_CACHE_LLM_TTL_DAYS", 30, min_value=1, max_value=3650)
+        cache_http_ttl_days = _env_int("MISCITE_CACHE_HTTP_TTL_DAYS", 30, min_value=1, max_value=3650)
+        cache_text_ttl_days = _env_int("MISCITE_CACHE_TEXT_TTL_DAYS", 30, min_value=1, max_value=3650)
+
         openrouter_api_key = _env_str("OPENROUTER_API_KEY", "")
         llm_model = _env_str("MISCITE_LLM_MODEL", "google/gemini-3-flash-preview")
         enable_llm_inappropriate = _env_bool("MISCITE_ENABLE_LLM_INAPPROPRIATE", True)
@@ -433,6 +445,11 @@ class Settings:
             predatory_publishers_url=predatory_publishers_url,
             predatory_journals_url=predatory_journals_url,
             api_timeout_seconds=api_timeout_seconds,
+            cache_enabled=cache_enabled,
+            cache_dir=cache_dir,
+            cache_llm_ttl_days=cache_llm_ttl_days,
+            cache_http_ttl_days=cache_http_ttl_days,
+            cache_text_ttl_days=cache_text_ttl_days,
             openrouter_api_key=openrouter_api_key,
             llm_model=llm_model,
             enable_llm_inappropriate=enable_llm_inappropriate,

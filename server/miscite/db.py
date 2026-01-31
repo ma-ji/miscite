@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from functools import lru_cache
 
 from fastapi import Request
 from sqlalchemy import create_engine
@@ -15,19 +16,26 @@ class Base(DeclarativeBase):
     pass
 
 
-def _create_engine(settings: Settings):
+@lru_cache(maxsize=8)
+def _engine_for(db_url: str):
     connect_args = {}
-    if settings.db_url.startswith("sqlite:"):
+    _ensure_db_parent_dir(db_url)
+    if db_url.startswith("sqlite:"):
         connect_args = {"check_same_thread": False}
-    return create_engine(settings.db_url, connect_args=connect_args, pool_pre_ping=True)
+    return create_engine(db_url, connect_args=connect_args, pool_pre_ping=True)
 
 
 def get_engine(settings: Settings):
-    return _create_engine(settings)
+    return _engine_for(settings.db_url)
 
 
 def get_sessionmaker(settings: Settings):
-    engine = get_engine(settings)
+    return _sessionmaker_for(settings.db_url)
+
+
+@lru_cache(maxsize=8)
+def _sessionmaker_for(db_url: str):
+    engine = _engine_for(db_url)
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 

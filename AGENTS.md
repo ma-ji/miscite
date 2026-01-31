@@ -95,6 +95,7 @@ Settings live in `server/miscite/config.py` and `.env.example`. Critical env key
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys and flags.
 - Ops/security: maintenance mode, load shedding, rate limits, upload scan, job reaper, access-token TTL.
+- Cache (optional): `MISCITE_CACHE_*` controls for HTTP/LLM/text caching.
 - Email login: Mailgun API keys + login code TTL/length.
 
 If you add new env vars:

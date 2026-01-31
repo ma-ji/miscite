@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from server.miscite.cache import Cache
 from server.miscite.analysis.citation_parsing import (
     CitationInstance,
     ReferenceEntry,
@@ -400,6 +401,7 @@ def analyze_document(
     path: Path,
     *,
     settings: Settings,
+    document_sha256: str | None = None,
     progress_cb: ProgressCallback | None = None,
 ) -> tuple[dict, list[dict], str]:
     started = time.time()
@@ -423,21 +425,35 @@ def analyze_document(
         last_stage = stage
         progress_cb(stage, message, progress)
 
+    cache = Cache(settings=settings)
+    doc_scope = f"doc:{document_sha256}" if document_sha256 else f"path:{path.name}"
+    doc_cache = cache.scoped(doc_scope)
+
     parser_backend_used = settings.text_extract_backend
     _progress("extract", f"Extracting text from {path.name}", 0.03)
-    text = extract_text(
-        path,
-        backend=settings.text_extract_backend,
-        timeout_seconds=settings.text_extract_timeout_seconds,
-        use_subprocess=settings.text_extract_subprocess,
-        process_context=settings.text_extract_process_context,
-    )
-    _progress("extract", "Text extracted", 0.08)
+    text: str | None = None
+    text_cache_parts = [settings.text_extract_backend, str(path)]
+    if settings.cache_text_ttl_days > 0:
+        hit, cached_text = doc_cache.get_text_file("text_extract", text_cache_parts, ttl_days=settings.cache_text_ttl_days)
+        if hit:
+            text = cached_text
+            _progress("extract", "Using cached extracted text", 0.08)
+    if text is None:
+        text = extract_text(
+            path,
+            backend=settings.text_extract_backend,
+            timeout_seconds=settings.text_extract_timeout_seconds,
+            use_subprocess=settings.text_extract_subprocess,
+            process_context=settings.text_extract_process_context,
+        )
+        if settings.cache_text_ttl_days > 0:
+            doc_cache.set_text_file("text_extract", text_cache_parts, text)
+        _progress("extract", "Text extracted", 0.08)
     if not settings.openrouter_api_key:
         raise RuntimeError("OPENROUTER_API_KEY is required for LLM-based citation/bibliography parsing.")
 
-    llm_parse_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_parse_model)
-    llm_match_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_match_model)
+    llm_parse_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_parse_model, cache=doc_cache)
+    llm_match_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_match_model, cache=doc_cache)
     llm_parsing_used = True
     llm_bib_used = True
     llm_citation_used = True
@@ -527,9 +543,10 @@ def analyze_document(
         user_agent=settings.crossref_user_agent,
         mailto=settings.crossref_mailto,
         timeout_seconds=settings.api_timeout_seconds,
+        cache=cache,
     )
-    openalex = OpenAlexClient(timeout_seconds=settings.api_timeout_seconds)
-    arxiv = ArxivClient(timeout_seconds=settings.api_timeout_seconds, user_agent=settings.crossref_user_agent)
+    openalex = OpenAlexClient(timeout_seconds=settings.api_timeout_seconds, cache=cache)
+    arxiv = ArxivClient(timeout_seconds=settings.api_timeout_seconds, user_agent=settings.crossref_user_agent, cache=cache)
     rw = RetractionWatchDataset(settings.retractionwatch_csv)
     pred = PredatoryVenueDataset(settings.predatory_csv)
 
@@ -565,6 +582,7 @@ def analyze_document(
             token=settings.retraction_api_token,
             mode=settings.retraction_api_mode,
             timeout_seconds=settings.api_timeout_seconds,
+            cache=cache,
         )
         used_sources.append(
             {
@@ -582,6 +600,7 @@ def analyze_document(
             token=settings.predatory_api_token,
             mode=settings.predatory_api_mode,
             timeout_seconds=settings.api_timeout_seconds,
+            cache=cache,
         )
         used_sources.append(
             {
@@ -592,8 +611,8 @@ def analyze_document(
 
     if not settings.enable_llm_inappropriate:
         raise RuntimeError("MISCITE_ENABLE_LLM_INAPPROPRIATE must be true (no heuristic fallback).")
-    llm_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_model)
-    llm_deep_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_deep_analysis_model)
+    llm_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_model, cache=doc_cache)
+    llm_deep_client = OpenRouterClient(api_key=settings.openrouter_api_key, model=settings.llm_deep_analysis_model, cache=doc_cache)
     llm_used = False
     used_sources.append({"name": "OpenRouter", "detail": f"LLM-assisted inappropriate-citation checks via {settings.llm_model}."})
 

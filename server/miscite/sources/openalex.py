@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import requests
 
+from server.miscite.cache import Cache
 from server.miscite.analysis.normalize import normalize_doi
 from server.miscite.sources.http import backoff_sleep
 
@@ -26,6 +27,7 @@ def _openalex_work_id_suffix(openalex_id: str) -> str | None:
 @dataclass
 class OpenAlexClient:
     timeout_seconds: float = 20.0
+    cache: Cache | None = None
     _session: requests.Session | None = field(default=None, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -33,18 +35,35 @@ class OpenAlexClient:
             self._session = requests.Session()
         return self._session
 
+    def _ttl_seconds(self, suggested_days: int) -> float:
+        cache = self.cache
+        if not cache:
+            return 0.0
+        days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
+        return float(max(0, days)) * 86400.0
+
     def get_work_by_doi(self, doi: str) -> dict | None:
         doi_norm = normalize_doi(doi)
         if not doi_norm:
             return None
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json("openalex.work_by_doi", [doi_norm])
+            if hit:
+                return cached
         url = f"https://api.openalex.org/works/https://doi.org/{doi_norm}"
         for attempt in range(3):
             try:
                 resp = self._client().get(url, timeout=self.timeout_seconds)
                 if resp.status_code == 404:
+                    if cache and cache.settings.cache_enabled:
+                        cache.set_json("openalex.work_by_doi", [doi_norm], None, ttl_seconds=self._ttl_seconds(1))
                     return None
                 resp.raise_for_status()
-                return resp.json()
+                data = resp.json()
+                if cache and cache.settings.cache_enabled:
+                    cache.set_json("openalex.work_by_doi", [doi_norm], data, ttl_seconds=self._ttl_seconds(90))
+                return data
             except requests.RequestException:
                 backoff_sleep(attempt)
         return None
@@ -55,6 +74,12 @@ class OpenAlexClient:
         openalex_id = openalex_id.strip()
         if not openalex_id:
             return None
+        cache = self.cache
+        suffix = _openalex_work_id_suffix(openalex_id) or openalex_id
+        if cache and cache.settings.cache_enabled and suffix:
+            hit, cached = cache.get_json("openalex.work_by_id", [suffix])
+            if hit:
+                return cached
 
         if openalex_id.startswith("https://openalex.org/"):
             suffix = openalex_id.rstrip("/").split("/")[-1]
@@ -70,9 +95,14 @@ class OpenAlexClient:
             try:
                 resp = self._client().get(url, timeout=self.timeout_seconds)
                 if resp.status_code == 404:
+                    if cache and cache.settings.cache_enabled and suffix:
+                        cache.set_json("openalex.work_by_id", [suffix], None, ttl_seconds=self._ttl_seconds(1))
                     return None
                 resp.raise_for_status()
-                return resp.json()
+                data = resp.json()
+                if cache and cache.settings.cache_enabled and suffix:
+                    cache.set_json("openalex.work_by_id", [suffix], data, ttl_seconds=self._ttl_seconds(90))
+                return data
             except requests.RequestException:
                 backoff_sleep(attempt)
         return None
@@ -80,11 +110,19 @@ class OpenAlexClient:
     def search(self, query: str, *, rows: int = 5) -> list[dict]:
         url = "https://api.openalex.org/works"
         params = {"search": query, "per-page": rows}
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json("openalex.search", [query, str(rows)])
+            if hit and isinstance(cached, list):
+                return cached
         for attempt in range(3):
             try:
                 resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
-                return (resp.json() or {}).get("results") or []
+                results = (resp.json() or {}).get("results") or []
+                if cache and cache.settings.cache_enabled and isinstance(results, list):
+                    cache.set_json("openalex.search", [query, str(rows)], results, ttl_seconds=self._ttl_seconds(7))
+                return results
             except requests.RequestException:
                 backoff_sleep(attempt)
         return []
@@ -98,6 +136,11 @@ class OpenAlexClient:
         suffix = _openalex_work_id_suffix(openalex_id)
         if not suffix:
             return []
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json("openalex.list_citing_works", [suffix, str(rows)])
+            if hit and isinstance(cached, list):
+                return cached
         url = "https://api.openalex.org/works"
         params = {
             "filter": f"cites:{suffix}",
@@ -108,7 +151,15 @@ class OpenAlexClient:
             try:
                 resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
-                return (resp.json() or {}).get("results") or []
+                results = (resp.json() or {}).get("results") or []
+                if cache and cache.settings.cache_enabled and isinstance(results, list):
+                    cache.set_json(
+                        "openalex.list_citing_works",
+                        [suffix, str(rows)],
+                        results,
+                        ttl_seconds=self._ttl_seconds(3),
+                    )
+                return results
             except requests.RequestException:
                 backoff_sleep(attempt)
         return []

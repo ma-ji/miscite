@@ -11,6 +11,7 @@ from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from server.miscite.analysis.pipeline import analyze_document
+from server.miscite.cache import Cache
 from server.miscite.config import Settings
 from server.miscite.db import get_sessionmaker, init_db
 from server.miscite.email import send_access_token_email
@@ -127,6 +128,7 @@ def _process_job(settings: Settings, job_id: str) -> None:
         report, sources, methodology_md = analyze_document(
             Path(doc.storage_path),
             settings=settings,
+            document_sha256=doc.sha256,
             progress_cb=progress_cb,
         )
 
@@ -261,6 +263,31 @@ def _reap_expired_jobs(settings: Settings) -> None:
             pass
 
 
+def _reap_cache(settings: Settings) -> None:
+    if not settings.cache_enabled:
+        return
+    Cache(settings=settings).reap_expired()
+
+    ttl_seconds = float(settings.cache_text_ttl_days) * 86400.0
+    if ttl_seconds <= 0:
+        return
+    root = settings.cache_dir / "text_extract"
+    if not root.exists():
+        return
+
+    now = time.time()
+    try:
+        paths = list(root.rglob("*.txt"))
+    except OSError:
+        return
+    for p in paths:
+        try:
+            if (now - p.stat().st_mtime) > ttl_seconds:
+                p.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+
 def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
     logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
     log = logging.getLogger(f"miscite.worker.{process_index}")
@@ -305,6 +332,7 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
         if time.time() >= next_reap_at:
             _reap_stale_jobs(settings)
             _reap_expired_jobs(settings)
+            _reap_cache(settings)
             next_reap_at = time.time() + float(settings.job_reap_interval_seconds)
 
         db = SessionLocal()

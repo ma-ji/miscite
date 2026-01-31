@@ -8,4 +8,5 @@ markitdown[all]
 python-dotenv>=1.0
 sqlalchemy>=2.0
 requests>=2.31
+json_repair>=0.54.0
 stripe>=8.0

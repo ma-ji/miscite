@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 
+import json_repair
 import requests
 
+from server.miscite.cache import Cache
 from server.miscite.sources.http import backoff_sleep
 
 
@@ -14,10 +17,20 @@ class OpenRouterClient:
     api_key: str
     model: str
     timeout_seconds: float = 45.0
+    cache: Cache | None = None
 
     def chat_json(self, *, system: str, user: str) -> dict:
         if not self.api_key:
             raise RuntimeError("OPENROUTER_API_KEY is required")
+
+        cache = self.cache
+        cache_ttl_days = cache.settings.cache_llm_ttl_days if cache and cache.settings.cache_enabled else 0
+        if cache and cache_ttl_days > 0:
+            system_h = hashlib.sha256(system.encode("utf-8")).hexdigest()
+            user_h = hashlib.sha256(user.encode("utf-8")).hexdigest()
+            hit, cached = cache.get_json("openrouter.chat_json", [self.model, "temp:0.2", system_h, user_h])
+            if hit and isinstance(cached, dict):
+                return cached
 
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
@@ -47,7 +60,15 @@ class OpenRouterClient:
                     snippet = json.dumps(data, ensure_ascii=True)[:1000]
                     raise RuntimeError(f"OpenRouter response missing message content. First 1000 chars: {snippet}")
                 try:
-                    return _load_json_payload(content)
+                    payload = _load_json_payload(content)
+                    if cache and cache_ttl_days > 0:
+                        cache.set_json(
+                            "openrouter.chat_json",
+                            [self.model, "temp:0.2", system_h, user_h],
+                            payload,
+                            ttl_seconds=float(cache_ttl_days) * 86400.0,
+                        )
+                    return payload
                 except json.JSONDecodeError as e:
                     snippet = content[:500].replace("\n", "\\n")
                     raise RuntimeError(f"Model did not return valid JSON. First 500 chars: {snippet}") from e
@@ -173,6 +194,13 @@ def _escape_control_chars_in_json_strings(text: str) -> str:
 
 
 def _load_json_payload(content: str) -> dict:
+    try:
+        repaired_obj = json_repair.loads(content, strict=False)
+        if isinstance(repaired_obj, dict):
+            return repaired_obj
+    except Exception:
+        pass
+
     candidates = _json_candidates(content)
     last_err: json.JSONDecodeError | None = None
     for candidate in candidates:

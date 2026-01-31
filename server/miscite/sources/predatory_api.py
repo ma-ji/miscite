@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import requests
 
+from server.miscite.cache import Cache
 from server.miscite.sources.http import backoff_sleep
 
 
@@ -50,6 +51,7 @@ class PredatoryApiClient:
     token: str = ""
     mode: str = "lookup"  # "lookup" | "list"
     timeout_seconds: float = 20.0
+    cache: Cache | None = None
 
     _list_cache: list[dict] | None = None
     _session: requests.Session | None = field(default=None, init=False, repr=False)
@@ -65,14 +67,43 @@ class PredatoryApiClient:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
+    def _ttl_seconds(self, suggested_days: int) -> float:
+        cache = self.cache
+        if not cache:
+            return 0.0
+        days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
+        return float(max(0, days)) * 86400.0
+
     def lookup(self, *, journal: str | None, publisher: str | None, issn: str | None) -> dict | None:
         if not self.url:
             return None
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json(
+                "predatory_api.lookup",
+                [
+                    self.mode,
+                    self.url,
+                    _norm_issn(issn or ""),
+                    _norm_text(journal or ""),
+                    _norm_text(publisher or ""),
+                ],
+            )
+            if hit:
+                return cached
         if self.mode == "list":
             return self._lookup_from_list(journal=journal, publisher=publisher, issn=issn)
         return self._lookup_via_http(journal=journal, publisher=publisher, issn=issn)
 
     def _lookup_via_http(self, *, journal: str | None, publisher: str | None, issn: str | None) -> dict | None:
+        cache = self.cache
+        cache_parts = [
+            self.mode,
+            self.url,
+            _norm_issn(issn or ""),
+            _norm_text(journal or ""),
+            _norm_text(publisher or ""),
+        ]
         params = {
             "issn": issn or "",
             "journal": journal or "",
@@ -82,9 +113,14 @@ class PredatoryApiClient:
             try:
                 resp = self._client().get(self.url, params=params, headers=self._headers(), timeout=self.timeout_seconds)
                 if resp.status_code == 404:
+                    if cache and cache.settings.cache_enabled:
+                        cache.set_json("predatory_api.lookup", cache_parts, None, ttl_seconds=self._ttl_seconds(1))
                     return None
                 resp.raise_for_status()
-                return _parse_predatory_lookup_response(resp.json(), journal=journal, publisher=publisher, issn=issn)
+                record = _parse_predatory_lookup_response(resp.json(), journal=journal, publisher=publisher, issn=issn)
+                if cache and cache.settings.cache_enabled:
+                    cache.set_json("predatory_api.lookup", cache_parts, record, ttl_seconds=self._ttl_seconds(30))
+                return record
             except requests.RequestException:
                 backoff_sleep(attempt)
             except Exception:

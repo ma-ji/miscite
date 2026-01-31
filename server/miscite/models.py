@@ -119,3 +119,17 @@ class BillingAccount(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
 
     user: Mapped["User"] = relationship(back_populates="billing")
+
+
+class CacheEntry(Base):
+    __tablename__ = "cache_entries"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    namespace: Mapped[str] = mapped_column(String(96), index=True)
+    scope: Mapped[str] = mapped_column(String(96), index=True, default="global")
+
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime, index=True)
+
+    value_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_text: Mapped[str | None] = mapped_column(Text, nullable=True)

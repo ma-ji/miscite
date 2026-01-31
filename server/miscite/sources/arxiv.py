@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
+from server.miscite.cache import Cache
 from server.miscite.analysis.normalize import normalize_doi
 from server.miscite.sources.http import backoff_sleep
 
@@ -80,6 +81,7 @@ def _parse_feed(xml_text: str) -> list[dict]:
 class ArxivClient:
     timeout_seconds: float = 20.0
     user_agent: str = "miscite/0.1"
+    cache: Cache | None = None
     _session: requests.Session | None = field(default=None, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -90,12 +92,36 @@ class ArxivClient:
     def _headers(self) -> dict[str, str]:
         return {"User-Agent": self.user_agent}
 
+    def _ttl_seconds(self, suggested_days: int) -> float:
+        cache = self.cache
+        if not cache:
+            return 0.0
+        days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
+        return float(max(0, days)) * 86400.0
+
+    def _ttl_seconds_for_params(self, params: dict[str, str]) -> float:
+        if "id_list" in params:
+            return self._ttl_seconds(90)
+        q = (params.get("search_query") or "").strip().lower()
+        if q.startswith("doi:"):
+            return self._ttl_seconds(90)
+        return self._ttl_seconds(7)
+
     def _query(self, params: dict[str, str]) -> list[dict]:
+        cache = self.cache
+        cache_parts = [f"{k}={params[k]}" for k in sorted(params.keys())]
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json("arxiv.query", cache_parts)
+            if hit and isinstance(cached, list):
+                return cached
         for attempt in range(3):
             try:
                 resp = self._client().get(_ARXIV_API, params=params, headers=self._headers(), timeout=self.timeout_seconds)
                 resp.raise_for_status()
-                return _parse_feed(resp.text)
+                entries = _parse_feed(resp.text)
+                if cache and cache.settings.cache_enabled:
+                    cache.set_json("arxiv.query", cache_parts, entries, ttl_seconds=self._ttl_seconds_for_params(params))
+                return entries
             except requests.RequestException:
                 backoff_sleep(attempt)
         return []

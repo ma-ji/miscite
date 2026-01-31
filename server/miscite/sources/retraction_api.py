@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import requests
 
+from server.miscite.cache import Cache
 from server.miscite.analysis.normalize import normalize_doi
 from server.miscite.sources.http import backoff_sleep
 
@@ -26,6 +27,7 @@ class RetractionApiClient:
     token: str = ""
     mode: str = "lookup"  # "lookup" | "list"
     timeout_seconds: float = 20.0
+    cache: Cache | None = None
 
     _list_cache: list[dict] | None = None
     _session: requests.Session | None = field(default=None, init=False, repr=False)
@@ -41,16 +43,29 @@ class RetractionApiClient:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
+    def _ttl_seconds(self, suggested_days: int) -> float:
+        cache = self.cache
+        if not cache:
+            return 0.0
+        days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
+        return float(max(0, days)) * 86400.0
+
     def lookup_by_doi(self, doi: str) -> dict | None:
         doi_norm = normalize_doi(doi)
         if not doi_norm or not self.url:
             return None
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json("retraction_api.lookup_by_doi", [self.mode, self.url, doi_norm])
+            if hit:
+                return cached
 
         if self.mode == "list":
             return self._lookup_from_list(doi_norm)
         return self._lookup_via_http(doi_norm)
 
     def _lookup_via_http(self, doi_norm: str) -> dict | None:
+        cache = self.cache
         for attempt in range(3):
             try:
                 resp = self._client().get(
@@ -60,9 +75,24 @@ class RetractionApiClient:
                     timeout=self.timeout_seconds,
                 )
                 if resp.status_code == 404:
+                    if cache and cache.settings.cache_enabled:
+                        cache.set_json(
+                            "retraction_api.lookup_by_doi",
+                            [self.mode, self.url, doi_norm],
+                            None,
+                            ttl_seconds=self._ttl_seconds(1),
+                        )
                     return None
                 resp.raise_for_status()
-                return _parse_retraction_lookup_response(resp.json(), doi_norm)
+                record = _parse_retraction_lookup_response(resp.json(), doi_norm)
+                if cache and cache.settings.cache_enabled:
+                    cache.set_json(
+                        "retraction_api.lookup_by_doi",
+                        [self.mode, self.url, doi_norm],
+                        record,
+                        ttl_seconds=self._ttl_seconds(30),
+                    )
+                return record
             except requests.RequestException:
                 backoff_sleep(attempt)
             except Exception:
