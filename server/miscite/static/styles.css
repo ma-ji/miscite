@@ -323,6 +323,10 @@ textarea {
   gap: var(--space-5);
 }
 
+.ds-mt-3 {
+  margin-top: var(--space-3);
+}
+
 .ds-mt-4 {
   margin-top: var(--space-4);
 }
@@ -602,6 +606,24 @@ a.miscite-wordmark:hover {
   --btn-shadow: var(--shadow-1);
 }
 
+.ds-button--warning {
+  background: var(--control-bg, var(--surface));
+  border-color: var(--severity-high-border);
+  color: var(--severity-high);
+}
+
+.ds-button--warning:hover {
+  background: var(--severity-high-soft);
+  border-color: var(--severity-high);
+  color: var(--severity-high);
+  --btn-shadow: var(--shadow-1);
+}
+
+.ds-button--warning:active {
+  background: var(--severity-high-soft);
+  border-color: var(--severity-high);
+}
+
 .ds-button--sm {
   min-height: 36px;
   padding: 0 var(--space-3);
@@ -631,6 +653,14 @@ a.miscite-wordmark:hover {
 .ds-button[disabled] {
   opacity: 0.6;
   cursor: not-allowed;
+  --btn-shadow: none;
+  transform: none;
+}
+
+.ds-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
   --btn-shadow: none;
   transform: none;
 }

@@ -51,117 +51,129 @@
             </div>
           </div>
         {% else %}
-          {% set token_value = access_token or job.access_token_value %}
-          {% set share_link = token_value and (public_origin ~ "/reports/" ~ token_value) %}
-          <div class="ds-card ds-card--subtle">
-            <div class="card-content">
-              <h3>Access token</h3>
-              <p class="miscite-muted">
-                Tokens are issued when the report is ready and emailed to you. Adjust expiration or renew below.
-              </p>
-              <div class="ds-panel ds-panel--compact ds-mt-4">
-                <div class="ds-panel-body ds-stack ds-stack--tight">
-                  <div class="ds-input-row">
-                    <div class="form-field">
-                      <label class="form-label" for="access-token-value">Access token</label>
-                      <input
-                        id="access-token-value"
-                        class="miscite-mono"
-                        type="text"
-                        readonly
-                        placeholder="Generate to reveal"
-                        value="{{ token_value or '' }}"
-                      />
-                    </div>
-                    <button
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      type="button"
-                      data-copy-target="access-token-value"
-                      {% if not token_value %}disabled{% endif %}
-                    >
-                      Copy token
-                    </button>
-                  </div>
-                  <div class="ds-input-row">
-                    <div class="form-field">
-                      <label class="form-label" for="access-link-value">Share link</label>
-                      <input
-                        id="access-link-value"
-                        class="miscite-mono"
-                        type="text"
-                        readonly
-                        placeholder="Share link appears here"
-                        value="{{ share_link or '' }}"
-                      />
-                    </div>
-                    <button
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      type="button"
-                      data-copy-target="access-link-value"
-                      {% if not token_value %}disabled{% endif %}
-                    >
-                      Copy link
-                    </button>
-                  </div>
-                  <p class="form-help">Anyone with this link can view the report until it expires.</p>
-                  {% if token_value %}
-                    {% if job.access_token_expired %}
-                      <p class="miscite-muted">
-                        Access token expired{% if job.access_token_expires_at_human %} {{ job.access_token_expires_at_human }}{% endif %}.
-                      </p>
-                    {% elif job.access_token_expires_at_human %}
-                      <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
-                    {% else %}
-                      <p class="miscite-muted">No expiration set.</p>
-                    {% endif %}
-                  {% else %}
-                    {% if job.access_token_hint %}
-                      <p class="miscite-muted">
-                        An active token ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
-                        Rotate the token to reveal a new value.
-                      </p>
-                    {% else %}
-                      <p class="miscite-muted">
-                        A token will appear here when the report is ready. You can generate one now.
-                      </p>
-                    {% endif %}
-                  {% endif %}
-                  {% if access_token_error %}
-                    <div class="ds-alert ds-alert--error ds-mt-3">{{ access_token_error }}</div>
-                  {% endif %}
-                  <form method="post" action="/jobs/{{ job.id }}/access-token" class="ds-stack ds-stack--tight ds-mt-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <div class="form-field">
-                      <label class="form-label" for="access-token-expiry-mode">Expiration</label>
-                      <select id="access-token-expiry-mode" name="expires_mode">
-                        <option value="current" {% if job.access_token_expires_mode == "current" %}selected{% endif %}>
-                          Keep current
-                        </option>
-                        <option value="default" {% if job.access_token_expires_mode == "default" %}selected{% endif %}>
-                          Default ({{ access_token_days }} days)
-                        </option>
-                        <option value="date" {% if job.access_token_expires_mode == "date" %}selected{% endif %}>
-                          Specific date &amp; time (UTC)
-                        </option>
-                        <option value="never" {% if job.access_token_expires_mode == "never" %}selected{% endif %}>
-                          No expiration
-                        </option>
-                      </select>
-                      <p class="form-help">Choose how long the token should remain valid.</p>
-                    </div>
-                    <div class="form-field">
-                      <label class="form-label" for="access-token-expires-at">Expires at (UTC)</label>
-                      <input
-                        id="access-token-expires-at"
-                        name="expires_at"
-                        type="datetime-local"
-                        value="{{ job.access_token_expires_at_input }}"
-                      />
-                    </div>
-                    <div class="ds-input-row">
-                      <button
-                        class="ds-button ds-button--secondary ds-button--sm"
-                        type="submit"
+	          {% set token_value = access_token or job.access_token_value %}
+	          {% set share_link = token_value and (public_origin ~ "/reports/" ~ token_value) %}
+	          <div class="ds-card ds-card--subtle">
+	            <div class="card-content">
+	              <h3>Access token</h3>
+	              <p class="miscite-muted">
+	                Tokens are issued when the report is ready and emailed to you. Adjust expiration or renew below.
+	              </p>
+	              <div class="ds-panel ds-panel--compact ds-mt-4">
+	                <div class="ds-panel-body ds-stack ds-stack--tight">
+	                  <div class="ds-input-row">
+	                    <div class="form-field">
+	                      <label class="form-label" for="access-link-value">Share link</label>
+	                      <input
+	                        id="access-link-value"
+	                        class="miscite-mono"
+	                        type="text"
+	                        readonly
+	                        placeholder="Generate a token to create a share link"
+	                        value="{{ share_link or '' }}"
+	                      />
+	                    </div>
+	                    <button
+	                      class="ds-button ds-button--secondary ds-button--sm"
+	                      type="button"
+	                      data-copy-target="access-link-value"
+	                      {% if not token_value %}disabled{% endif %}
+	                    >
+	                      Copy link
+	                    </button>
+	                    <a
+	                      class="ds-button ds-button--secondary ds-button--sm"
+	                      href="{{ share_link or '#' }}"
+	                      target="_blank"
+	                      rel="noopener"
+	                      aria-disabled="{% if not token_value %}true{% else %}false{% endif %}"
+	                      {% if not token_value %}tabindex="-1"{% endif %}
+	                    >
+	                      View
+	                    </a>
+	                  </div>
+	                  <div class="ds-input-row">
+	                    <div class="form-field">
+	                      <label class="form-label" for="access-token-value">Access token</label>
+	                      <input
+	                        id="access-token-value"
+	                        class="miscite-mono"
+	                        type="text"
+	                        readonly
+	                        placeholder="Generate to reveal"
+	                        value="{{ token_value or '' }}"
+	                      />
+	                    </div>
+	                    <button
+	                      class="ds-button ds-button--secondary ds-button--sm"
+	                      type="button"
+	                      data-copy-target="access-token-value"
+	                      {% if not token_value %}disabled{% endif %}
+	                    >
+	                      Copy token
+	                    </button>
+	                  </div>
+	                  <p class="form-help">Anyone with this link can view the report until it expires.</p>
+	                  {% if token_value %}
+	                    {% if job.access_token_expired %}
+	                      <p class="form-help">
+	                        Access token expired{% if job.access_token_expires_at_human %} {{ job.access_token_expires_at_human }}{% endif %}.
+	                      </p>
+	                    {% elif job.access_token_expires_at_human %}
+	                      <p class="form-help">Expires {{ job.access_token_expires_at_human }}.</p>
+	                    {% else %}
+	                      <p class="form-help">No expiration set.</p>
+	                    {% endif %}
+	                  {% else %}
+	                    {% if job.access_token_hint %}
+	                      <p class="form-help">
+	                        An active token ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
+	                        Rotate the token to reveal a new value.
+	                      </p>
+	                    {% else %}
+	                      <p class="form-help">
+	                        A token will appear here when the report is ready. You can generate one now.
+	                      </p>
+	                    {% endif %}
+	                  {% endif %}
+	                  {% if access_token_error %}
+	                    <div class="ds-alert ds-alert--error ds-mt-3">{{ access_token_error }}</div>
+	                  {% endif %}
+	                  <form method="post" action="/jobs/{{ job.id }}/access-token" class="ds-stack ds-stack--tight ds-mt-3">
+	                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+	                    <div class="ds-input-row">
+	                      <div class="form-field">
+	                        <label class="form-label" for="access-token-expiry-mode">Expiration</label>
+	                        <select id="access-token-expiry-mode" name="expires_mode">
+	                          <option value="current" {% if job.access_token_expires_mode == "current" %}selected{% endif %}>
+	                            Keep current
+	                          </option>
+	                          <option value="default" {% if job.access_token_expires_mode == "default" %}selected{% endif %}>
+	                            Default ({{ access_token_days }} days)
+	                          </option>
+	                          <option value="date" {% if job.access_token_expires_mode == "date" %}selected{% endif %}>
+	                            Specific date &amp; time (UTC)
+	                          </option>
+	                          <option value="never" {% if job.access_token_expires_mode == "never" %}selected{% endif %}>
+	                            No expiration
+	                          </option>
+	                        </select>
+	                        <p class="form-help">Choose how long the token should remain valid.</p>
+	                      </div>
+	                      <div class="form-field" id="access-token-expires-at-field">
+	                        <label class="form-label" for="access-token-expires-at">Expires at (UTC)</label>
+	                        <input
+	                          id="access-token-expires-at"
+	                          name="expires_at"
+	                          type="datetime-local"
+	                          value="{{ job.access_token_expires_at_input }}"
+	                        />
+	                      </div>
+	                    </div>
+	                    <div class="ds-input-row">
+	                      <button
+	                        class="ds-button ds-button--secondary ds-button--sm"
+	                        type="submit"
                         name="action"
                         value="update-expiration"
                       >
@@ -184,30 +196,23 @@
                         {% endif %}
                       </button>
                     </div>
-                  </form>
-                </div>
-              </div>
-              <div class="ds-panel ds-panel--compact ds-mt-4">
-                <div class="ds-panel-body">
-                  <h4>Delete report</h4>
-                  <p class="miscite-muted">
-                    This permanently deletes the report, events, and uploaded file. This cannot be undone.
-                  </p>
-                  <form
-                    method="post"
-                    action="/jobs/{{ job.id }}/delete"
-                    onsubmit="return confirm('Delete this report and uploaded file? This cannot be undone.');"
-                  >
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <button class="ds-button ds-button--secondary ds-button--sm" type="submit">
-                      Delete report
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-        {% endif %}
+	                  </form>
+	                </div>
+	              </div>
+	              <form
+	                method="post"
+	                action="/jobs/{{ job.id }}/delete"
+	                class="ds-mt-4"
+	                onsubmit="return confirm('Delete this report and uploaded file? This cannot be undone.');"
+	              >
+	                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+	                <button class="ds-button ds-button--warning ds-button--sm" type="submit">
+	                  Delete report
+	                </button>
+	              </form>
+	            </div>
+	          </div>
+	        {% endif %}
       </div>
     </div>
     {% if job.error_message and not public_view %}
@@ -227,15 +232,15 @@
         <div class="card-content">
           <div class="ds-progress-header">
             <h3>Live progress</h3>
-            <div class="ds-progress-actions">
-              <span class="ds-pill" id="job-status-pill">{{ job.status }}</span>
-              {% if not public_view and job.status in ["PENDING", "RUNNING"] %}
-                <button
-                  class="ds-button ds-button--ghost ds-button--sm"
-                  type="button"
-                  id="job-progress-stop"
-                  aria-label="Stop analysis"
-                >
+	            <div class="ds-progress-actions">
+	              <span class="ds-pill" id="job-status-pill">{{ job.status }}</span>
+	              {% if not public_view and job.status in ["PENDING", "RUNNING"] %}
+	                <button
+	                  class="ds-button ds-button--warning ds-button--sm"
+	                  type="button"
+	                  id="job-progress-stop"
+	                  aria-label="Stop analysis"
+	                >
                   Stop
                 </button>
               {% endif %}
@@ -1051,6 +1056,25 @@
         }
         clearActive();
       });
+    })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var mode = document.getElementById("access-token-expiry-mode");
+      var expiresField = document.getElementById("access-token-expires-at-field");
+      var expiresInput = document.getElementById("access-token-expires-at");
+      if (!mode || !expiresField || !expiresInput) {
+        return;
+      }
+
+      var sync = function () {
+        var isDate = mode.value === "date";
+        expiresField.style.display = isDate ? "" : "none";
+        expiresInput.disabled = !isDate;
+      };
+
+      mode.addEventListener("change", sync);
+      sync();
     })();
   </script>
 {% endblock %}
