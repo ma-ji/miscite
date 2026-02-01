@@ -21,6 +21,20 @@ if [ "$(id -u)" -eq 0 ] && [ "$RUN_USER" != "root" ]; then
   RUN_AS=(sudo -u "$RUN_USER")
 fi
 
+is_tty() {
+  [ -t 0 ]
+}
+
+prompt_choice() {
+  local prompt="$1"
+  local default="$2"
+  local choice=""
+  if is_tty; then
+    read -r -p "${prompt} " choice
+  fi
+  echo "${choice:-$default}"
+}
+
 echo "==> Installing base packages..."
 $SUDO apt-get update -y
 $SUDO apt-get install -y git curl ufw
@@ -68,6 +82,60 @@ if [ "${#missing[@]}" -gt 0 ]; then
   echo "Missing required secrets in .env: ${missing[*]}" >&2
   echo "Edit $APP_DIR/.env and re-run this script." >&2
   exit 1
+fi
+
+echo "==> Data setup..."
+DATA_DIR="$APP_DIR/data"
+DB_PATH="$DATA_DIR/miscite.db"
+UPLOAD_DIR="$DATA_DIR/uploads"
+
+choice="fresh"
+if [ -e "$DB_PATH" ] || [ -d "$UPLOAD_DIR" ]; then
+  choice="existing"
+fi
+default_choice="$choice"
+choice="$(prompt_choice "Use existing data or start fresh? [existing/fresh] (default: ${default_choice})" "$default_choice")"
+choice="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]')"
+if [ "$choice" != "existing" ] && [ "$choice" != "fresh" ]; then
+  echo "Unknown choice '${choice}', defaulting to ${default_choice}."
+  choice="$default_choice"
+fi
+
+if [ "$choice" = "existing" ]; then
+  echo "Place your existing DB at: ${DB_PATH}"
+  echo "Place your uploads at:   ${UPLOAD_DIR}"
+  if [ ! -f "$DB_PATH" ] || [ ! -d "$UPLOAD_DIR" ]; then
+    if is_tty; then
+      read -r -p "Press Enter once files are in place (or type 'q' to quit): " reply
+      if [ "${reply:-}" = "q" ]; then
+        exit 1
+      fi
+    else
+      echo "Missing ${DB_PATH} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
+      exit 1
+    fi
+  fi
+  if [ ! -f "$DB_PATH" ] || [ ! -d "$UPLOAD_DIR" ]; then
+    echo "Missing ${DB_PATH} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
+    exit 1
+  fi
+else
+  if [ -d "$DATA_DIR" ] && [ -n "$(ls -A "$DATA_DIR" 2>/dev/null || true)" ]; then
+    echo "Data directory is not empty: ${DATA_DIR}"
+    if is_tty; then
+      move_choice="$(prompt_choice "Move existing data to ${DATA_DIR}.bak.<timestamp>? [y/N]" "n")"
+      if [ "$move_choice" = "y" ] || [ "$move_choice" = "Y" ]; then
+        stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+        $SUDO mv "$DATA_DIR" "${DATA_DIR}.bak.${stamp}"
+      else
+        echo "Refusing to start fresh with non-empty data dir." >&2
+        exit 1
+      fi
+    else
+      echo "Non-interactive run with non-empty data dir. Move it aside and re-run." >&2
+      exit 1
+    fi
+  fi
 fi
 
 echo "==> Creating data dir..."
