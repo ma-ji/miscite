@@ -71,7 +71,9 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 echo "==> Creating data dir..."
-"${RUN_AS[@]}" mkdir -p data
+"${RUN_AS[@]}" mkdir -p data data/uploads
+# Ensure container user (uid 1000) can write SQLite DB + uploads.
+$SUDO chown -R 1000:1000 data
 
 echo "==> Configuring firewall (UFW)..."
 $SUDO ufw allow OpenSSH
