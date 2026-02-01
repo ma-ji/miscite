@@ -35,6 +35,102 @@ prompt_choice() {
   echo "${choice:-$default}"
 }
 
+check_missing_env() {
+  missing=()
+  for key in OPENROUTER_API_KEY MISCITE_MAILGUN_API_KEY MISCITE_MAILGUN_DOMAIN MISCITE_MAILGUN_SENDER MISCITE_TURNSTILE_SITE_KEY MISCITE_TURNSTILE_SECRET_KEY; do
+    val="$(grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true)"
+    if [ -z "${val}" ]; then
+      missing+=("$key")
+    fi
+  done
+}
+
+wait_for_env_ready() {
+  while true; do
+    check_missing_env
+    if [ "${#missing[@]}" -eq 0 ]; then
+      return 0
+    fi
+    echo "Edit $APP_DIR/.env and set required secrets:"
+    printf '  - %s\n' "${missing[@]}"
+    if is_tty; then
+      read -r -p "Press Enter to re-check .env (or type 'q' to quit): " reply
+      if [ "${reply:-}" = "q" ]; then
+        exit 1
+      fi
+    else
+      echo "Missing required secrets in .env: ${missing[*]}" >&2
+      echo "Edit $APP_DIR/.env and re-run this script." >&2
+      exit 1
+    fi
+  done
+}
+
+wait_for_existing_data() {
+  while true; do
+    if [ -f "$DB_PATH" ] && [ -d "$UPLOAD_DIR" ]; then
+      return 0
+    fi
+    echo "Place your existing DB at: ${DB_PATH}"
+    echo "Place your uploads at:   ${UPLOAD_DIR}"
+    if is_tty; then
+      read -r -p "Press Enter to re-check (or type 'q' to quit): " reply
+      if [ "${reply:-}" = "q" ]; then
+        exit 1
+      fi
+    else
+      echo "Missing ${DB_PATH} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
+      exit 1
+    fi
+  done
+}
+
+can_write_as_uid() {
+  local uid="$1"
+  local path="$2"
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -u "#$uid" test -w "$path" 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+data_permissions_ok() {
+  if [ -f "$DB_PATH" ]; then
+    can_write_as_uid 1000 "$DB_PATH" || return 1
+  else
+    can_write_as_uid 1000 "$DATA_DIR" || return 1
+  fi
+  can_write_as_uid 1000 "$UPLOAD_DIR" || return 1
+  return 0
+}
+
+wait_for_data_permissions() {
+  # Auto-fix perms for container UID (1000) before prompting.
+  if ! data_permissions_ok; then
+    $SUDO chown -R 1000:1000 "$DATA_DIR" || true
+    $SUDO chmod -R u+rwX "$DATA_DIR" || true
+  fi
+  while true; do
+    if data_permissions_ok; then
+      return 0
+    fi
+    echo "Ensure UID 1000 can write to ${DATA_DIR} (SQLite + uploads)."
+    echo "Auto-fix attempted but permissions are still not writable."
+    if is_tty; then
+      read -r -p "Press Enter to re-check (or type 'q' to quit): " reply
+      if [ "${reply:-}" = "q" ]; then
+        exit 1
+      fi
+      $SUDO chown -R 1000:1000 "$DATA_DIR" || true
+      $SUDO chmod -R u+rwX "$DATA_DIR" || true
+    else
+      echo "Data directory not writable by UID 1000." >&2
+      exit 1
+    fi
+  done
+}
+
 echo "==> Installing base packages..."
 $SUDO apt-get update -y
 $SUDO apt-get install -y git curl ufw
@@ -64,24 +160,11 @@ echo "==> Ensuring .env exists..."
 if [ ! -f .env ]; then
   "${RUN_AS[@]}" cp .env.example .env
 fi
+wait_for_env_ready
 
 echo "==> Applying domain to Caddyfile..."
 if grep -q "^miscite.review {" deploy/Caddyfile; then
   "${RUN_AS[@]}" sed -i "s/^miscite.review {/${DOMAIN} {/" deploy/Caddyfile
-fi
-
-echo "==> Checking required secrets..."
-missing=()
-for key in OPENROUTER_API_KEY MISCITE_MAILGUN_API_KEY MISCITE_MAILGUN_DOMAIN MISCITE_MAILGUN_SENDER MISCITE_TURNSTILE_SITE_KEY MISCITE_TURNSTILE_SECRET_KEY; do
-  val="$(grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true)"
-  if [ -z "${val}" ]; then
-    missing+=("$key")
-  fi
-done
-if [ "${#missing[@]}" -gt 0 ]; then
-  echo "Missing required secrets in .env: ${missing[*]}" >&2
-  echo "Edit $APP_DIR/.env and re-run this script." >&2
-  exit 1
 fi
 
 echo "==> Data setup..."
@@ -102,23 +185,7 @@ if [ "$choice" != "existing" ] && [ "$choice" != "fresh" ]; then
 fi
 
 if [ "$choice" = "existing" ]; then
-  echo "Place your existing DB at: ${DB_PATH}"
-  echo "Place your uploads at:   ${UPLOAD_DIR}"
-  if [ ! -f "$DB_PATH" ] || [ ! -d "$UPLOAD_DIR" ]; then
-    if is_tty; then
-      read -r -p "Press Enter once files are in place (or type 'q' to quit): " reply
-      if [ "${reply:-}" = "q" ]; then
-        exit 1
-      fi
-    else
-      echo "Missing ${DB_PATH} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
-      exit 1
-    fi
-  fi
-  if [ ! -f "$DB_PATH" ] || [ ! -d "$UPLOAD_DIR" ]; then
-    echo "Missing ${DB_PATH} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
-    exit 1
-  fi
+  wait_for_existing_data
 else
   if [ -d "$DATA_DIR" ] && [ -n "$(ls -A "$DATA_DIR" 2>/dev/null || true)" ]; then
     echo "Data directory is not empty: ${DATA_DIR}"
@@ -142,6 +209,7 @@ echo "==> Creating data dir..."
 "${RUN_AS[@]}" mkdir -p data data/uploads
 # Ensure container user (uid 1000) can write SQLite DB + uploads.
 $SUDO chown -R 1000:1000 data
+wait_for_data_permissions
 
 echo "==> Configuring firewall (UFW)..."
 $SUDO ufw allow OpenSSH
