@@ -46,6 +46,25 @@ from server.miscite.sources.retraction.match import RetractionMatcher
 
 ProgressCallback = Callable[[str, str | None, float | None], None]
 
+def _text_extract_cache_parts(
+    settings: Settings,
+    *,
+    document_sha256: str | None,
+    path: Path,
+) -> list[str]:
+    # Cache extracted text by document content (sha256) rather than the storage path.
+    # Uploaded files are stored under random UUID filenames, so including the path in the cache key
+    # prevents cache hits for identical re-uploads.
+    parts = [
+        f"backend:{settings.text_extract_backend}",
+        f"subprocess:{int(bool(settings.text_extract_subprocess))}",
+        f"context:{settings.text_extract_process_context}",
+    ]
+    if not (document_sha256 or "").strip():
+        # Without a stable content hash, include the path to avoid collisions.
+        parts.append(str(path))
+    return parts
+
 
 def analyze_document(
     path: Path,
@@ -82,13 +101,14 @@ def analyze_document(
         progress_cb(stage, message, progress)
 
     cache = Cache(settings=settings)
-    doc_scope = f"doc:{document_sha256}" if document_sha256 else f"path:{path.name}"
+    doc_sha = (document_sha256 or "").strip() or None
+    doc_scope = f"doc:{doc_sha}" if doc_sha else f"path:{path.name}"
     doc_cache = cache.scoped(doc_scope)
 
     parser_backend_used = settings.text_extract_backend
     _progress("extract", f"Extracting text from {path.name}", 0.03)
     text: str | None = None
-    text_cache_parts = [settings.text_extract_backend, str(path)]
+    text_cache_parts = _text_extract_cache_parts(settings, document_sha256=doc_sha, path=path)
     if settings.cache_text_ttl_days > 0:
         hit, cached_text = doc_cache.get_text_file(
             "text_extract", text_cache_parts, ttl_days=settings.cache_text_ttl_days
