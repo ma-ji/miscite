@@ -400,13 +400,13 @@ def analyze_document(
 
     issues: list[dict] = []
 
-    new_issues, missing_bib = check_missing_bibliography_refs(
+    new_issues, _missing_bib = check_missing_bibliography_refs(
         citation_to_ref=citation_to_ref,
         progress=(lambda msg, frac: _progress("flags", msg, 0.72 + 0.03 * frac)),
     )
     issues.extend(new_issues)
 
-    new_issues, unresolved_refs, retracted_refs, predatory_matches = check_retractions_and_predatory_venues(
+    new_issues, _unresolved_refs, _retracted_refs, _predatory_matches = check_retractions_and_predatory_venues(
         settings=settings,
         references=references,
         resolved_by_ref_id=resolved_by_ref_id,
@@ -419,7 +419,7 @@ def analyze_document(
     issues.extend(new_issues)
 
     llm_max_calls = int(settings.llm_max_calls)
-    new_issues, potentially_inappropriate, llm_calls, used_llm = check_inappropriate_citations(
+    new_issues, _potentially_inappropriate, llm_calls, used_llm = check_inappropriate_citations(
         settings=settings,
         llm_client=llm_client,
         local_nli=local_nli,
@@ -430,13 +430,34 @@ def analyze_document(
     if used_llm:
         llm_used = True
     issues.extend(new_issues)
+    issue_counts = {
+        "missing_bibliography_refs": 0,
+        "unresolved_references": 0,
+        "retracted_references": 0,
+        "predatory_matches": 0,
+        "potentially_inappropriate": 0,
+    }
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        issue_type = str(issue.get("type") or "")
+        if issue_type == "missing_bibliography_ref":
+            issue_counts["missing_bibliography_refs"] += 1
+        elif issue_type == "unresolved_reference":
+            issue_counts["unresolved_references"] += 1
+        elif issue_type == "retracted_article":
+            issue_counts["retracted_references"] += 1
+        elif issue_type == "predatory_venue_match":
+            issue_counts["predatory_matches"] += 1
+        elif issue_type in {"potentially_inappropriate", "needs_manual_review"}:
+            issue_counts["potentially_inappropriate"] += 1
     summary = {
         "total_citations": len(citations),
-        "missing_bibliography_refs": missing_bib,
-        "unresolved_references": unresolved_refs,
-        "retracted_references": retracted_refs,
-        "predatory_matches": predatory_matches,
-        "potentially_inappropriate": potentially_inappropriate,
+        "missing_bibliography_refs": issue_counts["missing_bibliography_refs"],
+        "unresolved_references": issue_counts["unresolved_references"],
+        "retracted_references": issue_counts["retracted_references"],
+        "predatory_matches": issue_counts["predatory_matches"],
+        "potentially_inappropriate": issue_counts["potentially_inappropriate"],
     }
 
     deep_analysis_report: dict | None = None
