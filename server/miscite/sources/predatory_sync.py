@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from server.miscite.config import Settings
+from server.miscite.core.config import Settings
 
 
 @dataclass(frozen=True)

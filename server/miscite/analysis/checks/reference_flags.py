@@ -1,0 +1,171 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
+from server.miscite.analysis.pipeline.types import ResolvedWork
+from server.miscite.core.config import Settings
+from server.miscite.sources.predatory_api import PredatoryApiClient
+from server.miscite.sources.predatory.match import PredatoryMatcher
+from server.miscite.sources.retraction_api import RetractionApiClient
+from server.miscite.sources.retraction.match import RetractionMatcher
+
+
+def check_missing_bibliography_refs(
+    *,
+    citation_to_ref: list[tuple[CitationInstance, ReferenceEntry | None]],
+    progress: Callable[[str, float], None] | None = None,
+) -> tuple[list[dict], int]:
+    if progress:
+        progress("Checking missing bibliography references", 0.0)
+
+    issues: list[dict] = []
+    missing_bib = 0
+    for cit, ref in citation_to_ref:
+        if ref is not None:
+            continue
+        missing_bib += 1
+        issues.append(
+            {
+                "type": "missing_bibliography_ref",
+                "title": f"In-text citation not found in bibliography: {cit.raw}",
+                "severity": "high",
+                "details": {"citation": cit.__dict__},
+            }
+        )
+
+    if progress:
+        progress("Checked missing bibliography references", 1.0)
+
+    return issues, missing_bib
+
+
+def check_retractions_and_predatory_venues(
+    *,
+    settings: Settings,
+    references: list[ReferenceEntry],
+    resolved_by_ref_id: dict[str, ResolvedWork],
+    retraction_matcher: RetractionMatcher,
+    predatory_matcher: PredatoryMatcher,
+    retraction_api: RetractionApiClient | None,
+    predatory_api: PredatoryApiClient | None,
+    progress: Callable[[str, float], None] | None = None,
+) -> tuple[list[dict], int, int, int]:
+    if progress:
+        progress("Checking retractions and predatory venues", 0.0)
+
+    issues: list[dict] = []
+    unresolved_refs = 0
+    retracted_refs = 0
+    predatory_matches = 0
+
+    total = len(references)
+    step = max(1, total // 10) if total else 1
+
+    pred_csv_enabled = settings.predatory_csv.exists()
+
+    for idx, ref in enumerate(references, start=1):
+        work = resolved_by_ref_id.get(ref.ref_id)
+        if not work:
+            continue
+
+        if (not work.source) or work.confidence < 0.55:
+            unresolved_refs += 1
+            issues.append(
+                {
+                    "type": "unresolved_reference",
+                    "title": f"Bibliography item could not be confidently resolved: {ref.ref_id}",
+                    "severity": "medium",
+                    "details": {
+                        "ref_id": ref.ref_id,
+                        "raw": ref.raw,
+                        "resolution": work.__dict__,
+                    },
+                }
+            )
+
+        retraction_hits: list[dict] = []
+        if work.is_retracted is True:
+            retraction_hits.append(
+                {
+                    "source": work.source or "metadata",
+                    "detail": work.retraction_detail or {},
+                }
+            )
+        if work.doi:
+            if retraction_api:
+                rec = retraction_api.lookup_by_doi(work.doi)
+                if rec:
+                    retraction_hits.append({"source": "retraction_api", "detail": rec})
+            record = retraction_matcher.get_by_doi(work.doi)
+            if record:
+                retraction_hits.append({"source": "retractionwatch_csv", "detail": record.__dict__})
+
+        if retraction_hits:
+            retracted_refs += 1
+            strong_sources = {
+                hit["source"]
+                for hit in retraction_hits
+                if hit["source"] in {"retractionwatch_csv", "retraction_api"}
+            }
+            db_sources = {
+                hit["source"]
+                for hit in retraction_hits
+                if hit["source"] in {"openalex", "crossref", "arxiv"}
+            }
+            high_conf = bool(strong_sources) or len(db_sources) >= 2
+            issues.append(
+                {
+                    "type": "retracted_article",
+                    "title": f"Retracted work cited: {work.doi}",
+                    "severity": "high",
+                    "details": {
+                        "ref_id": ref.ref_id,
+                        "retraction": retraction_hits,
+                        "resolution": work.__dict__,
+                        "review_needed": not high_conf,
+                    },
+                }
+            )
+
+        predatory_hits: list[dict] = []
+        if predatory_api:
+            rec = predatory_api.lookup(journal=work.journal, publisher=work.publisher, issn=work.issn)
+            if rec:
+                predatory_hits.append({"source": "predatory_api", "detail": rec})
+
+        if pred_csv_enabled:
+            match = predatory_matcher.match(journal=work.journal, publisher=work.publisher, issn=work.issn)
+            if match:
+                predatory_hits.append({"source": "predatory_csv", "detail": match.as_dict()})
+
+        if predatory_hits:
+            predatory_matches += 1
+            sources = {hit["source"] for hit in predatory_hits}
+            csv_conf = 0.0
+            for hit in predatory_hits:
+                if hit["source"] == "predatory_csv":
+                    detail = hit.get("detail") or {}
+                    try:
+                        csv_conf = max(csv_conf, float(detail.get("confidence") or 0.0))
+                    except Exception:
+                        pass
+            high_conf = len(sources) >= 2 or csv_conf >= 0.8
+            issues.append(
+                {
+                    "type": "predatory_venue_match",
+                    "title": f"Predatory venue match for {ref.ref_id}",
+                    "severity": "high",
+                    "details": {
+                        "ref_id": ref.ref_id,
+                        "match": predatory_hits,
+                        "resolution": work.__dict__,
+                        "review_needed": not high_conf,
+                    },
+                }
+            )
+
+        if progress and total and (idx == 1 or idx % step == 0 or idx == total):
+            progress(f"Checked {idx}/{total} references", idx / total)
+
+    return issues, unresolved_refs, retracted_refs, predatory_matches

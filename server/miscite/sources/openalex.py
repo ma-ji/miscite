@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import threading
 
 import requests
 
-from server.miscite.cache import Cache
-from server.miscite.analysis.normalize import normalize_doi
+from server.miscite.core.cache import Cache
+from server.miscite.analysis.shared.normalize import normalize_doi
 from server.miscite.sources.http import backoff_sleep
 
 
@@ -28,12 +29,14 @@ def _openalex_work_id_suffix(openalex_id: str) -> str | None:
 class OpenAlexClient:
     timeout_seconds: float = 20.0
     cache: Cache | None = None
-    _session: requests.Session | None = field(default=None, init=False, repr=False)
+    _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
-        if self._session is None:
-            self._session = requests.Session()
-        return self._session
+        session = getattr(self._session_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._session_local.session = session
+        return session
 
     def _ttl_seconds(self, suggested_days: int) -> float:
         cache = self.cache

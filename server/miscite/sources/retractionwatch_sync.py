@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 
-from server.miscite.config import Settings
+from server.miscite.core.config import Settings
 
 
 @dataclass(frozen=True)

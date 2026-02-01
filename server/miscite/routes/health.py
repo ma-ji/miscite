@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import text
 
-from server.miscite.config import Settings
-from server.miscite.db import get_sessionmaker
+from server.miscite.core.config import Settings
+from server.miscite.core.db import get_sessionmaker
 
 router = APIRouter()
 

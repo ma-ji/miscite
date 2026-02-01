@@ -5,7 +5,7 @@ import json
 
 from dotenv import load_dotenv
 
-from server.miscite.config import Settings
+from server.miscite.core.config import Settings
 from server.miscite.sources.predatory_sync import sync_predatory_datasets
 
 

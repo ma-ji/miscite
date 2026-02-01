@@ -17,7 +17,7 @@
     <div class="ds-grid landing-hero-grid">
       <div class="span-7 ds-stack ds-stack--lg landing-hero-copy">
         <div class="landing-reveal" data-delay="1">
-          <p class="eyebrow">Commercial citation intelligence</p>
+          <p class="eyebrow">Domain-informed citation intelligence</p>
           <h1>Audit-ready citation checks for journals, labs, and research teams.</h1>
           <p class="lead">
             miscite scans PDF and DOCX manuscripts, resolves every reference against vetted metadata
@@ -28,11 +28,11 @@
         <div class="landing-reveal" data-delay="2">
           <div class="hero-actions">
             <a class="ds-button ds-button--primary" href="/login">Start a check</a>
-            <a class="ds-button ds-button--secondary" href="#report">View sample report</a>
+            <a class="ds-button ds-button--secondary" href="/reports/dGw8JyOc8KkdWuhu2RtAZ885gd3P61Fh">View sample report</a>
           </div>
           <div class="hero-meta">
             <span class="ds-badge">PDF + DOCX</span>
-            <span class="ds-pill">Verified metadata registries</span>
+            <span class="ds-pill">Verified scholarly registries</span>
             <span class="ds-pill">Retraction & integrity watchlists</span>
             <span class="ds-pill">Est. {{ record_estimate }} scholarly records</span>
           </div>
@@ -84,22 +84,13 @@
               </div>
             </div>
             <dl class="ds-meta">
-              <dt>Coverage</dt>
-              <dd>Reference resolution across multiple metadata registries.</dd>
-              <dt>Checks</dt>
-              <dd>Missing refs, retractions, venue risk signals, context review.</dd>
-              <dt>Report</dt>
+              <dt style="text-align: right;">Record Coverage</dt>
+              <dd>Estimated {{ record_estimate }} scholarly records indexed.</dd>
+              <dt style="text-align: right;">Risk Check</dt>
+              <dd>Missing refs, citing retractions and predatory journals, venue risk signals, context review.</dd>
+              <dt style="text-align: right;">Constructive Report</dt>
               <dd>Summary counts, evidence links, and recommendations.</dd>
             </dl>
-            <div class="ds-chip-row">
-              <span class="ds-chip">Evidence trail</span>
-              <span class="ds-chip">Audit-ready</span>
-              <span class="ds-chip">Export JSON</span>
-            </div>
-          </div>
-          <div class="card-action">
-            <a href="/login">Run a live report</a>
-            <span class="miscite-muted">See the full workflow</span>
           </div>
         </div>
       </div>
@@ -109,7 +100,7 @@
   <section id="features" class="ds-section">
     <div class="section-header landing-reveal">
       <p class="eyebrow">Capabilities</p>
-      <h2>Commercial-grade coverage for every citation.</h2>
+      <h2>Domain-informed coverage for every citation.</h2>
       <p class="lead">
         miscite combines metadata resolution, risk flags, and context-aware checks so your team can
         approve submissions with confidence.

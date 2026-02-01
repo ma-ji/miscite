@@ -5,8 +5,8 @@ import multiprocessing as mp
 
 from dotenv import load_dotenv
 
-from server.miscite.cli import add_runtime_args, apply_runtime_overrides
-from server.miscite.config import Settings
+from server.miscite.core.cli import add_runtime_args, apply_runtime_overrides
+from server.miscite.core.config import Settings
 from server.miscite.worker import run_worker_loop
 
 

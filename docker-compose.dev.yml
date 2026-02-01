@@ -1,0 +1,15 @@
+services:
+  web:
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"
+    environment:
+      MISCITE_RELOAD: "true"
+      MISCITE_LOG_LEVEL: "DEBUG"
+
+  worker:
+    volumes:
+      - ./:/app
+    environment:
+      MISCITE_LOG_LEVEL: "DEBUG"

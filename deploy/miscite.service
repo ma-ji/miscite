@@ -1,0 +1,24 @@
+# Copy to: /etc/systemd/system/miscite.service
+#
+# Then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now miscite
+#
+# Update WorkingDirectory to your repo location (e.g. /opt/miscite).
+[Unit]
+Description=miscite (Docker Compose)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/miscite
+# Default compose files (override to include docker-compose.caddy.yml when needed).
+Environment="COMPOSE_FILES=-f docker-compose.yml"
+ExecStart=/usr/bin/docker compose $COMPOSE_FILES up -d --remove-orphans
+ExecStop=/usr/bin/docker compose $COMPOSE_FILES down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

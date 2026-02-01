@@ -1,0 +1,30 @@
+services:
+  web:
+    build:
+      context: .
+    command: ["python", "-m", "server.main"]
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+    command: ["python", "-m", "server.worker"]
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy

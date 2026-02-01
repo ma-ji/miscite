@@ -5,7 +5,7 @@ import json
 
 from dotenv import load_dotenv
 
-from server.miscite.config import Settings
+from server.miscite.core.config import Settings
 from server.miscite.sources.retractionwatch_sync import sync_retractionwatch_dataset
 
 

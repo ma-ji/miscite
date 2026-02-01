@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import requests
 
-from server.miscite.cache import Cache
+from server.miscite.core.cache import Cache
 from server.miscite.sources.http import backoff_sleep
 
 

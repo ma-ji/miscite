@@ -1,0 +1,5 @@
+# Automatic TLS
+miscite.review {
+  reverse_proxy web:8000
+  encode zstd gzip
+}

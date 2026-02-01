@@ -8,11 +8,11 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from server.miscite.config import Settings
-from server.miscite.db import db_session
-from server.miscite.models import BillingAccount, User
-from server.miscite.rate_limit import enforce_rate_limit
-from server.miscite.security import require_csrf, require_user
+from server.miscite.core.config import Settings
+from server.miscite.core.db import db_session
+from server.miscite.core.models import BillingAccount, User
+from server.miscite.core.rate_limit import enforce_rate_limit
+from server.miscite.core.security import require_csrf, require_user
 from server.miscite.web import template_context, templates
 
 router = APIRouter()
