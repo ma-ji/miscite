@@ -42,7 +42,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `docker-compose.dev.yml`: dev override (bind mount code + reload/log level).
 - `docker-compose.caddy.yml`: optional Caddy reverse proxy (automatic TLS).
 - `docs/`: centralized documentation (start at `docs/README.md`).
-- `deploy/`: deployment assets (`Caddyfile`, `miscite.service`, `monitoring.md`).
+- `deploy/`: deployment assets (`Caddyfile`, `miscite.service` with `COMPOSE_FILES` for compose overrides, `monitoring.md`).
 - `server/main.py`: FastAPI entrypoint.
 - `server/worker.py`: worker process launcher.
 - `server/miscite/worker/`: job loop, progress events, dataset auto-sync.

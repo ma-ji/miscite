@@ -14,6 +14,12 @@ SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
   SUDO="sudo"
 fi
+RUN_USER="${SUDO_USER:-${USER:-$(id -un)}}"
+RUN_GROUP="$(id -gn "$RUN_USER")"
+RUN_AS=()
+if [ "$(id -u)" -eq 0 ] && [ "$RUN_USER" != "root" ]; then
+  RUN_AS=(sudo -u "$RUN_USER")
+fi
 
 echo "==> Installing base packages..."
 $SUDO apt-get update -y
@@ -21,12 +27,13 @@ $SUDO apt-get install -y git curl ufw
 
 if [ ! -d "$APP_DIR/.git" ]; then
   echo "==> Cloning repo to $APP_DIR"
-  $SUDO mkdir -p "$(dirname "$APP_DIR")"
-  $SUDO git clone "$REPO_URL" "$APP_DIR"
-  $SUDO chown -R "$USER":"$USER" "$APP_DIR"
+  $SUDO mkdir -p "$APP_DIR"
+  $SUDO chown -R "$RUN_USER":"$RUN_GROUP" "$APP_DIR"
+  "${RUN_AS[@]}" git clone "$REPO_URL" "$APP_DIR"
 else
   echo "==> Updating repo in $APP_DIR"
-  $SUDO git -C "$APP_DIR" pull --ff-only
+  $SUDO chown -R "$RUN_USER":"$RUN_GROUP" "$APP_DIR"
+  "${RUN_AS[@]}" git -C "$APP_DIR" pull --ff-only
 fi
 
 cd "$APP_DIR"
@@ -41,17 +48,17 @@ fi
 
 echo "==> Ensuring .env exists..."
 if [ ! -f .env ]; then
-  cp .env.example .env
+  "${RUN_AS[@]}" cp .env.example .env
 fi
 
 echo "==> Applying domain to Caddyfile..."
 if grep -q "^miscite.review {" deploy/Caddyfile; then
-  $SUDO sed -i "s/^miscite.review {/${DOMAIN} {/" deploy/Caddyfile
+  "${RUN_AS[@]}" sed -i "s/^miscite.review {/${DOMAIN} {/" deploy/Caddyfile
 fi
 
 echo "==> Checking required secrets..."
 missing=()
-for key in OPENROUTER_API_KEY MISCITE_MAILGUN_API_KEY MISCITE_MAILGUN_DOMAIN MISCITE_MAILGUN_SENDER; do
+for key in OPENROUTER_API_KEY MISCITE_MAILGUN_API_KEY MISCITE_MAILGUN_DOMAIN MISCITE_MAILGUN_SENDER MISCITE_TURNSTILE_SITE_KEY MISCITE_TURNSTILE_SECRET_KEY; do
   val="$(grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true)"
   if [ -z "${val}" ]; then
     missing+=("$key")
@@ -64,7 +71,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 echo "==> Creating data dir..."
-mkdir -p data
+"${RUN_AS[@]}" mkdir -p data
 
 echo "==> Configuring firewall (UFW)..."
 $SUDO ufw allow OpenSSH
@@ -78,7 +85,9 @@ echo "==> Starting services (web + worker + caddy)..."
 echo "==> Installing systemd unit..."
 SERVICE_SRC="deploy/miscite.service"
 SERVICE_TMP="/tmp/miscite.service"
-sed "s|^WorkingDirectory=.*|WorkingDirectory=${APP_DIR}|" "$SERVICE_SRC" > "$SERVICE_TMP"
+sed -e "s|^WorkingDirectory=.*|WorkingDirectory=${APP_DIR}|" \
+  -e "s|^Environment=.*COMPOSE_FILES=.*|Environment=\"COMPOSE_FILES=-f docker-compose.yml -f docker-compose.caddy.yml\"|" \
+  "$SERVICE_SRC" > "$SERVICE_TMP"
 $SUDO mv "$SERVICE_TMP" /etc/systemd/system/miscite.service
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now miscite
