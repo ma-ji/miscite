@@ -56,7 +56,7 @@ def check_inappropriate_citations(
 ) -> tuple[list[dict], int, int, bool]:
     """Run heuristic/NLI/LLM inappropriate-citation checks.
 
-    Returns (issues, potentially_inappropriate_count, llm_calls_used, llm_used).
+    Returns (issues, potential_issue_count, llm_calls_used, llm_used).
     """
 
     if progress:
@@ -175,7 +175,6 @@ def check_inappropriate_citations(
         return [], True
 
     checks: list[tuple[CitationInstance, ReferenceEntry, ResolvedWork]] = []
-    potentially_inappropriate = 0
 
     for cit, ref in citation_to_ref:
         if ref is None:
@@ -186,12 +185,11 @@ def check_inappropriate_citations(
         evidence_text = (work.title or "") + "\n" + (work.abstract or "")
         if token_overlap_score(cit.context, evidence_text) >= 0.06:
             continue
-        potentially_inappropriate += 1
         checks.append((cit, ref, work))
 
     issues: list[dict] = []
     if not checks:
-        return issues, potentially_inappropriate, llm_calls, False
+        return issues, 0, llm_calls, False
 
     total_checks = len(checks)
     step_checks = max(1, total_checks // 10)
@@ -228,4 +226,4 @@ def check_inappropriate_citations(
                     fut.cancel()
                 raise
 
-    return issues, potentially_inappropriate, llm_calls, llm_used
+    return issues, len(issues), llm_calls, llm_used
