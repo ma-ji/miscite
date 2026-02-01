@@ -51,94 +51,162 @@
             </div>
           </div>
         {% else %}
+          {% set token_value = access_token or job.access_token_value %}
+          {% set share_link = token_value and (public_origin ~ "/reports/" ~ token_value) %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
               <h3>Access token</h3>
               <p class="miscite-muted">
-                Tokens are issued when a job starts and emailed to you. They expire after {{ access_token_days }} days.
+                Tokens are issued when the report is ready and emailed to you. Adjust expiration or renew below.
               </p>
               <div class="ds-panel ds-panel--compact ds-mt-4">
-                <div class="ds-panel-body">
-                  {% if access_token %}
-                    <p class="miscite-muted">Copy and share this token. It is shown once.</p>
-                    <div class="ds-input-row">
-                      <div class="form-field">
-                        <label class="form-label" for="access-token-value">Access token</label>
-                        <input
-                          id="access-token-value"
-                          class="miscite-mono"
-                          type="text"
-                          readonly
-                          value="{{ access_token }}"
-                        />
-                      </div>
-                      <button
-                        class="ds-button ds-button--secondary ds-button--sm"
-                        type="button"
-                        data-copy-target="access-token-value"
-                      >
-                        Copy token
-                      </button>
+                <div class="ds-panel-body ds-stack ds-stack--tight">
+                  <div class="ds-input-row">
+                    <div class="form-field">
+                      <label class="form-label" for="access-token-value">Access token</label>
+                      <input
+                        id="access-token-value"
+                        class="miscite-mono"
+                        type="text"
+                        readonly
+                        placeholder="Generate to reveal"
+                        value="{{ token_value or '' }}"
+                      />
                     </div>
-                    <div class="ds-input-row ds-mt-4">
-                      <div class="form-field">
-                        <label class="form-label" for="access-link-value">Share link</label>
-                        <input
-                          id="access-link-value"
-                          class="miscite-mono"
-                          type="text"
-                          readonly
-                          value="{{ public_origin }}/reports/{{ access_token }}"
-                        />
-                      </div>
-                      <button
-                        class="ds-button ds-button--secondary ds-button--sm"
-                        type="button"
-                        data-copy-target="access-link-value"
-                      >
-                        Copy link
-                      </button>
+                    <button
+                      class="ds-button ds-button--secondary ds-button--sm"
+                      type="button"
+                      data-copy-target="access-token-value"
+                      {% if not token_value %}disabled{% endif %}
+                    >
+                      Copy token
+                    </button>
+                  </div>
+                  <div class="ds-input-row">
+                    <div class="form-field">
+                      <label class="form-label" for="access-link-value">Share link</label>
+                      <input
+                        id="access-link-value"
+                        class="miscite-mono"
+                        type="text"
+                        readonly
+                        placeholder="Share link appears here"
+                        value="{{ share_link or '' }}"
+                      />
                     </div>
-                    <p class="form-help">Anyone with this link can view the report until it expires.</p>
-                    {% if job.access_token_expires_at_human %}
-                      <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
-                    {% endif %}
-                  {% elif job.access_token_hint %}
+                    <button
+                      class="ds-button ds-button--secondary ds-button--sm"
+                      type="button"
+                      data-copy-target="access-link-value"
+                      {% if not token_value %}disabled{% endif %}
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                  <p class="form-help">Anyone with this link can view the report until it expires.</p>
+                  {% if token_value %}
                     {% if job.access_token_expired %}
                       <p class="miscite-muted">
-                        Access token expired. Generate a new token to share this report.
+                        Access token expired{% if job.access_token_expires_at_human %} {{ job.access_token_expires_at_human }}{% endif %}.
                       </p>
-                      {% if job.access_token_expires_at_human %}
-                        <p class="miscite-muted">Expired {{ job.access_token_expires_at_human }}.</p>
-                      {% endif %}
-                      <form method="post" action="/jobs/{{ job.id }}/access-token">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <button class="ds-button ds-button--secondary ds-button--sm" type="submit">Generate token</button>
-                      </form>
+                    {% elif job.access_token_expires_at_human %}
+                      <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
                     {% else %}
-                      <p class="miscite-muted">
-                        Active token ending in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
-                      </p>
-                      {% if job.access_token_expires_at_human %}
-                        <p class="miscite-muted">Expires {{ job.access_token_expires_at_human }}.</p>
-                      {% endif %}
-                      <form method="post" action="/jobs/{{ job.id }}/access-token">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <button class="ds-button ds-button--ghost ds-button--sm" type="submit">Rotate token</button>
-                      </form>
+                      <p class="miscite-muted">No expiration set.</p>
                     {% endif %}
                   {% else %}
-                    <p class="miscite-muted">A token will be emailed when the job starts. You can also generate one now.</p>
-                    <form method="post" action="/jobs/{{ job.id }}/access-token">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                      <button class="ds-button ds-button--secondary ds-button--sm" type="submit">
-                        Generate token
-                      </button>
-                    </form>
+                    {% if job.access_token_hint %}
+                      <p class="miscite-muted">
+                        An active token ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>.
+                        Rotate the token to reveal a new value.
+                      </p>
+                    {% else %}
+                      <p class="miscite-muted">
+                        A token will appear here when the report is ready. You can generate one now.
+                      </p>
+                    {% endif %}
                   {% endif %}
+                  {% if access_token_error %}
+                    <div class="ds-alert ds-alert--error ds-mt-3">{{ access_token_error }}</div>
+                  {% endif %}
+                  <form method="post" action="/jobs/{{ job.id }}/access-token" class="ds-stack ds-stack--tight ds-mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <div class="form-field">
+                      <label class="form-label" for="access-token-expiry-mode">Expiration</label>
+                      <select id="access-token-expiry-mode" name="expires_mode">
+                        <option value="current" {% if job.access_token_expires_mode == "current" %}selected{% endif %}>
+                          Keep current
+                        </option>
+                        <option value="default" {% if job.access_token_expires_mode == "default" %}selected{% endif %}>
+                          Default ({{ access_token_days }} days)
+                        </option>
+                        <option value="date" {% if job.access_token_expires_mode == "date" %}selected{% endif %}>
+                          Specific date &amp; time (UTC)
+                        </option>
+                        <option value="never" {% if job.access_token_expires_mode == "never" %}selected{% endif %}>
+                          No expiration
+                        </option>
+                      </select>
+                      <p class="form-help">Choose how long the token should remain valid.</p>
+                    </div>
+                    <div class="form-field">
+                      <label class="form-label" for="access-token-expires-at">Expires at (UTC)</label>
+                      <input
+                        id="access-token-expires-at"
+                        name="expires_at"
+                        type="datetime-local"
+                        value="{{ job.access_token_expires_at_input }}"
+                      />
+                    </div>
+                    <div class="ds-input-row">
+                      <button
+                        class="ds-button ds-button--secondary ds-button--sm"
+                        type="submit"
+                        name="action"
+                        value="update-expiration"
+                      >
+                        Update expiration
+                      </button>
+                      <button
+                        class="ds-button ds-button--ghost ds-button--sm"
+                        type="submit"
+                        name="action"
+                        value="rotate"
+                      >
+                        {% if token_value %}
+                          {% if job.access_token_expired %}
+                            Renew token
+                          {% else %}
+                            Rotate token
+                          {% endif %}
+                        {% else %}
+                          Generate token
+                        {% endif %}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
-	          </div>
+              <div class="ds-panel ds-panel--compact ds-mt-4">
+                <div class="ds-panel-body">
+                  <h4>Delete report</h4>
+                  <p class="miscite-muted">
+                    This permanently deletes the report, events, and uploaded file. This cannot be undone.
+                  </p>
+                  <form
+                    method="post"
+                    action="/jobs/{{ job.id }}/delete"
+                    onsubmit="return confirm('Delete this report and uploaded file? This cannot be undone.');"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button class="ds-button ds-button--secondary ds-button--sm" type="submit">
+                      Delete report
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
         {% endif %}
       </div>
     </div>
@@ -159,12 +227,25 @@
         <div class="card-content">
           <div class="ds-progress-header">
             <h3>Live progress</h3>
-            <span class="ds-pill" id="job-status-pill">{{ job.status }}</span>
+            <div class="ds-progress-actions">
+              <span class="ds-pill" id="job-status-pill">{{ job.status }}</span>
+              {% if not public_view and job.status in ["PENDING", "RUNNING"] %}
+                <button
+                  class="ds-button ds-button--ghost ds-button--sm"
+                  type="button"
+                  id="job-progress-stop"
+                  aria-label="Stop analysis"
+                >
+                  Stop
+                </button>
+              {% endif %}
+            </div>
           </div>
           <div class="ds-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="2">
             <div class="ds-progress-fill" id="job-progress-fill" style="width: 2%"></div>
           </div>
           <p class="miscite-muted ds-mt-3" id="job-progress-text">Waiting for worker...</p>
+          <p class="ds-progress-meta" id="job-progress-meta">Last update (UTC): --</p>
           <ul class="ds-progress-log" id="job-progress-log" aria-live="polite"></ul>
         </div>
       </div>
@@ -652,11 +733,14 @@
       var statusPill = document.getElementById("job-status-pill");
       var progressFill = document.getElementById("job-progress-fill");
       var progressText = document.getElementById("job-progress-text");
+      var progressMeta = document.getElementById("job-progress-meta");
       var progressLog = document.getElementById("job-progress-log");
+      var stopButton = document.getElementById("job-progress-stop");
+      var csrfToken = "{{ csrf_token }}";
 
       var lastEventId = 0;
       var lastProgress = 2;
-      var terminal = { COMPLETED: true, FAILED: true };
+      var terminal = { COMPLETED: true, FAILED: true, CANCELED: true };
 
       var setStatus = function (status) {
         var value = status || "UNKNOWN";
@@ -666,9 +750,46 @@
         if (statusPill) {
           statusPill.textContent = value;
         }
+        if (stopButton) {
+          var canStop = value === "PENDING" || value === "RUNNING";
+          stopButton.disabled = !canStop;
+          stopButton.style.display = canStop ? "" : "none";
+        }
       };
 
-      var setProgress = function (progress, message) {
+      var formatTime = function (iso) {
+        var date = iso ? new Date(iso) : new Date();
+        if (isNaN(date.getTime())) {
+          date = new Date();
+        }
+        var y = date.getUTCFullYear();
+        var m = String(date.getUTCMonth() + 1).padStart(2, "0");
+        var d = String(date.getUTCDate()).padStart(2, "0");
+        var hh = String(date.getUTCHours()).padStart(2, "0");
+        var mm = String(date.getUTCMinutes()).padStart(2, "0");
+        var ss = String(date.getUTCSeconds()).padStart(2, "0");
+        return y + "-" + m + "-" + d + " " + hh + ":" + mm + ":" + ss + " UTC";
+      };
+
+      var formatStage = function (stage) {
+        if (!stage) {
+          return "";
+        }
+        var cleaned = String(stage).replace(/_/g, " ").trim();
+        if (!cleaned) {
+          return "";
+        }
+        return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      };
+
+      var formatPercent = function (progress) {
+        if (typeof progress !== "number") {
+          return "";
+        }
+        return String(Math.round(progress * 100)) + "%";
+      };
+
+      var setProgress = function (progress, message, stage, createdAt) {
         if (typeof progress === "number") {
           var pct = Math.max(2, Math.min(100, Math.round(progress * 100)));
           if (pct >= lastProgress) {
@@ -679,8 +800,23 @@
             }
           }
         }
-        if (message && progressText) {
-          progressText.textContent = message;
+        if (progressText) {
+          var stageLabel = formatStage(stage);
+          var pctLabel = formatPercent(progress);
+          var parts = [];
+          if (stageLabel) {
+            parts.push(stageLabel);
+          }
+          if (message) {
+            parts.push(message);
+          }
+          if (pctLabel) {
+            parts.push(pctLabel);
+          }
+          progressText.textContent = parts.length ? parts.join(" \u2022 ") : "Working...";
+        }
+        if (progressMeta) {
+          progressMeta.textContent = "Last update: " + formatTime(createdAt);
         }
       };
 
@@ -688,12 +824,37 @@
         if (!progressLog || !payload) {
           return;
         }
-        var message = payload.message || payload.stage || "Update";
+        var stageLabel = formatStage(payload.stage);
+        var message = payload.message ? String(payload.message).trim() : "";
+        var detail = "";
+        if (stageLabel && message) {
+          detail = stageLabel + " \u2014 " + message;
+        } else {
+          detail = message || stageLabel || "Update";
+        }
+        var pctLabel = formatPercent(payload.progress);
+        var timeLabel = formatTime(payload.created_at);
         var item = document.createElement("li");
         item.className = "ds-progress-item";
-        item.textContent = message;
+        var time = document.createElement("span");
+        time.className = "ds-progress-time";
+        time.textContent = timeLabel;
+        if (payload.created_at) {
+          time.title = payload.created_at;
+        }
+        var text = document.createElement("span");
+        text.className = "ds-progress-detail";
+        text.textContent = detail;
+        item.appendChild(time);
+        item.appendChild(text);
+        if (pctLabel) {
+          var pct = document.createElement("span");
+          pct.className = "ds-progress-percent";
+          pct.textContent = pctLabel;
+          item.appendChild(pct);
+        }
         progressLog.prepend(item);
-        var maxItems = 8;
+        var maxItems = 10;
         while (progressLog.children.length > maxItems) {
           progressLog.removeChild(progressLog.lastChild);
         }
@@ -701,10 +862,14 @@
 
       var handleDone = function (status) {
         if (status === "FAILED") {
-          setProgress(1.0, "Job failed.");
+          setProgress(1.0, "Job failed.", "failed");
           return;
         }
-        setProgress(1.0, "Analysis complete. Refreshing...");
+        if (status === "CANCELED") {
+          setProgress(1.0, "Job canceled.", "canceled");
+          return;
+        }
+        setProgress(1.0, "Analysis complete. Refreshing...", "complete");
         setTimeout(function () {
           window.location.reload();
         }, 1200);
@@ -717,7 +882,7 @@
         if (payload.id && payload.id > lastEventId) {
           lastEventId = payload.id;
         }
-        setProgress(payload.progress, payload.message || payload.stage);
+        setProgress(payload.progress, payload.message, payload.stage, payload.created_at);
         appendLog(payload);
       };
 
@@ -730,6 +895,52 @@
           handleDone(payload.status);
         }
       };
+
+      var requestCancel = function () {
+        if (!stopButton) {
+          return;
+        }
+        stopButton.disabled = true;
+        stopButton.textContent = "Stopping...";
+        setProgress(lastProgress / 100, "Canceling...", "canceled", new Date().toISOString());
+        fetch("/api/jobs/" + jobId + "/cancel", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+          },
+          credentials: "same-origin",
+          body: "csrf_token=" + encodeURIComponent(csrfToken || ""),
+        })
+          .then(function (resp) {
+            if (!resp.ok) {
+              throw new Error("Cancel request failed");
+            }
+            return resp.json();
+          })
+          .then(function (data) {
+            var status = (data && data.status) || "CANCELED";
+            setStatus(status);
+            if (terminal[status]) {
+              handleDone(status);
+            }
+          })
+          .catch(function () {
+            if (stopButton) {
+              stopButton.disabled = false;
+              stopButton.textContent = "Stop";
+            }
+          });
+      };
+
+      if (stopButton) {
+        stopButton.addEventListener("click", function () {
+          if (!confirm("Stop this analysis?")) {
+            return;
+          }
+          requestCancel();
+        });
+      }
 
       var eventsPath = publicView ? "/api/reports/" + accessToken + "/events" : "/api/jobs/" + jobId + "/events";
       var streamUrl = publicView ? "/api/reports/" + accessToken + "/stream" : "/api/jobs/" + jobId + "/stream";

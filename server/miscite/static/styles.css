@@ -2182,6 +2182,14 @@ input[readonly] {
   gap: var(--space-3);
 }
 
+.ds-progress-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .ds-progress-bar {
   position: relative;
   height: 10px;
@@ -2214,6 +2222,34 @@ input[readonly] {
   background: var(--surface);
   border: 1px solid var(--border-soft);
   font-size: var(--text-14);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.ds-progress-time {
+  font-size: var(--text-12);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-progress-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ds-progress-percent {
+  font-size: var(--text-12);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-progress-meta {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-12);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 900px) {

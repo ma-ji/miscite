@@ -5,8 +5,8 @@ import threading
 
 import requests
 
-from server.miscite.cache import Cache
-from server.miscite.analysis.normalize import normalize_doi
+from server.miscite.core.cache import Cache
+from server.miscite.analysis.shared.normalize import normalize_doi
 from server.miscite.sources.http import backoff_sleep
 
 

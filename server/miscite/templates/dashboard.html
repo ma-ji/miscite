@@ -4,7 +4,7 @@
   {% if latest_job %}
     {% if latest_job.status == "COMPLETED" %}
       {% set upload_state = "completed" %}
-    {% elif latest_job.status == "FAILED" %}
+    {% elif latest_job.status in ["FAILED", "CANCELED"] %}
       {% set upload_state = "failed" %}
     {% elif latest_job.status in ["PENDING", "RUNNING"] %}
       {% set upload_state = "processing" %}
@@ -121,10 +121,14 @@
                   </div>
                   <div class="ds-upload-state-item" data-state="failed">
                     <i class="material-icons" aria-hidden="true">error</i>
-                    <span>
-                      Analysis failed{{ ": " ~ latest_job.error_message if latest_job and latest_job.error_message else "" }}.
-                      Review the error, then retry with a fresh upload.
-                    </span>
+                    {% if latest_job and latest_job.status == "CANCELED" %}
+                      <span>Analysis canceled. Upload again when you're ready.</span>
+                    {% else %}
+                      <span>
+                        Analysis failed{{ ": " ~ latest_job.error_message if latest_job and latest_job.error_message else "" }}.
+                        Review the error, then retry with a fresh upload.
+                      </span>
+                    {% endif %}
                     <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-retry-upload>
                       Retry upload
                     </button>
@@ -326,6 +330,11 @@
                             <i class="material-icons" aria-hidden="true">error</i>
                             Failed
                           </span>
+                        {% elif job.status == "CANCELED" %}
+                          <span class="ds-status ds-status--error" title="Canceled by user.">
+                            <i class="material-icons" aria-hidden="true">block</i>
+                            Canceled
+                          </span>
                         {% else %}
                           <span class="ds-status ds-status--processing">
                             <i class="material-icons" aria-hidden="true">autorenew</i>
@@ -343,6 +352,13 @@
                           {% elif job.status == "FAILED" %}
                             <a class="ds-button ds-button--secondary ds-button--sm" href="/jobs/{{ job.id }}">
                               View error
+                            </a>
+                            <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-retry-upload>
+                              Retry
+                            </button>
+                          {% elif job.status == "CANCELED" %}
+                            <a class="ds-button ds-button--secondary ds-button--sm" href="/jobs/{{ job.id }}">
+                              View details
                             </a>
                             <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-retry-upload>
                               Retry
@@ -423,6 +439,24 @@
           dropzone.addEventListener(eventName, function (event) {
             event.preventDefault();
             dropzone.classList.remove("is-dragover");
+            if (eventName !== "drop") return;
+            if (billingBlocked || maintenanceBlocked) return;
+            if (!fileInput) return;
+            var transfer = event.dataTransfer;
+            var files = transfer && transfer.files ? transfer.files : null;
+            if (!files || files.length === 0) return;
+            if (typeof DataTransfer !== "undefined") {
+              var dt = new DataTransfer();
+              dt.items.add(files[0]);
+              fileInput.files = dt.files;
+            } else {
+              try {
+                fileInput.files = files;
+              } catch (err) {
+                // ignore unsupported file assignment
+              }
+            }
+            fileInput.dispatchEvent(new Event("change", { bubbles: true }));
           });
         });
       }

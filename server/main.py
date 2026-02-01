@@ -11,10 +11,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from server.miscite.cli import add_runtime_args, apply_runtime_overrides
-from server.miscite.config import Settings
-from server.miscite.db import init_db
-from server.miscite.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from server.miscite.core.cli import add_runtime_args, apply_runtime_overrides
+from server.miscite.core.config import Settings
+from server.miscite.core.db import init_db
+from server.miscite.core.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from server.miscite.routes import auth, billing, dashboard, health, seo
 
 

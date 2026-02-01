@@ -8,12 +8,12 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from server.miscite.config import Settings
-from server.miscite.db import db_session
-from server.miscite.email import send_login_code_email
-from server.miscite.models import LoginCode, User
-from server.miscite.rate_limit import enforce_rate_limit
-from server.miscite.security import (
+from server.miscite.core.config import Settings
+from server.miscite.core.db import db_session
+from server.miscite.core.email import send_login_code_email
+from server.miscite.core.models import LoginCode, User
+from server.miscite.core.rate_limit import enforce_rate_limit
+from server.miscite.core.security import (
     clear_csrf_cookie,
     clear_session_cookie,
     create_session,
@@ -26,7 +26,7 @@ from server.miscite.security import (
     set_csrf_cookie,
     set_session_cookie,
 )
-from server.miscite.turnstile import verify_turnstile
+from server.miscite.core.turnstile import verify_turnstile
 from server.miscite.web import template_context, templates
 
 router = APIRouter()

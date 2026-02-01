@@ -291,3 +291,12 @@ THINK HARD: Work on the email delivery system and user system:
 3. Merge the sign in and register buttons elsewhere given the new simplified process. Keep using the color for register.
 4. Generate an access token automatically once a job starts and email it with the related information. Users can use this token to check progress or access the report.
 5. By default, the access token and report are valid for 7 days and then auto-deleted.
+
+====
+
+THINK HARD: Refactor and reorganize the codebase to be more modularized:
+
+1. Scripts related to each major step of the pipeline or function is under one folder. Shared components are also under one folder.
+2. Under each such folder, there is a readme file documenting the details.
+3. Simplify the contents of the main readme file under the root folder, with links to readme files under subfolders that provide more details.
+4. Optimize this strategy if necessary.

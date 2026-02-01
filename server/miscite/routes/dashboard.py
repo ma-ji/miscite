@@ -8,15 +8,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
-from server.miscite.config import Settings
-from server.miscite.db import db_session, get_sessionmaker
-from server.miscite.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
-from server.miscite.rate_limit import acquire_stream_slot, enforce_rate_limit, release_stream_slot
-from server.miscite.security import access_token_hint, generate_access_token, hash_token, require_csrf, require_user
-from server.miscite.storage import save_upload
+from server.miscite.core.config import Settings
+from server.miscite.core.db import db_session, get_sessionmaker
+from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
+from server.miscite.core.rate_limit import acquire_stream_slot, enforce_rate_limit, release_stream_slot
+from server.miscite.core.security import access_token_hint, generate_access_token, hash_token, require_csrf, require_user
+from server.miscite.core.storage import save_upload
 from server.miscite.web import template_context, templates
 
 router = APIRouter()
@@ -48,6 +48,66 @@ def _human_datetime(ts: dt.datetime | None) -> str:
     if ts is None:
         return ""
     return f"{ts.strftime('%b')} {ts.day}, {ts.year} at {ts.strftime('%H:%M')} UTC"
+
+
+def _datetime_local(ts: dt.datetime | None) -> str:
+    ts = _as_utc(ts)
+    if ts is None:
+        return ""
+    return ts.strftime("%Y-%m-%dT%H:%M")
+
+
+def _access_token_expiry_mode(job: AnalysisJob) -> str:
+    if not job.access_token_hash:
+        return "default"
+    if job.access_token_expires_at is None:
+        return "never"
+    expires_at = _as_utc(job.access_token_expires_at)
+    if expires_at and expires_at < dt.datetime.now(dt.UTC):
+        return "default"
+    return "current"
+
+
+def _parse_datetime_local(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def _resolve_token_expiration(
+    settings: Settings,
+    *,
+    mode: str | None,
+    raw_value: str | None,
+    has_token: bool,
+    current_expires_at: dt.datetime | None,
+) -> tuple[dt.datetime | None, str | None]:
+    selection = (mode or "default").strip().lower() or "default"
+    current_expires_at = _as_utc(current_expires_at)
+    if selection == "current" and has_token:
+        if current_expires_at and current_expires_at < dt.datetime.now(dt.UTC):
+            return None, "The current expiration has passed. Choose a new expiration."
+        return current_expires_at, None
+    if selection == "never":
+        return None, None
+    if selection == "date":
+        parsed = _parse_datetime_local(raw_value)
+        if parsed is None:
+            return None, "Enter a valid expiration date and time."
+        if parsed <= dt.datetime.now(dt.UTC):
+            return None, "Expiration must be in the future."
+        return parsed, None
+    expires_at = dt.datetime.now(dt.UTC) + dt.timedelta(days=settings.access_token_days)
+    return expires_at, None
 
 
 def _relative_time(ts: dt.datetime | None) -> str:
@@ -103,12 +163,12 @@ def _load_report(job: AnalysisJob) -> dict | None:
 
 
 def _token_expired(job: AnalysisJob) -> bool:
+    if not job.access_token_hash:
+        return False
     expires_at = _as_utc(job.access_token_expires_at)
-    if job.access_token_hash and expires_at is None:
-        return True
-    if expires_at and expires_at < dt.datetime.now(dt.UTC):
-        return True
-    return False
+    if expires_at is None:
+        return False
+    return expires_at < dt.datetime.now(dt.UTC)
 
 
 def _resolve_access_token(
@@ -132,7 +192,7 @@ def _resolve_access_token(
     job, doc = row
     now = dt.datetime.now(dt.UTC)
     expires_at = _as_utc(job.access_token_expires_at)
-    if expires_at is None or expires_at < now:
+    if expires_at is not None and expires_at < now:
         return None, "That token has expired. Request a new token from the report owner."
     return (job, doc), None
 
@@ -316,7 +376,9 @@ def dashboard(
     if status_filter == "completed":
         stmt = stmt.where(AnalysisJob.status == JobStatus.completed.value)
     elif status_filter == "failed":
-        stmt = stmt.where(AnalysisJob.status == JobStatus.failed.value)
+        stmt = stmt.where(
+            AnalysisJob.status.in_([JobStatus.failed.value, JobStatus.canceled.value])
+        )
     elif status_filter == "processing":
         stmt = stmt.where(AnalysisJob.status.in_([JobStatus.pending.value, JobStatus.running.value]))
 
@@ -473,15 +535,19 @@ def job_page(
                 "filename": doc.original_filename,
                 "error_message": _safe_error_message(settings, job.error_message),
                 "access_token_hint": job.access_token_hint,
+                "access_token_value": job.access_token_value,
                 "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
                 "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
                 if job.access_token_expires_at
                 else None,
+                "access_token_expires_at_input": _datetime_local(job.access_token_expires_at),
+                "access_token_expires_mode": _access_token_expiry_mode(job),
                 "access_token_expired": _token_expired(job),
             },
             report=report,
             data_sources=data_sources,
             methodology_md=methodology_md,
+            access_token=job.access_token_value,
             public_view=False,
             hide_report_access=True,
         ),
@@ -492,6 +558,9 @@ def job_page(
 def job_access_token(
     request: Request,
     job_id: str,
+    action: str = Form("rotate"),
+    expires_mode: str = Form("default"),
+    expires_at: str = Form(""),
     csrf_token: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(db_session),
@@ -518,10 +587,71 @@ def job_access_token(
         raise HTTPException(status_code=404)
     job, doc = row
 
-    token = generate_access_token()
-    job.access_token_hash = hash_token(token)
-    job.access_token_hint = access_token_hint(token)
-    job.access_token_expires_at = dt.datetime.now(dt.UTC) + dt.timedelta(days=settings.access_token_days)
+    action_value = (action or "rotate").strip().lower()
+    if action_value not in {"rotate", "update-expiration"}:
+        action_value = "rotate"
+
+    has_token = bool(job.access_token_hash)
+    if action_value == "update-expiration" and (not has_token or job.access_token_value is None):
+        action_value = "rotate"
+
+    expires_at_value, error = _resolve_token_expiration(
+        settings,
+        mode=expires_mode,
+        raw_value=expires_at,
+        has_token=has_token,
+        current_expires_at=job.access_token_expires_at,
+    )
+
+    if error:
+        report = _load_report(job)
+        data_sources = json.loads(job.sources_json) if job.sources_json else None
+        methodology_md = job.methodology_md or ""
+        if not settings.expose_sensitive_report_fields:
+            data_sources = _redact_sources(data_sources)
+            methodology_md = _redact_methodology(methodology_md)
+        selected_mode = (expires_mode or "default").strip().lower() or "default"
+
+        return templates.TemplateResponse(
+            "job.html",
+            template_context(
+                request,
+                title="Job",
+                job={
+                    "id": job.id,
+                    "status": job.status,
+                    "filename": doc.original_filename,
+                    "error_message": _safe_error_message(settings, job.error_message),
+                    "access_token_hint": job.access_token_hint,
+                    "access_token_value": job.access_token_value,
+                    "access_token_expires_at": job.access_token_expires_at.isoformat()
+                    if job.access_token_expires_at
+                    else None,
+                    "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
+                    if job.access_token_expires_at
+                    else None,
+                    "access_token_expires_at_input": expires_at or _datetime_local(job.access_token_expires_at),
+                    "access_token_expires_mode": selected_mode,
+                    "access_token_expired": _token_expired(job),
+                },
+                report=report,
+                data_sources=data_sources,
+                methodology_md=methodology_md,
+                access_token=job.access_token_value,
+                access_token_error=error,
+                public_view=False,
+                hide_report_access=True,
+            ),
+        )
+
+    token_value = job.access_token_value
+    if action_value == "rotate":
+        token_value = generate_access_token()
+        job.access_token_hash = hash_token(token_value)
+        job.access_token_hint = access_token_hint(token_value)
+        job.access_token_value = token_value
+
+    job.access_token_expires_at = expires_at_value
     db.commit()
 
     report = _load_report(job)
@@ -542,20 +672,117 @@ def job_access_token(
                 "filename": doc.original_filename,
                 "error_message": _safe_error_message(settings, job.error_message),
                 "access_token_hint": job.access_token_hint,
+                "access_token_value": job.access_token_value,
                 "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
                 "access_token_expires_at_human": _human_datetime(job.access_token_expires_at)
                 if job.access_token_expires_at
                 else None,
+                "access_token_expires_at_input": _datetime_local(job.access_token_expires_at),
+                "access_token_expires_mode": _access_token_expiry_mode(job),
                 "access_token_expired": _token_expired(job),
             },
             report=report,
             data_sources=data_sources,
             methodology_md=methodology_md,
-            access_token=token,
+            access_token=token_value or job.access_token_value,
             public_view=False,
             hide_report_access=True,
         ),
     )
+
+
+@router.post("/jobs/{job_id}/delete")
+def job_delete(
+    request: Request,
+    job_id: str,
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-delete",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+
+    row = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404)
+    job, doc = row
+    storage_path = doc.storage_path
+
+    db.execute(delete(AnalysisJobEvent).where(AnalysisJobEvent.job_id == job.id))
+    db.delete(job)
+    db.delete(doc)
+    db.commit()
+
+    try:
+        Path(storage_path).unlink()
+    except OSError:
+        pass
+
+    return RedirectResponse("/dashboard", status_code=303)
+
+
+@router.post("/api/jobs/{job_id}/cancel")
+def job_cancel_api(
+    request: Request,
+    job_id: str,
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-cancel",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+
+    job = db.scalar(
+        select(AnalysisJob).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
+    )
+    if not job:
+        raise HTTPException(status_code=404)
+
+    if job.status in {
+        JobStatus.completed.value,
+        JobStatus.failed.value,
+        JobStatus.canceled.value,
+    }:
+        return {"status": job.status, "message": "Job already finished."}
+
+    job.status = JobStatus.canceled.value
+    job.error_message = "Canceled by user."
+    job.finished_at = dt.datetime.now(dt.UTC)
+    db.add(job)
+    db.add(
+        AnalysisJobEvent(
+            job_id=job.id,
+            stage="canceled",
+            message="Canceled by user.",
+            progress=1.0,
+        )
+    )
+    db.commit()
+    return {"status": job.status}
 
 
 @router.get("/api/jobs/{job_id}")
@@ -615,7 +842,7 @@ def _require_access_job(db: Session, token_hash: str) -> AnalysisJob:
         raise HTTPException(status_code=404)
     now = dt.datetime.now(dt.UTC)
     expires_at = _as_utc(job.access_token_expires_at)
-    if expires_at is None or expires_at < now:
+    if expires_at is not None and expires_at < now:
         raise HTTPException(status_code=403, detail="Access token expired.")
     return job
 
@@ -743,7 +970,11 @@ async def job_stream(
 
     async def event_stream():
         last_id = 0
-        terminal = {JobStatus.completed.value, JobStatus.failed.value}
+        terminal = {
+            JobStatus.completed.value,
+            JobStatus.failed.value,
+            JobStatus.canceled.value,
+        }
         try:
             while True:
                 if await request.is_disconnected():
@@ -808,7 +1039,11 @@ async def report_stream(
 
     async def event_stream():
         last_id = 0
-        terminal = {JobStatus.completed.value, JobStatus.failed.value}
+        terminal = {
+            JobStatus.completed.value,
+            JobStatus.failed.value,
+            JobStatus.canceled.value,
+        }
         try:
             while True:
                 if await request.is_disconnected():

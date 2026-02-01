@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import json_repair
 import requests
 
-from server.miscite.cache import Cache
+from server.miscite.core.cache import Cache
 from server.miscite.sources.http import backoff_sleep
 
 
@@ -80,11 +80,17 @@ class OpenRouterClient:
                     return payload
                 except json.JSONDecodeError as e:
                     snippet = content[:500].replace("\n", "\\n")
-                    raise RuntimeError(f"Model did not return valid JSON. First 500 chars: {snippet}") from e
+                    raise LlmOutputError(
+                        f"Model did not return valid JSON. First 500 chars: {snippet}"
+                    ) from e
             except requests.RequestException as e:
                 last_err = e
                 backoff_sleep(attempt)
         raise RuntimeError("OpenRouter request failed after retries") from last_err
+
+
+class LlmOutputError(RuntimeError):
+    """Raised when LLM output cannot be parsed into the expected JSON object."""
 
 
 def _extract_message_content(data: dict) -> str | None:
@@ -225,12 +231,16 @@ def _load_json_payload(content: str) -> dict:
 
 def _json_loads_flexible(text: str) -> tuple[dict | None, json.JSONDecodeError | None]:
     try:
-        return json.loads(text), None
+        parsed = json.loads(text)
     except json.JSONDecodeError as e:
         try:
-            return json.loads(text, strict=False), None
+            parsed = json.loads(text, strict=False)
         except json.JSONDecodeError as e2:
             return None, e2
+
+    if isinstance(parsed, dict):
+        return parsed, None
+    return None, json.JSONDecodeError("Expected JSON object", text, 0)
 
 
 def _json_candidates(content: str) -> list[str]:

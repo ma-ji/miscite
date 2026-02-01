@@ -1,0 +1,42 @@
+# Deployment
+
+## Docker Compose (recommended)
+
+```bash
+cp .env.example .env
+# edit .env
+mkdir -p data
+docker compose up -d --build
+```
+
+## Reverse proxy
+
+### Caddy (automatic TLS)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+```
+
+Edit `deploy/Caddyfile` to set the domain before starting.
+
+### nginx on host
+
+```bash
+DOMAIN=your.domain bash scripts/install-nginx.sh
+```
+
+Keep `MISCITE_TRUST_PROXY=true` and `MISCITE_COOKIE_SECURE=true` when terminating TLS at
+the proxy.
+
+## systemd (optional)
+
+`deploy/miscite.service` can be installed under `/etc/systemd/system` for auto-start.
+
+## Backups
+
+- `bash scripts/backup-data.sh`: backup `./data` (excludes `./data/cache`).
+- `bash scripts/restore-data.sh ./backups/<file>.tar.gz --force`: restore `./data`.
+
+## Monitoring
+
+See `deploy/monitoring.md` for uptime and log options.

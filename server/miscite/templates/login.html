@@ -41,6 +41,7 @@
                     class="ds-stack"
                     data-disable-on-submit
                     data-loading-text="Sending…"
+                    data-turnstile-form
                   >
                     <div class="form-field">
                       <label class="form-label" for="email">Email</label>
@@ -80,10 +81,20 @@
                           class="cf-turnstile"
                           data-sitekey="{{ turnstile_site_key }}"
                           data-theme="auto"
+                          data-callback="misciteTurnstileReady"
+                          data-expired-callback="misciteTurnstileExpired"
+                          data-error-callback="misciteTurnstileError"
                         ></div>
                       </div>
                     {% endif %}
-                    <button class="ds-button ds-button--primary" type="submit">Email code</button>
+                    <button
+                      class="ds-button ds-button--primary"
+                      type="submit"
+                      data-turnstile-submit
+                      {{ "disabled" if turnstile_site_key else "" }}
+                    >
+                      Email code
+                    </button>
                   </form>
                 </div>
               </details>
@@ -153,6 +164,37 @@
   {% endif %}
   <script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function () {
+      var gateTurnstileButtons = function (enabled) {
+        document.querySelectorAll("[data-turnstile-form]").forEach(function (form) {
+          var button = form.querySelector("[data-turnstile-submit]");
+          if (!button) return;
+          button.disabled = !enabled;
+          button.setAttribute("aria-disabled", enabled ? "false" : "true");
+        });
+      };
+
+      var initTurnstileGate = function () {
+        document.querySelectorAll("[data-turnstile-form]").forEach(function (form) {
+          var widget = form.querySelector(".cf-turnstile");
+          var button = form.querySelector("[data-turnstile-submit]");
+          if (!widget || !button) return;
+          button.disabled = true;
+          button.setAttribute("aria-disabled", "true");
+        });
+      };
+
+      initTurnstileGate();
+
+      window.misciteTurnstileReady = function () {
+        gateTurnstileButtons(true);
+      };
+      window.misciteTurnstileExpired = function () {
+        gateTurnstileButtons(false);
+      };
+      window.misciteTurnstileError = function () {
+        gateTurnstileButtons(false);
+      };
+
       document.querySelectorAll("[data-disable-on-submit]").forEach(function (form) {
         form.addEventListener("submit", function () {
           var button = form.querySelector("button[type='submit']");
