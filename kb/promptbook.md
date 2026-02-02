@@ -300,3 +300,5 @@ THINK HARD: Refactor and reorganize the codebase to be more modularized:
 2. Under each such folder, there is a readme file documenting the details.
 3. Simplify the contents of the main readme file under the root folder, with links to readme files under subfolders that provide more details.
 4. Optimize this strategy if necessary.
+====
+TASK: Fix SyntaxError in server/miscite/routes/dashboard.py caused by malformed f-string in balance_display (seen in docker logs for miscite-web-1).

@@ -444,7 +444,7 @@ def dashboard(
             billing_required=billing_required,
             billing_ready=billing_ready,
             balance_cents=balance_cents,
-            balance_display=f\"${balance_cents / 100:.2f}\",
+            balance_display=f"${balance_cents / 100:.2f}",
             query=q or "",
             status_filter=status_filter,
             sort_choice=sort_choice,

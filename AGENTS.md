@@ -8,7 +8,7 @@ Repository guide for future assistants working on **miscite**.
 - This project is in active development; do not preserve backward compatibility or add fallbacks unless explicitly requested.
 - When adding or refactoring steps, split data prep from matching/analysis into separate modules or folders when appropriate (e.g., `sources/*/data.py` + `sources/*/match.py`, and thin orchestrators under `analysis/pipeline/` / `analysis/deep_analysis/`).
 - Keep documentation centralized under `docs/` (avoid adding many small per-folder `README.md` files unless there's a strong reason).
-- Log major agent prompts in `kb/promptbook.md`.
+- **Record major agent interactions in `kb/promptbook.md`:** when an agent prompt leads to non-trivial code/architecture changes, new workflows, or changed assumptions, append an entry with **date**, **goal**, **prompt (or summary)**, **files touched**, and **decision/rationale**. Skip trivial Q&A and typo fixes.
 
 ## Product summary
 
