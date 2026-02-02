@@ -38,10 +38,10 @@ def _success_message(raw: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _format_cents_plain(cents: int) -> str:
+def _format_currency(cents: int) -> str:
     sign = "-" if cents < 0 else ""
     value = abs(int(cents)) / 100.0
-    return f"{sign}{value:.2f}"
+    return f"{sign}${value:.2f}"
 
 
 def _format_amount(cents: int) -> str:
@@ -130,7 +130,7 @@ def _load_billing_context(
             "amount_cents": txn.amount_cents,
             "amount_display": _format_amount(txn.amount_cents),
             "balance_after_cents": txn.balance_after_cents,
-            "balance_after_display": f"${_format_cents_plain(txn.balance_after_cents)}",
+            "balance_after_display": _format_currency(txn.balance_after_cents),
             "created_at": txn.created_at.isoformat(),
             "created_at_human": _human_datetime(txn.created_at),
         }
@@ -140,16 +140,16 @@ def _load_billing_context(
     return {
         "billing_enabled": settings.billing_enabled,
         "balance_cents": balance_cents,
-        "balance_display": f"${_format_cents_plain(balance_cents)}",
+        "balance_display": _format_currency(balance_cents),
         "currency": currency,
         "min_charge_cents": settings.billing_min_charge_cents,
-        "min_charge_display": f"${_format_cents_plain(settings.billing_min_charge_cents)}",
+        "min_charge_display": _format_currency(settings.billing_min_charge_cents),
         "auto_charge_enabled": auto_charge_enabled,
         "auto_charge_threshold_cents": auto_charge_threshold_cents,
-        "auto_charge_threshold_display": f"${_format_cents_plain(auto_charge_threshold_cents)}",
+        "auto_charge_threshold_display": _format_currency(auto_charge_threshold_cents),
         "auto_charge_threshold_value": f"{auto_charge_threshold_cents / 100:.2f}",
         "auto_charge_amount_cents": auto_charge_amount_cents,
-        "auto_charge_amount_display": f"${_format_cents_plain(auto_charge_amount_cents)}",
+        "auto_charge_amount_display": _format_currency(auto_charge_amount_cents),
         "auto_charge_amount_value": f"{auto_charge_amount_cents / 100:.2f}",
         "auto_charge_last_error": account.auto_charge_last_error if account else None,
         "can_open_portal": bool(settings.stripe_secret_key),
@@ -260,7 +260,7 @@ def billing_topup(
             ),
         )
     if amount_cents is None or amount_cents < settings.billing_min_charge_cents:
-        error = f"Minimum top-up is ${_format_cents_plain(settings.billing_min_charge_cents)}."
+        error = f"Minimum top-up is {_format_currency(settings.billing_min_charge_cents)}."
         return templates.TemplateResponse(
             "billing.html",
             template_context(
@@ -344,7 +344,7 @@ def billing_auto_charge(
     resolved_threshold_cents = threshold_cents or settings.billing_auto_charge_default_threshold_cents
     resolved_amount_cents = amount_cents or settings.billing_auto_charge_default_amount_cents
     if resolved_amount_cents < settings.billing_min_charge_cents:
-        error = f"Auto-charge amount must be at least ${_format_cents_plain(settings.billing_min_charge_cents)}."
+        error = f"Auto-charge amount must be at least {_format_currency(settings.billing_min_charge_cents)}."
         return templates.TemplateResponse(
             "billing.html",
             template_context(

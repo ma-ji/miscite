@@ -346,3 +346,9 @@ Goal: Make pay-as-you-go the primary billing path and fix confusing auto-charge 
 Prompt: List pay-as-you-go option first; after clicking "save auto-charge", nothing changed.
 Files touched: server/miscite/routes/billing.py, server/miscite/templates/billing.html, server/miscite/templates/dashboard.html, kb/promptbook.md
 Decision/rationale: Reframe the billing checklist around pay-as-you-go first (with a primary CTA), adjust banner copy to match, and ensure auto-charge threshold/amount edits persist with accurate success messages for enable/disable/save flows.
+
+2026-02-02
+Goal: Refresh the Billing balance and usage UI for clearer hierarchy, payment-grade trust, and better validation feedback.
+Prompt: Improve the Billing -> Balance & usage page layout, copy, states, and accessibility without changing billing logic.
+Files touched: server/miscite/templates/billing.html, server/miscite/static/styles.css, server/miscite/routes/billing.py, server/miscite/routes/test_billing_formatting.py, kb/promptbook.md
+Decision/rationale: Replace the redundant billing setup block with a contextual payment-method stepper, build a two-column layout with prominent balance/actions, add presets and inline validation/disabled states with loading feedback, improve activity formatting and mobile responsiveness, and fix currency display for negative balances.
