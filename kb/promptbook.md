@@ -340,3 +340,9 @@ Goal: Improve billing/auto-charge UX clarity.
 Prompt: Improve the UI/UX to make it easy and simple to follow.
 Files touched: server/miscite/routes/billing.py, server/miscite/templates/billing.html, server/miscite/templates/dashboard.html, kb/promptbook.md
 Decision/rationale: Add a clear on-page auto-charge setup checklist, surface missing Stripe/webhook prerequisites, and disable top-up actions when billing is not fully configured to reduce user confusion.
+
+2026-02-02
+Goal: Make pay-as-you-go the primary billing path and fix confusing auto-charge saves.
+Prompt: List pay-as-you-go option first; after clicking "save auto-charge", nothing changed.
+Files touched: server/miscite/routes/billing.py, server/miscite/templates/billing.html, server/miscite/templates/dashboard.html, kb/promptbook.md
+Decision/rationale: Reframe the billing checklist around pay-as-you-go first (with a primary CTA), adjust banner copy to match, and ensure auto-charge threshold/amount edits persist with accurate success messages for enable/disable/save flows.

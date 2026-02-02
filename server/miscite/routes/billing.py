@@ -23,6 +23,21 @@ from server.miscite.web import template_context, templates
 router = APIRouter()
 
 
+def _success_message(raw: str | None) -> tuple[str | None, str | None]:
+    key = (raw or "").strip().lower()
+    if not key:
+        return None, None
+    if key in {"auto_charge_enabled", "auto-charge-enabled"}:
+        return "Auto-charge enabled.", "auto_charge"
+    if key in {"auto_charge_disabled", "auto-charge-disabled"}:
+        return "Auto-charge turned off.", "auto_charge"
+    if key in {"auto_charge_saved_off", "auto-charge-saved-off"}:
+        return "Saved auto-charge settings (auto-charge is off).", "auto_charge"
+    if key in {"auto_charge_saved", "auto-charge-saved"}:
+        return "Saved auto-charge settings.", "auto_charge"
+    return None, None
+
+
 def _format_cents_plain(cents: int) -> str:
     sign = "-" if cents < 0 else ""
     value = abs(int(cents)) / 100.0
@@ -153,18 +168,21 @@ def _load_billing_context(
 @router.get("/billing")
 def billing_page(
     request: Request,
+    success: str = "",
     user: User = Depends(require_user),
     db: Session = Depends(db_session),
 ):
     request.state.user = user
     settings: Settings = request.app.state.settings
 
+    success_message, success_scope = _success_message(success)
     return templates.TemplateResponse(
         "billing.html",
         template_context(
             request,
             title="Billing",
-            **_load_billing_context(request, user=user, db=db, settings=settings),
+            **_load_billing_context(request, user=user, db=db, settings=settings, success=success_message),
+            auto_charge_success=success_message if success_scope == "auto_charge" else None,
         ),
     )
 
@@ -306,7 +324,43 @@ def billing_auto_charge(
 
     account = get_or_create_account(db, user_id=user.id, currency=settings.billing_currency)
 
+    was_enabled = bool(account.auto_charge_enabled)
     enable = (enabled or "").strip().lower() in {"true", "1", "yes", "on"}
+
+    threshold_cents, threshold_err = _parse_amount_to_cents(threshold)
+    amount_cents, amount_err = _parse_amount_to_cents(amount)
+    if threshold_err or amount_err:
+        error = threshold_err or amount_err or "Enter valid auto-charge values."
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                auto_charge_error=error,
+            ),
+        )
+
+    resolved_threshold_cents = threshold_cents or settings.billing_auto_charge_default_threshold_cents
+    resolved_amount_cents = amount_cents or settings.billing_auto_charge_default_amount_cents
+    if resolved_amount_cents < settings.billing_min_charge_cents:
+        error = f"Auto-charge amount must be at least ${_format_cents_plain(settings.billing_min_charge_cents)}."
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                auto_charge_error=error,
+            ),
+        )
+
+    account.auto_charge_threshold_cents = int(resolved_threshold_cents)
+    account.auto_charge_amount_cents = int(resolved_amount_cents)
+    account.updated_at = dt.datetime.now(dt.UTC)
+    db.add(account)
+    db.commit()
+
     if not enable:
         account.auto_charge_enabled = False
         account.auto_charge_last_error = None
@@ -317,7 +371,8 @@ def billing_auto_charge(
         account.auto_charge_in_flight_payment_intent_id = None
         account.updated_at = dt.datetime.now(dt.UTC)
         db.commit()
-        return RedirectResponse("/billing", status_code=303)
+        success = "auto_charge_disabled" if was_enabled else "auto_charge_saved_off"
+        return RedirectResponse(f"/billing?success={success}#auto-charge", status_code=303)
 
     if not settings.stripe_secret_key:
         error = "Stripe is not configured in this environment."
@@ -327,6 +382,7 @@ def billing_auto_charge(
                 request,
                 title="Billing",
                 **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                auto_charge_error=error,
             ),
         )
     if not settings.stripe_webhook_secret:
@@ -337,8 +393,16 @@ def billing_auto_charge(
                 request,
                 title="Billing",
                 **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                auto_charge_error=error,
             ),
         )
+
+    if was_enabled:
+        account.auto_charge_enabled = True
+        account.auto_charge_last_error = None
+        account.updated_at = dt.datetime.now(dt.UTC)
+        db.commit()
+        return RedirectResponse("/billing?success=auto_charge_saved#auto-charge", status_code=303)
 
     if not account.stripe_customer_id:
         try:
@@ -354,10 +418,15 @@ def billing_auto_charge(
                     request,
                     title="Billing",
                     **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                    auto_charge_error=error,
                 ),
             )
 
-    if not auto_charge_payment_method_available(settings=settings, customer_id=account.stripe_customer_id):
+    if not auto_charge_payment_method_available(
+        settings=settings,
+        customer_id=account.stripe_customer_id,
+        cache=Cache(settings=settings),
+    ):
         error = "Add a payment method (complete a top-up or use the portal) before enabling auto-charge."
         return templates.TemplateResponse(
             "billing.html",
@@ -365,40 +434,16 @@ def billing_auto_charge(
                 request,
                 title="Billing",
                 **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
-            ),
-        )
-
-    threshold_cents, threshold_err = _parse_amount_to_cents(threshold)
-    amount_cents, amount_err = _parse_amount_to_cents(amount)
-    if threshold_err or amount_err:
-        error = threshold_err or amount_err or "Enter valid auto-charge values."
-        return templates.TemplateResponse(
-            "billing.html",
-            template_context(
-                request,
-                title="Billing",
-                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
-            ),
-        )
-
-    if amount_cents is None or amount_cents < settings.billing_min_charge_cents:
-        error = f"Auto-charge amount must be at least ${_format_cents_plain(settings.billing_min_charge_cents)}."
-        return templates.TemplateResponse(
-            "billing.html",
-            template_context(
-                request,
-                title="Billing",
-                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                auto_charge_error=error,
             ),
         )
 
     account.auto_charge_enabled = True
-    account.auto_charge_threshold_cents = threshold_cents or settings.billing_auto_charge_default_threshold_cents
-    account.auto_charge_amount_cents = amount_cents or settings.billing_auto_charge_default_amount_cents
     account.auto_charge_last_error = None
     account.updated_at = dt.datetime.now(dt.UTC)
     db.commit()
-    return RedirectResponse("/billing", status_code=303)
+    success = "auto_charge_saved" if was_enabled else "auto_charge_enabled"
+    return RedirectResponse(f"/billing?success={success}#auto-charge", status_code=303)
 
 
 @router.post("/billing/portal")
