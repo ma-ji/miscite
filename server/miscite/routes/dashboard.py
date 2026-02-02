@@ -12,6 +12,8 @@ from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
 from server.miscite.billing.ledger import get_or_create_account
+from server.miscite.billing.stripe import auto_charge_payment_method_available
+from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import db_session, get_sessionmaker
 from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
@@ -28,9 +30,14 @@ def _billing_ready(settings: Settings, account: BillingAccount | None) -> bool:
         return True
     if account is None:
         return False
-    if account.auto_charge_enabled and account.stripe_customer_id:
+    if int(account.balance_cents or 0) >= int(settings.billing_min_balance_cents):
         return True
-    return int(account.balance_cents or 0) >= int(settings.billing_min_balance_cents)
+    if not (account.auto_charge_enabled and account.stripe_customer_id):
+        return False
+    if not (settings.stripe_secret_key and settings.stripe_webhook_secret):
+        return False
+    cache = Cache(settings=settings)
+    return auto_charge_payment_method_available(settings=settings, customer_id=account.stripe_customer_id, cache=cache)
 
 
 def _as_utc(ts: dt.datetime | None) -> dt.datetime | None:

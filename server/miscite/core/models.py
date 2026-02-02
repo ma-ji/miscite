@@ -135,6 +135,11 @@ class BillingAccount(Base):
     auto_charge_threshold_cents: Mapped[int] = mapped_column(Integer, default=0)
     auto_charge_amount_cents: Mapped[int] = mapped_column(Integer, default=0)
     auto_charge_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    auto_charge_in_flight: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_charge_in_flight_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_charge_in_flight_amount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    auto_charge_in_flight_idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    auto_charge_in_flight_payment_intent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
 
     user: Mapped["User"] = relationship(back_populates="billing")
@@ -152,8 +157,8 @@ class BillingTransaction(Base):
     currency: Mapped[str] = mapped_column(String(8), default="usd")
     balance_after_cents: Mapped[int] = mapped_column(Integer)
 
-    stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
+    stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC), index=True)

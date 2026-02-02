@@ -186,6 +186,7 @@ class Settings:
     billing_min_balance_cents: int
     billing_auto_charge_default_threshold_cents: int
     billing_auto_charge_default_amount_cents: int
+    billing_auto_charge_in_flight_ttl_seconds: int
     stripe_secret_key: str
     stripe_webhook_secret: str
     stripe_success_url: str
@@ -374,6 +375,9 @@ class Settings:
         billing_auto_charge_default_amount_cents = _env_int(
             "MISCITE_BILLING_AUTO_CHARGE_AMOUNT_CENTS", 2000, min_value=0, max_value=1_000_000
         )
+        billing_auto_charge_in_flight_ttl_seconds = _env_int(
+            "MISCITE_BILLING_AUTO_CHARGE_IN_FLIGHT_TTL_SECONDS", 1800, min_value=30, max_value=86_400
+        )
         stripe_secret_key = _env_str("STRIPE_SECRET_KEY", "")
         stripe_webhook_secret = _env_str("STRIPE_WEBHOOK_SECRET", "")
         stripe_success_url = _env_str("STRIPE_SUCCESS_URL", "http://localhost:8000/billing/success")
@@ -518,6 +522,7 @@ class Settings:
             billing_min_balance_cents=billing_min_balance_cents,
             billing_auto_charge_default_threshold_cents=billing_auto_charge_default_threshold_cents,
             billing_auto_charge_default_amount_cents=billing_auto_charge_default_amount_cents,
+            billing_auto_charge_in_flight_ttl_seconds=billing_auto_charge_in_flight_ttl_seconds,
             stripe_secret_key=stripe_secret_key,
             stripe_webhook_secret=stripe_webhook_secret,
             stripe_success_url=stripe_success_url,

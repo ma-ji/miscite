@@ -7,10 +7,11 @@ import stripe
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from server.miscite.billing.ledger import credit_balance, get_or_create_account
-from server.miscite.billing.stripe import create_topup_checkout, ensure_customer
+from server.miscite.billing.stripe import auto_charge_payment_method_available, create_topup_checkout, ensure_customer
 from server.miscite.core.config import Settings
 from server.miscite.core.db import db_session
 from server.miscite.core.models import BillingAccount, BillingTransaction, User
@@ -170,6 +171,8 @@ def billing_topup(
         raise HTTPException(status_code=503, detail=settings.maintenance_message)
     if not settings.stripe_secret_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
+    if not settings.stripe_webhook_secret:
+        raise HTTPException(status_code=500, detail="Stripe webhook not configured")
 
     amount_cents, error = _parse_amount_to_cents(amount)
     if error:
@@ -233,12 +236,50 @@ def billing_auto_charge(
     enable = (enabled or "").strip().lower() in {"true", "1", "yes", "on"}
     if not enable:
         account.auto_charge_enabled = False
+        account.auto_charge_last_error = None
+        account.auto_charge_in_flight = False
+        account.auto_charge_in_flight_at = None
+        account.auto_charge_in_flight_amount_cents = 0
+        account.auto_charge_in_flight_idempotency_key = None
+        account.auto_charge_in_flight_payment_intent_id = None
         account.updated_at = dt.datetime.now(dt.UTC)
         db.commit()
         return RedirectResponse("/billing", status_code=303)
 
+    if not settings.stripe_secret_key:
+        error = "Stripe is not configured in this environment."
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+            ),
+        )
+    if not settings.stripe_webhook_secret:
+        error = "Stripe webhook is not configured in this environment."
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+            ),
+        )
+
     if not account.stripe_customer_id:
         error = "Add a payment method by completing a top-up before enabling auto-charge."
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+            ),
+        )
+
+    if not auto_charge_payment_method_available(settings=settings, customer_id=account.stripe_customer_id):
+        error = "Add a payment method (complete a top-up or use the portal) before enabling auto-charge."
         return templates.TemplateResponse(
             "billing.html",
             template_context(
@@ -404,7 +445,11 @@ async def billing_webhook(request: Request, db: Session = Depends(db_session)):
         )
         account.auto_charge_last_error = None
         db.add(account)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return {"received": True}
 
         if customer_id and payment_intent_id:
             try:
@@ -448,8 +493,17 @@ async def billing_webhook(request: Request, db: Session = Depends(db_session)):
             stripe_payment_intent_id=payment_intent_id,
         )
         account.auto_charge_last_error = None
+        account.auto_charge_in_flight = False
+        account.auto_charge_in_flight_at = None
+        account.auto_charge_in_flight_amount_cents = 0
+        account.auto_charge_in_flight_idempotency_key = None
+        account.auto_charge_in_flight_payment_intent_id = None
         db.add(account)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return {"received": True}
 
     elif event_type == "payment_intent.payment_failed":
         metadata = obj.get("metadata") or {}
@@ -463,6 +517,11 @@ async def billing_webhook(request: Request, db: Session = Depends(db_session)):
             return {"received": True}
         error = (obj.get("last_payment_error") or {}).get("message") or "Auto-charge failed."
         account.auto_charge_last_error = str(error)
+        account.auto_charge_in_flight = False
+        account.auto_charge_in_flight_at = None
+        account.auto_charge_in_flight_amount_cents = 0
+        account.auto_charge_in_flight_idempotency_key = None
+        account.auto_charge_in_flight_payment_intent_id = None
         db.add(account)
         db.commit()
 

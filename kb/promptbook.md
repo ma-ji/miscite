@@ -328,3 +328,9 @@ Goal: Avoid worker crashes on OpenRouter provider errors during match disambigua
 Prompt: Traceback showed OpenRouter error response "Provider returned error" bubbling from resolve LLM matching.
 Files touched: server/miscite/llm/openrouter.py, server/miscite/analysis/pipeline/resolve.py, kb/promptbook.md
 Decision/rationale: Treat provider errors as retryable when possible, and skip LLM disambiguation on failure so optional matching does not abort the job.
+
+2026-02-02
+Goal: Make Stripe auto-charge workflow robust and idempotent.
+Prompt: Double check the auto-charge function and confirm the end-to-end workflow works correctly.
+Files touched: server/miscite/worker/__init__.py, server/miscite/billing/stripe.py, server/miscite/routes/billing.py, server/miscite/routes/dashboard.py, server/miscite/core/models.py, server/miscite/core/config.py, server/miscite/templates/billing.html, .env.example, docs/DEVELOPMENT.md, kb/promptbook.md
+Decision/rationale: Add an in-flight auto-charge lock (plus Stripe idempotency keys) to prevent duplicate charges under concurrency, require webhook configuration for top-ups/auto-charge, verify a saved payment method exists before treating auto-charge as “ready”, clear in-flight state on webhook success/failure, and enforce uniqueness for Stripe IDs on billing transactions to prevent double-credits.

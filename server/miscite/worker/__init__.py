@@ -4,6 +4,7 @@ import datetime as dt
 import json
 import logging
 import time
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -297,7 +298,7 @@ def _record_progress(
 
 
 def _maybe_auto_charge(settings: Settings, *, user_id: str) -> None:
-    if not settings.billing_enabled or not settings.stripe_secret_key:
+    if not settings.billing_enabled:
         return
     SessionLocal = get_sessionmaker(settings)
     db = SessionLocal()
@@ -311,8 +312,18 @@ def _maybe_auto_charge(settings: Settings, *, user_id: str) -> None:
             account.auto_charge_last_error = "No Stripe customer on file for auto-charge."
             db.commit()
             return
+        if not settings.stripe_secret_key:
+            account.auto_charge_last_error = "Stripe is not configured for auto-charge."
+            db.commit()
+            return
+        if not settings.stripe_webhook_secret:
+            account.auto_charge_last_error = "Stripe webhook is not configured; cannot credit auto-charges."
+            db.commit()
+            return
 
         threshold = account.auto_charge_threshold_cents or settings.billing_auto_charge_default_threshold_cents
+        if threshold < 0:
+            threshold = 0
         amount = account.auto_charge_amount_cents or settings.billing_auto_charge_default_amount_cents
         if amount < settings.billing_min_charge_cents:
             amount = settings.billing_min_charge_cents
@@ -321,13 +332,80 @@ def _maybe_auto_charge(settings: Settings, *, user_id: str) -> None:
         if account.balance_cents >= threshold:
             return
 
-        try:
-            create_auto_charge_payment_intent(settings=settings, account=account, amount_cents=amount)
-            account.auto_charge_last_error = None
-        except Exception as e:
-            account.auto_charge_last_error = str(e)
-        db.add(account)
+        now = dt.datetime.now(dt.UTC)
+        cutoff = now - dt.timedelta(seconds=settings.billing_auto_charge_in_flight_ttl_seconds)
+
+        if account.auto_charge_in_flight and account.auto_charge_in_flight_at:
+            in_flight_at = _as_utc(account.auto_charge_in_flight_at)
+            if in_flight_at and in_flight_at >= cutoff:
+                return
+
+        in_flight_amount_cents = int(account.auto_charge_in_flight_amount_cents or 0) if account.auto_charge_in_flight else 0
+        if in_flight_amount_cents <= 0:
+            in_flight_amount_cents = amount
+
+        idempotency_key = account.auto_charge_in_flight_idempotency_key if account.auto_charge_in_flight else None
+        if not idempotency_key:
+            idempotency_key = uuid.uuid4().hex
+
+        result = db.execute(
+            update(BillingAccount)
+            .where(
+                BillingAccount.id == account.id,
+                (
+                    (BillingAccount.auto_charge_in_flight.is_(False))
+                    | (BillingAccount.auto_charge_in_flight_at.is_(None))
+                    | (BillingAccount.auto_charge_in_flight_at < cutoff)
+                ),
+            )
+            .values(
+                auto_charge_in_flight=True,
+                auto_charge_in_flight_at=now,
+                auto_charge_in_flight_amount_cents=int(in_flight_amount_cents),
+                auto_charge_in_flight_idempotency_key=idempotency_key,
+                auto_charge_in_flight_payment_intent_id=None,
+                auto_charge_last_error=None,
+                updated_at=now,
+            )
+        )
+        if result.rowcount != 1:
+            db.rollback()
+            return
         db.commit()
+
+        try:
+            intent = create_auto_charge_payment_intent(
+                settings=settings,
+                account=account,
+                amount_cents=int(in_flight_amount_cents),
+                idempotency_key=idempotency_key,
+            )
+            intent_id = intent.get("id") if hasattr(intent, "get") else getattr(intent, "id", None)
+            db.execute(
+                update(BillingAccount)
+                .where(BillingAccount.id == account.id)
+                .values(
+                    auto_charge_in_flight_payment_intent_id=intent_id,
+                    auto_charge_last_error=None,
+                    updated_at=dt.datetime.now(dt.UTC),
+                )
+            )
+            db.commit()
+        except Exception as e:
+            db.execute(
+                update(BillingAccount)
+                .where(BillingAccount.id == account.id)
+                .values(
+                    auto_charge_last_error=str(e),
+                    auto_charge_in_flight=False,
+                    auto_charge_in_flight_at=None,
+                    auto_charge_in_flight_amount_cents=0,
+                    auto_charge_in_flight_idempotency_key=None,
+                    auto_charge_in_flight_payment_intent_id=None,
+                    updated_at=dt.datetime.now(dt.UTC),
+                )
+            )
+            db.commit()
     except Exception:
         db.rollback()
     finally:
