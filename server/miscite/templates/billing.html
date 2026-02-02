@@ -1,10 +1,53 @@
 {% extends "base.html" %}
 {% block content %}
-  <section class="ds-section ds-section--hero billing-hero">
-    <div class="section-header">
-      <p class="eyebrow">Billing</p>
-      <h1>Balance & usage</h1>
-      <p class="lead">Prepaid credits for citation checks. Add funds anytime and optionally enable auto-charge.</p>
+  <section class="ds-section ds-section--hero">
+    <div class="ds-grid">
+      <div class="span-7">
+        <div class="section-header">
+          <p class="eyebrow">Billing</p>
+          <h1>Balance & usage</h1>
+          <p class="lead">Prepaid credits for citation checks. Add funds anytime and optionally enable auto-charge.</p>
+        </div>
+      </div>
+      <div class="span-5">
+        <div class="ds-panel ds-panel--compact">
+          <div class="ds-panel-header">
+            <div>
+              <p class="eyebrow">Balance</p>
+              <h3>Credits available</h3>
+            </div>
+            <span class="ds-badge ds-badge--neutral">{{ balance_display }}</span>
+          </div>
+          <div class="ds-panel-body">
+            <div class="ds-stat-grid ds-stat-grid--compact">
+              <div class="ds-stat">
+                <div class="ds-stat-value ds-stat-value--label">{{ "On" if auto_charge_enabled else "Off" }}</div>
+                <div class="ds-stat-label">Auto-charge</div>
+              </div>
+              <div class="ds-stat">
+                <div class="ds-stat-value ds-stat-value--label">{{ auto_charge_threshold_display }}</div>
+                <div class="ds-stat-label">Trigger balance</div>
+              </div>
+            </div>
+            <div class="ds-panel-meta">
+              <span class="ds-badge">Recharge {{ auto_charge_amount_display }}</span>
+              {% if auto_charge_enabled %}
+                <span class="miscite-muted">Applies after a billed check.</span>
+              {% else %}
+                <span class="miscite-muted">Enable in Auto-charge settings.</span>
+              {% endif %}
+            </div>
+            {% if can_open_portal %}
+              <div class="ds-table-actions">
+                <form method="post" action="/billing/portal">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button class="ds-button ds-button--secondary ds-button--sm" type="submit">Manage payment method</button>
+                </form>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -21,78 +64,64 @@
       </section>
     {% endif %}
     {% if billing_success and not auto_charge_success %}
-      <div class="ds-toast ds-toast--success is-visible" role="status" aria-live="polite" data-toast>
-        <span>{{ billing_success }}</span>
-        <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-toast-close>Dismiss</button>
-      </div>
+      <section class="ds-section ds-section--banner">
+        <div class="ds-alert ds-alert--success" role="status" aria-live="polite">{{ billing_success }}</div>
+      </section>
     {% endif %}
     {% if auto_charge_success %}
-      <div class="ds-toast ds-toast--success is-visible" role="status" aria-live="polite" data-toast>
-        <span>{{ auto_charge_success }}</span>
-        <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-toast-close>Dismiss</button>
-      </div>
+      <section class="ds-section ds-section--banner">
+        <div class="ds-alert ds-alert--success" role="status" aria-live="polite">{{ auto_charge_success }}</div>
+      </section>
     {% endif %}
 
     <section class="ds-section">
-      <div class="ds-grid billing-grid">
-        <div class="span-7 billing-col">
-          <div class="ds-card billing-card billing-balance-card">
+      <div class="ds-grid">
+        <div class="span-7 ds-stack">
+          <div class="ds-card">
             <div class="card-content">
-              <div class="billing-card-header">
-                <div>
-                  <h3>Balance</h3>
-                  <p class="miscite-muted">Credits available for new checks.</p>
-                </div>
-                <span class="ds-status {{ 'ds-status--success' if auto_charge_enabled else 'ds-status--muted' }}">
-                  Auto-charge {{ "On" if auto_charge_enabled else "Off" }}
-                </span>
-              </div>
-              <div class="billing-balance-value miscite-mono">{{ balance_display }}</div>
-              <div class="billing-balance-meta">
-                {% if auto_charge_enabled %}
-                  <span class="form-help">Triggers below {{ auto_charge_threshold_display }}.</span>
-                {% else %}
-                  <span class="form-help">Optional to keep analyses running.</span>
-                {% endif %}
-              </div>
-              <div class="billing-actions">
-                <a
-                  class="ds-button ds-button--primary"
-                  href="#add-funds"
-                  {% if not stripe_ready %}aria-disabled="true" tabindex="-1"{% endif %}
-                >
-                  Add funds
-                </a>
-                {% if can_open_portal %}
-                  <form method="post" action="/billing/portal">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <button class="ds-button ds-button--secondary" type="submit">Manage payment method</button>
-                  </form>
-                {% endif %}
-                <a class="ds-button ds-button--ghost" href="#auto-charge">Auto-charge settings</a>
-              </div>
-              {% if auto_charge_last_error %}
-                <div class="ds-alert ds-alert--warning ds-mt-3">{{ auto_charge_last_error }}</div>
-              {% endif %}
-            </div>
-          </div>
-
-          <div class="ds-card billing-card billing-activity-card">
-            <div class="card-content">
-              <div class="billing-card-header">
-                <div>
-                  <h3>Recent activity</h3>
-                  <p class="miscite-muted">Newest first.</p>
-                </div>
+              <div class="ds-card-header">
+                <h3>Recent activity</h3>
+                <p class="miscite-muted">Newest first.</p>
               </div>
               {% if transactions|length == 0 %}
-                <div class="billing-empty">
+                <div class="ds-empty">
+                  <h4>No billing activity yet</h4>
                   <p class="miscite-muted">No billing activity yet.</p>
                   <p class="form-help">Top-ups and usage will appear here once you run checks.</p>
                 </div>
               {% else %}
-                <div class="ds-table-wrap billing-table-wrap" role="region" aria-label="Recent billing activity" tabindex="0">
-                  <table class="ds-table billing-activity-table">
+                <div class="ds-stack ds-stack--tight" data-txn-filters>
+                  <div class="form-field">
+                    <label class="form-label">Type</label>
+                    <div class="ds-filter-group" role="radiogroup" aria-label="Filter by transaction type">
+                      <label class="ds-filter-pill">
+                        <input type="radio" name="txn-type" value="all" checked />
+                        <span>All</span>
+                      </label>
+                      <label class="ds-filter-pill">
+                        <input type="radio" name="txn-type" value="topup" />
+                        <span>Top-up</span>
+                      </label>
+                      <label class="ds-filter-pill">
+                        <input type="radio" name="txn-type" value="usage" />
+                        <span>Usage</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="ds-input-row">
+                    <div class="form-field">
+                      <label class="form-label" for="txn-from">From</label>
+                      <input id="txn-from" type="date" data-txn-from />
+                    </div>
+                    <div class="form-field">
+                      <label class="form-label" for="txn-to">To</label>
+                      <input id="txn-to" type="date" data-txn-to />
+                    </div>
+                    <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-txn-clear>Clear</button>
+                  </div>
+                </div>
+                <div class="ds-table-wrap" role="region" aria-label="Recent billing activity" tabindex="0">
+                  <table class="ds-table" data-txn-table>
                     <thead>
                       <tr>
                         <th scope="col">Date</th>
@@ -104,40 +133,38 @@
                     <tbody>
                       {% for txn in transactions %}
                         {% set kind_label = "Top-up" if txn.kind == "topup" else ("Usage" if txn.kind == "usage" else txn.kind|replace("_", " ")|title) %}
-                        <tr>
+                        {% set kind_status = "ds-status--success" if txn.kind == "topup" else ("ds-status--processing" if txn.kind == "usage" else "") %}
+                        <tr data-kind="{{ txn.kind }}" data-created-at="{{ txn.created_at }}">
                           <td data-label="Date">{{ txn.created_at_human }}</td>
                           <td data-label="Type">
-                            <span class="ds-badge billing-kind {{ 'is-topup' if txn.kind == 'topup' else 'is-usage' }}">
+                            <span class="ds-status {{ kind_status }}">
                               {{ kind_label }}
                             </span>
                           </td>
                           <td data-label="Amount">
-                            <span class="billing-amount {{ 'is-positive' if txn.amount_cents > 0 else 'is-negative' }}">
-                              {{ txn.amount_display }}
-                            </span>
+                            <span class="miscite-mono">{{ txn.amount_display }}</span>
                           </td>
                           <td data-label="Balance after">
-                            <span class="billing-balance-after {{ 'is-negative' if txn.balance_after_cents < 0 else '' }}">
-                              {{ txn.balance_after_display }}
-                            </span>
+                            <span class="miscite-mono">{{ txn.balance_after_display }}</span>
                           </td>
                         </tr>
                       {% endfor %}
                     </tbody>
                   </table>
                 </div>
+                <p class="form-help ds-mt-3" data-txn-empty hidden>No activity matches the current filters.</p>
               {% endif %}
             </div>
           </div>
         </div>
 
-        <div class="span-5 billing-col">
+        <div class="span-5 ds-stack">
           {% if not stripe_configured %}
-            <div class="ds-alert ds-alert--warning billing-system-alert" role="status" aria-live="polite">
+            <div class="ds-alert ds-alert--warning" role="status" aria-live="polite">
               Stripe is not configured on this deployment yet.
             </div>
           {% elif not stripe_webhook_configured %}
-            <div class="ds-alert ds-alert--warning billing-system-alert" role="status" aria-live="polite">
+            <div class="ds-alert ds-alert--warning" role="status" aria-live="polite">
               Stripe webhooks are not configured, so top-ups and auto-charge cannot be credited.
             </div>
             {% if is_local_dev %}
@@ -149,8 +176,8 @@
           {% endif %}
 
           {% if stripe_ready and not has_payment_method %}
-            <div class="ds-card billing-card billing-setup-card">
-              <div class="card-content">
+            <div class="ds-card ds-card--subtle">
+              <div class="card-content ds-stack">
                 <h3>Add a payment method</h3>
                 <p class="miscite-muted">Required before you can enable auto-charge.</p>
                 <ol class="ds-stepper">
@@ -173,20 +200,20 @@
             </div>
           {% endif %}
 
-          <div class="ds-card billing-card" id="add-funds">
+          <div class="ds-card" id="add-funds">
             <div class="card-content ds-stack">
               <div>
                 <h3>Add funds</h3>
                 <p class="miscite-muted">Top up your balance when you need to run checks. Minimum {{ min_charge_display }}.</p>
               </div>
-              <div class="billing-presets" role="group" aria-label="Quick top-up presets">
-                <button class="ds-button ds-button--secondary ds-button--sm billing-preset" type="button" data-topup-preset="10">
+              <div class="ds-filter-group" role="group" aria-label="Quick top-up presets">
+                <button class="ds-button ds-button--secondary ds-button--sm" type="button" data-topup-preset="10">
                   $10
                 </button>
-                <button class="ds-button ds-button--secondary ds-button--sm billing-preset" type="button" data-topup-preset="25">
+                <button class="ds-button ds-button--secondary ds-button--sm" type="button" data-topup-preset="25">
                   $25
                 </button>
-                <button class="ds-button ds-button--secondary ds-button--sm billing-preset" type="button" data-topup-preset="50">
+                <button class="ds-button ds-button--secondary ds-button--sm" type="button" data-topup-preset="50">
                   $50
                 </button>
               </div>
@@ -202,24 +229,21 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <div class="form-field">
                   <label class="form-label" for="topup-amount">Top-up amount (USD)</label>
-                  <div class="billing-input">
-                    <span class="billing-input-prefix" aria-hidden="true">$</span>
-                    <input
-                      id="topup-amount"
-                      name="amount"
-                      type="number"
-                      inputmode="decimal"
-                      min="{{ min_charge_cents / 100 }}"
-                      step="0.01"
-                      placeholder="25.00"
-                      required
-                      aria-describedby="topup-help topup-error"
-                      data-topup-input
-                      {{ "disabled" if not stripe_ready else "" }}
-                    />
-                  </div>
+                  <input
+                    id="topup-amount"
+                    name="amount"
+                    type="number"
+                    inputmode="decimal"
+                    min="{{ min_charge_cents / 100 }}"
+                    step="0.01"
+                    placeholder="25.00"
+                    required
+                    aria-describedby="topup-help topup-error"
+                    data-topup-input
+                    {{ "disabled" if not stripe_ready else "" }}
+                  />
                   <p class="form-help" id="topup-help">You will be redirected to Stripe to complete payment.</p>
-                  <p class="form-error" id="topup-error" data-topup-error role="status" aria-live="polite"></p>
+                  <div class="ds-alert ds-alert--warning" id="topup-error" data-topup-error role="status" aria-live="polite" hidden></div>
                 </div>
                 <button
                   class="ds-button ds-button--primary"
@@ -227,14 +251,13 @@
                   data-topup-submit
                   {{ "disabled" if not stripe_ready else "" }}
                 >
-                  <span class="button-spinner" aria-hidden="true"></span>
-                  <span class="button-label">Add funds</span>
+                  Add funds
                 </button>
               </form>
             </div>
           </div>
 
-          <div class="ds-card billing-card" id="auto-charge">
+          <div class="ds-card" id="auto-charge">
             <div class="card-content ds-stack">
               <div>
                 <h3>Auto-charge</h3>
@@ -249,7 +272,7 @@
                 data-min-display="{{ min_charge_display }}"
               >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <label class="ds-toggle billing-toggle">
+                <label class="ds-toggle">
                   <input
                     type="checkbox"
                     name="enabled"
@@ -261,7 +284,7 @@
                     {{ "checked" if auto_charge_enabled else "" }}
                   />
                   <span class="ds-toggle-track" aria-hidden="true"></span>
-                  <span class="billing-toggle-text" data-autocharge-label>
+                  <span data-autocharge-label>
                     Auto-charge is {{ "on" if auto_charge_enabled else "off" }}
                   </span>
                 </label>
@@ -269,75 +292,111 @@
                   When your balance falls below {{ auto_charge_threshold_display }} after a billed check, we automatically add
                   {{ auto_charge_amount_display }}.
                 </p>
+                <p class="form-help" data-autocharge-state>Toggling auto-charge saves immediately. Use "Adjust" to change trigger &amp; recharge.</p>
+                <p class="miscite-muted">
+                  Current settings:
+                  trigger below <span class="miscite-mono">{{ auto_charge_threshold_display }}</span>,
+                  recharge <span class="miscite-mono">{{ auto_charge_amount_display }}</span>.
+                </p>
                 <p class="form-help">
                   Requires a saved payment method. Auto-charge runs after a billed analysis; it will not charge immediately just by enabling.
                 </p>
+                {% if auto_charge_last_error %}
+                  <div class="ds-alert ds-alert--warning">{{ auto_charge_last_error }}</div>
+                {% endif %}
                 {% if auto_charge_error %}
                   <div class="ds-alert ds-alert--warning">{{ auto_charge_error }}</div>
                 {% endif %}
-                <div class="ds-input-row">
-                  <div class="form-field">
-                    <label class="form-label" for="auto-charge-threshold">
-                      Trigger balance (USD)
-                      <span class="billing-help" title="The balance level that triggers a recharge.">
-                        <i class="material-icons" aria-hidden="true">help_outline</i>
-                      </span>
-                    </label>
-                    <div class="billing-input">
-                      <span class="billing-input-prefix" aria-hidden="true">$</span>
-                      <input
-                        id="auto-charge-threshold"
-                        name="threshold"
-                        type="number"
-                        inputmode="decimal"
-                        min="0.01"
-                        step="0.01"
-                        value="{{ auto_charge_threshold_value }}"
-                        required
-                        aria-describedby="auto-charge-threshold-help auto-charge-threshold-error"
-                        data-autocharge-threshold
-                      />
-                    </div>
-                    <p class="form-help" id="auto-charge-threshold-help">Balance that starts an auto-charge.</p>
-                    <p class="form-error" id="auto-charge-threshold-error" data-autocharge-threshold-error role="status" aria-live="polite"></p>
-                  </div>
-                  <div class="form-field">
-                    <label class="form-label" for="auto-charge-amount">
-                      Recharge amount (USD)
-                      <span class="billing-help" title="The amount we add when auto-charge triggers.">
-                        <i class="material-icons" aria-hidden="true">help_outline</i>
-                      </span>
-                    </label>
-                    <div class="billing-input">
-                      <span class="billing-input-prefix" aria-hidden="true">$</span>
-                      <input
-                        id="auto-charge-amount"
-                        name="amount"
-                        type="number"
-                        inputmode="decimal"
-                        min="{{ min_charge_cents / 100 }}"
-                        step="0.01"
-                        value="{{ auto_charge_amount_value }}"
-                        required
-                        aria-describedby="auto-charge-amount-help auto-charge-amount-error"
-                        data-autocharge-amount
-                      />
-                    </div>
-                    <p class="form-help" id="auto-charge-amount-help">Minimum {{ min_charge_display }}.</p>
-                    <p class="form-error" id="auto-charge-amount-error" data-autocharge-amount-error role="status" aria-live="polite"></p>
-                  </div>
+                <div class="ds-table-actions">
+                  <button class="ds-button ds-button--secondary ds-button--sm" type="button" data-autocharge-open>
+                    Adjust trigger &amp; recharge
+                  </button>
                 </div>
-                <button class="ds-button ds-button--secondary" type="submit" data-autocharge-submit>
-                  <span class="button-spinner" aria-hidden="true"></span>
-                  <span class="button-label">Save changes</span>
-                </button>
+                <dialog class="ds-dialog" data-autocharge-dialog aria-labelledby="autocharge-dialog-title">
+                  <div class="ds-card ds-card--hero">
+                    <div class="card-content ds-stack">
+                      <div class="ds-card-header--split">
+                        <div>
+                          <p class="eyebrow">Auto-charge</p>
+                          <h3 id="autocharge-dialog-title">Trigger &amp; recharge</h3>
+                          <p class="miscite-muted">Update when auto-charge runs and how much it adds.</p>
+                        </div>
+                        <button class="ds-icon-button" type="button" data-autocharge-close aria-label="Close settings">
+                          <i class="material-icons" aria-hidden="true">close</i>
+                        </button>
+                      </div>
+                      <div class="ds-stack ds-stack--tight">
+                        <div class="form-field">
+                          <label class="form-label" for="auto-charge-threshold">
+                            Trigger balance (USD)
+                            <span class="miscite-muted" title="The balance level that triggers a recharge.">
+                              <i class="material-icons" aria-hidden="true">help_outline</i>
+                            </span>
+                          </label>
+                          <input
+                            id="auto-charge-threshold"
+                            name="threshold"
+                            type="number"
+                            inputmode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            value="{{ auto_charge_threshold_value }}"
+                            required
+                            aria-describedby="auto-charge-threshold-help auto-charge-threshold-error"
+                            data-autocharge-threshold
+                          />
+                          <p class="form-help" id="auto-charge-threshold-help">Balance that starts an auto-charge.</p>
+                          <div
+                            class="ds-alert ds-alert--warning"
+                            id="auto-charge-threshold-error"
+                            data-autocharge-threshold-error
+                            role="status"
+                            aria-live="polite"
+                            hidden
+                          ></div>
+                        </div>
+                        <div class="form-field">
+                          <label class="form-label" for="auto-charge-amount">
+                            Recharge amount (USD)
+                            <span class="miscite-muted" title="The amount we add when auto-charge triggers.">
+                              <i class="material-icons" aria-hidden="true">help_outline</i>
+                            </span>
+                          </label>
+                          <input
+                            id="auto-charge-amount"
+                            name="amount"
+                            type="number"
+                            inputmode="decimal"
+                            min="{{ min_charge_cents / 100 }}"
+                            step="0.01"
+                            value="{{ auto_charge_amount_value }}"
+                            required
+                            aria-describedby="auto-charge-amount-help auto-charge-amount-error"
+                            data-autocharge-amount
+                          />
+                          <p class="form-help" id="auto-charge-amount-help">Minimum {{ min_charge_display }}.</p>
+                          <div
+                            class="ds-alert ds-alert--warning"
+                            id="auto-charge-amount-error"
+                            data-autocharge-amount-error
+                            role="status"
+                            aria-live="polite"
+                            hidden
+                          ></div>
+                        </div>
+                      </div>
+                      <div class="ds-table-actions">
+                        <button class="ds-button ds-button--ghost ds-button--sm" type="button" data-autocharge-cancel>
+                          Cancel
+                        </button>
+                        <button class="ds-button ds-button--secondary ds-button--sm" type="submit" data-autocharge-apply>
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </dialog>
               </form>
-              {% if can_open_portal %}
-                <form method="post" action="/billing/portal">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                  <button class="ds-button ds-button--ghost" type="submit">Manage payment method</button>
-                </form>
-              {% endif %}
             </div>
           </div>
         </div>
@@ -346,20 +405,6 @@
 
     <script nonce="{{ csp_nonce }}">
       document.addEventListener("DOMContentLoaded", function () {
-        var toasts = document.querySelectorAll("[data-toast]");
-        toasts.forEach(function (toast) {
-          var close = toast.querySelector("[data-toast-close]");
-          var hide = function () {
-            toast.classList.remove("is-visible");
-          };
-          if (close) {
-            close.addEventListener("click", function () {
-              hide();
-            });
-          }
-          window.setTimeout(hide, 4500);
-        });
-
         var formatMoney = function (value) {
           if (typeof value !== "number" || Number.isNaN(value)) return "";
           return "$" + value.toFixed(2);
@@ -385,7 +430,7 @@
           var setTopupError = function (message) {
             if (!topupError) return;
             topupError.textContent = message || "";
-            topupError.classList.toggle("is-visible", Boolean(message));
+            topupError.hidden = !message;
           };
 
           var validateTopup = function () {
@@ -448,12 +493,9 @@
             }
             if (topupSubmit) {
               topupSubmit.disabled = true;
-              topupSubmit.classList.add("is-loading");
               topupSubmit.setAttribute("aria-busy", "true");
-              var label = topupSubmit.querySelector(".button-label");
-              if (label) {
-                label.textContent = "Redirecting...";
-              }
+              topupSubmit.dataset.originalLabel = topupSubmit.dataset.originalLabel || topupSubmit.textContent;
+              topupSubmit.textContent = "Redirecting...";
             }
           });
         }
@@ -462,19 +504,27 @@
         if (autoForm) {
           var autoToggle = autoForm.querySelector("[data-autocharge-toggle]");
           var autoLabel = autoForm.querySelector("[data-autocharge-label]");
+          var autoStatus = autoForm.querySelector("[data-autocharge-state]");
           var summary = autoForm.querySelector("[data-autocharge-summary]");
           var thresholdInput = autoForm.querySelector("[data-autocharge-threshold]");
           var amountInput = autoForm.querySelector("[data-autocharge-amount]");
           var thresholdError = autoForm.querySelector("[data-autocharge-threshold-error]");
           var amountError = autoForm.querySelector("[data-autocharge-amount-error]");
-          var autoSubmit = autoForm.querySelector("[data-autocharge-submit]");
+          var dialog = autoForm.querySelector("[data-autocharge-dialog]");
+          var openButton = autoForm.querySelector("[data-autocharge-open]");
+          var closeButton = autoForm.querySelector("[data-autocharge-close]");
+          var cancelButton = autoForm.querySelector("[data-autocharge-cancel]");
+          var applyButton = autoForm.querySelector("[data-autocharge-apply]");
           var minCharge = parseFloat(autoForm.dataset.min || "1");
           var minDisplay = autoForm.dataset.minDisplay || formatMoney(minCharge);
+          var autoSubmitting = false;
+          var dialogSnapshot = null;
+          var defaultAutoStatus = autoStatus ? autoStatus.textContent : "";
 
           var setError = function (node, message) {
             if (!node) return;
             node.textContent = message || "";
-            node.classList.toggle("is-visible", Boolean(message));
+            node.hidden = !message;
           };
 
           var parseField = function (input) {
@@ -531,49 +581,233 @@
               setError(amountError, "");
             }
 
-            if (autoSubmit) {
-              autoSubmit.disabled = !valid;
-            }
             return valid;
           };
 
-          if (thresholdInput) {
-            thresholdInput.addEventListener("input", function () {
+          var requestAutoSubmit = function () {
+            if (autoSubmitting) return;
+            if (!validateAuto()) return;
+            autoSubmitting = true;
+            if (autoStatus) {
+              autoStatus.textContent = "Saving...";
+            }
+            if (typeof autoForm.requestSubmit === "function") {
+              autoForm.requestSubmit();
+            } else {
+              autoForm.submit();
+            }
+          };
+
+          var snapshotDialogValues = function () {
+            dialogSnapshot = {
+              threshold: thresholdInput ? thresholdInput.value : "",
+              amount: amountInput ? amountInput.value : "",
+            };
+          };
+
+          var restoreDialogValues = function () {
+            if (!dialogSnapshot) return;
+            if (thresholdInput) thresholdInput.value = dialogSnapshot.threshold;
+            if (amountInput) amountInput.value = dialogSnapshot.amount;
+            if (autoStatus && defaultAutoStatus) {
+              autoStatus.textContent = defaultAutoStatus;
+            }
+            validateAuto();
+            updateSummary();
+            if (applyButton) {
+              applyButton.disabled = !validateAuto();
+            }
+          };
+
+          var closeDialog = function (restore) {
+            if (!dialog) return;
+            if (restore) restoreDialogValues();
+            if (dialog.open) dialog.close();
+          };
+
+          if (openButton && dialog && typeof dialog.showModal === "function") {
+            openButton.addEventListener("click", function () {
+              snapshotDialogValues();
               validateAuto();
               updateSummary();
+              if (applyButton) {
+                applyButton.disabled = !validateAuto();
+              }
+              dialog.showModal();
+              thresholdInput && thresholdInput.focus();
+            });
+          }
+
+          if (closeButton) {
+            closeButton.addEventListener("click", function () {
+              closeDialog(true);
+            });
+          }
+
+          if (cancelButton) {
+            cancelButton.addEventListener("click", function () {
+              closeDialog(true);
+            });
+          }
+
+          if (dialog) {
+            dialog.addEventListener("cancel", function (event) {
+              // Ensure ESC behaves like Cancel (restore values) instead of leaving partial edits around.
+              event.preventDefault();
+              closeDialog(true);
+            });
+
+            dialog.addEventListener("click", function (event) {
+              // Click on backdrop closes the dialog and restores values.
+              if (event.target === dialog) {
+                closeDialog(true);
+              }
+            });
+          }
+
+          autoForm.addEventListener("submit", function (event) {
+            if (!validateAuto()) {
+              event.preventDefault();
+              autoSubmitting = false;
+              if (autoStatus) {
+                autoStatus.textContent = "Fix the highlighted fields to continue.";
+              }
+              if (dialog && typeof dialog.showModal === "function" && !dialog.open) {
+                snapshotDialogValues();
+                dialog.showModal();
+              }
+              if (thresholdInput && thresholdError && !thresholdError.hidden) {
+                thresholdInput.focus();
+              } else if (amountInput && amountError && !amountError.hidden) {
+                amountInput.focus();
+              }
+              return;
+            }
+
+            autoSubmitting = true;
+            if (autoStatus) {
+              autoStatus.textContent = "Saving...";
+            }
+            if (applyButton && document.activeElement === applyButton) {
+              applyButton.disabled = true;
+              applyButton.setAttribute("aria-busy", "true");
+              applyButton.dataset.originalLabel = applyButton.dataset.originalLabel || applyButton.textContent;
+              applyButton.textContent = "Saving...";
+            }
+          });
+
+          if (thresholdInput) {
+            thresholdInput.addEventListener("input", function () {
+              var valid = validateAuto();
+              updateSummary();
+              if (applyButton) {
+                applyButton.disabled = !valid;
+              }
+              if (valid && autoStatus && defaultAutoStatus && autoStatus.textContent.indexOf("Fix") === 0) {
+                autoStatus.textContent = defaultAutoStatus;
+              }
             });
           }
 
           if (amountInput) {
             amountInput.addEventListener("input", function () {
-              validateAuto();
+              var valid = validateAuto();
               updateSummary();
+              if (applyButton) {
+                applyButton.disabled = !valid;
+              }
+              if (valid && autoStatus && defaultAutoStatus && autoStatus.textContent.indexOf("Fix") === 0) {
+                autoStatus.textContent = defaultAutoStatus;
+              }
             });
           }
 
           if (autoToggle) {
-            autoToggle.addEventListener("change", updateToggle);
+            autoToggle.addEventListener("change", function () {
+              updateToggle();
+              requestAutoSubmit();
+            });
             updateToggle();
           }
 
           validateAuto();
           updateSummary();
+          if (applyButton) {
+            applyButton.disabled = !validateAuto();
+          }
+        }
 
-          autoForm.addEventListener("submit", function (event) {
-            if (!validateAuto()) {
-              event.preventDefault();
-              return;
-            }
-            if (autoSubmit) {
-              autoSubmit.disabled = true;
-              autoSubmit.classList.add("is-loading");
-              autoSubmit.setAttribute("aria-busy", "true");
-              var label = autoSubmit.querySelector(".button-label");
-              if (label) {
-                label.textContent = "Saving...";
+        var filterForm = document.querySelector("[data-txn-filters]");
+        var txnTable = document.querySelector("[data-txn-table]");
+        if (filterForm && txnTable) {
+          var rows = Array.prototype.slice.call(txnTable.querySelectorAll("tbody tr"));
+          var typeInputs = filterForm.querySelectorAll("input[name=\"txn-type\"]");
+          var fromInput = filterForm.querySelector("[data-txn-from]");
+          var toInput = filterForm.querySelector("[data-txn-to]");
+          var clearButton = filterForm.querySelector("[data-txn-clear]");
+          var emptyNote = document.querySelector("[data-txn-empty]");
+
+          var parseDateInput = function (value, isEnd) {
+            if (!value) return null;
+            var suffix = isEnd ? "T23:59:59" : "T00:00:00";
+            var date = new Date(value + suffix);
+            return Number.isNaN(date.getTime()) ? null : date;
+          };
+
+          var applyFilters = function () {
+            var selected = filterForm.querySelector("input[name=\"txn-type\"]:checked");
+            var typeValue = selected ? selected.value : "all";
+            var fromDate = parseDateInput(fromInput ? fromInput.value : "", false);
+            var toDate = parseDateInput(toInput ? toInput.value : "", true);
+            var visibleCount = 0;
+
+            rows.forEach(function (row) {
+              var kind = row.getAttribute("data-kind") || "";
+              var createdAt = row.getAttribute("data-created-at") || "";
+              var rowDate = createdAt ? new Date(createdAt) : null;
+              var typeMatch = typeValue === "all" || kind === typeValue;
+              var dateMatch = true;
+
+              if (rowDate && fromDate && rowDate < fromDate) {
+                dateMatch = false;
               }
+              if (rowDate && toDate && rowDate > toDate) {
+                dateMatch = false;
+              }
+
+              var show = typeMatch && dateMatch;
+              row.hidden = !show;
+              if (show) {
+                visibleCount += 1;
+              }
+            });
+
+            if (emptyNote) {
+              emptyNote.hidden = visibleCount !== 0;
             }
+          };
+
+          typeInputs.forEach(function (input) {
+            input.addEventListener("change", applyFilters);
           });
+          if (fromInput) {
+            fromInput.addEventListener("change", applyFilters);
+          }
+          if (toInput) {
+            toInput.addEventListener("change", applyFilters);
+          }
+          if (clearButton) {
+            clearButton.addEventListener("click", function () {
+              if (fromInput) fromInput.value = "";
+              if (toInput) toInput.value = "";
+              typeInputs.forEach(function (input) {
+                input.checked = input.value === "all";
+              });
+              applyFilters();
+            });
+          }
+
+          applyFilters();
         }
       });
     </script>
