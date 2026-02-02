@@ -421,24 +421,26 @@ def _reap_cache(settings: Settings) -> None:
         return
     Cache(settings=settings).reap_expired()
 
-    ttl_seconds = float(settings.cache_text_ttl_days) * 86400.0
-    if ttl_seconds <= 0:
-        return
-    root = settings.cache_dir / "text_extract"
-    if not root.exists():
-        return
-
-    now = time.time()
-    try:
-        paths = list(root.rglob("*.txt"))
-    except OSError:
-        return
-    for p in paths:
+    def _reap_text_cache(root: Path, ttl_days: int) -> None:
+        ttl_seconds = float(ttl_days) * 86400.0
+        if ttl_seconds <= 0:
+            return
+        if not root.exists():
+            return
+        now = time.time()
         try:
-            if (now - p.stat().st_mtime) > ttl_seconds:
-                p.unlink(missing_ok=True)
+            paths = list(root.rglob("*.txt"))
         except OSError:
-            continue
+            return
+        for p in paths:
+            try:
+                if (now - p.stat().st_mtime) > ttl_seconds:
+                    p.unlink(missing_ok=True)
+            except OSError:
+                continue
+
+    _reap_text_cache(settings.cache_dir / "text_extract", settings.cache_text_ttl_days)
+    _reap_text_cache(settings.cache_dir / "openrouter.chat_json", settings.cache_llm_ttl_days)
 
 
 def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:

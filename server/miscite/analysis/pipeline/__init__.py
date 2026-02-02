@@ -460,7 +460,7 @@ def analyze_document(
         elif issue_type in {"potentially_inappropriate", "needs_manual_review"}:
             issue_counts["potentially_inappropriate"] += 1
     summary = {
-        "total_citations": len(citations),
+        "total_citations": len(references),
         "missing_bibliography_refs": issue_counts["missing_bibliography_refs"],
         "unresolved_references": issue_counts["unresolved_references"],
         "retracted_references": issue_counts["retracted_references"],

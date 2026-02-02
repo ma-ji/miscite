@@ -36,12 +36,25 @@ class OpenRouterClient:
 
         cache = self.cache
         cache_ttl_days = cache.settings.cache_llm_ttl_days if cache and cache.settings.cache_enabled else 0
+        cache_parts: list[str] | None = None
         if cache and cache_ttl_days > 0:
             system_h = hashlib.sha256(system.encode("utf-8")).hexdigest()
             user_h = hashlib.sha256(user.encode("utf-8")).hexdigest()
-            hit, cached = cache.get_json("openrouter.chat_json", [self.model, "temp:0.2", system_h, user_h])
+            cache_parts = [self.model, "temp:0.2", system_h, user_h]
+            hit, cached = cache.get_json("openrouter.chat_json", cache_parts)
             if hit and isinstance(cached, dict):
                 return cached
+            # Fallback to file cache to avoid SQLite lock contention.
+            hit, cached_text = cache.get_text_file(
+                "openrouter.chat_json", cache_parts, ttl_days=int(cache_ttl_days)
+            )
+            if hit:
+                try:
+                    cached_file = json.loads(cached_text)
+                except Exception:
+                    cached_file = None
+                if isinstance(cached_file, dict):
+                    return cached_file
 
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
@@ -76,10 +89,18 @@ class OpenRouterClient:
                     if cache and cache_ttl_days > 0:
                         cache.set_json(
                             "openrouter.chat_json",
-                            [self.model, "temp:0.2", system_h, user_h],
+                            cache_parts or [self.model, "temp:0.2", system_h, user_h],
                             payload,
                             ttl_seconds=float(cache_ttl_days) * 86400.0,
                         )
+                        try:
+                            cache.set_text_file(
+                                "openrouter.chat_json",
+                                cache_parts or [self.model, "temp:0.2", system_h, user_h],
+                                json.dumps(payload, ensure_ascii=False),
+                            )
+                        except Exception:
+                            pass
                     return payload
                 except json.JSONDecodeError as e:
                     snippet = content[:500].replace("\n", "\\n")

@@ -300,5 +300,17 @@ THINK HARD: Refactor and reorganize the codebase to be more modularized:
 2. Under each such folder, there is a readme file documenting the details.
 3. Simplify the contents of the main readme file under the root folder, with links to readme files under subfolders that provide more details.
 4. Optimize this strategy if necessary.
+
 ====
-TASK: Fix SyntaxError in server/miscite/routes/dashboard.py caused by malformed f-string in balance_display (seen in docker logs for miscite-web-1).
+
+THINK HARD: create a fully functional billing system.
+
+1. Pull latest model price from openrouter via API, update hourly: <https://openrouter.ai/docs/api/api-reference/models/get-models>
+
+2. Monitor the use of LLM API, calculate actual cost using the latest price.
+
+3. Allowing setting up a multiplier in .env file for calculating final cost.
+
+4. Deduct that final cost from user's balance only after job successfully completed.
+
+5. Allow users to charge balance via Stripe. Have an auto-charge option. Minimal charge amount is configurable via .env. Auto-charge option mimics how OpenAI billing system works.
