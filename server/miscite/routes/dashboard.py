@@ -11,6 +11,9 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
+from server.miscite.billing.ledger import get_or_create_account
+from server.miscite.billing.stripe import auto_charge_payment_method_available
+from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import db_session, get_sessionmaker
 from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
@@ -22,10 +25,19 @@ from server.miscite.web import template_context, templates
 router = APIRouter()
 
 
-def _subscription_active(account: BillingAccount | None) -> bool:
+def _billing_ready(settings: Settings, account: BillingAccount | None) -> bool:
+    if not settings.billing_enabled:
+        return True
     if account is None:
         return False
-    return account.subscription_status in {"active", "trialing"}
+    if int(account.balance_cents or 0) >= int(settings.billing_min_balance_cents):
+        return True
+    if not (account.auto_charge_enabled and account.stripe_customer_id):
+        return False
+    if not (settings.stripe_secret_key and settings.stripe_webhook_secret):
+        return False
+    cache = Cache(settings=settings)
+    return auto_charge_payment_method_available(settings=settings, customer_id=account.stripe_customer_id, cache=cache)
 
 
 def _as_utc(ts: dt.datetime | None) -> dt.datetime | None:
@@ -356,7 +368,9 @@ def dashboard(
     settings: Settings = request.app.state.settings
 
     billing = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user.id))
-    subscription_status = billing.subscription_status if billing else "inactive"
+    if settings.billing_enabled and billing is None:
+        billing = get_or_create_account(db, user_id=user.id, currency=settings.billing_currency)
+    balance_cents = billing.balance_cents if billing else 0
 
     status_filter = (status or "all").lower()
     if status_filter not in {"all", "completed", "failed", "processing"}:
@@ -426,7 +440,7 @@ def dashboard(
     ]
 
     billing_required = settings.billing_enabled
-    subscription_active = _subscription_active(billing)
+    billing_ready = _billing_ready(settings, billing)
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -435,8 +449,9 @@ def dashboard(
             title="Analyze citations",
             jobs=jobs,
             billing_required=billing_required,
-            subscription_active=subscription_active,
-            subscription_status=subscription_status,
+            billing_ready=billing_ready,
+            balance_cents=balance_cents,
+            balance_display=f"${balance_cents / 100:.2f}",
             query=q or "",
             status_filter=status_filter,
             sort_choice=sort_choice,
@@ -470,8 +485,10 @@ def upload(
 
     if settings.billing_enabled:
         billing = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user.id))
-        if not _subscription_active(billing):
-            raise HTTPException(status_code=402, detail="Active subscription required")
+        if billing is None:
+            billing = get_or_create_account(db, user_id=user.id, currency=settings.billing_currency)
+        if not _billing_ready(settings, billing):
+            raise HTTPException(status_code=402, detail="Insufficient balance or auto-charge disabled")
 
     stored = save_upload(settings, file)
 
@@ -822,6 +839,12 @@ def job_api(
         "report": json.loads(job.report_json) if job.report_json else None,
         "data_sources": data_sources,
         "methodology_md": methodology_md,
+        "billing": {
+            "usage": json.loads(job.llm_usage_json) if job.llm_usage_json else None,
+            "cost": json.loads(job.llm_cost_json) if job.llm_cost_json else None,
+            "status": job.billing_status,
+            "error": job.billing_error,
+        },
     }
     return payload
 

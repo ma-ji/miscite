@@ -32,7 +32,7 @@
                   <p class="miscite-muted">Upload a manuscript to generate a detailed citation report.</p>
                 </div>
                 {% if jobs|length == 0 %}
-                  <a class="ds-link" href="#sample-report">Sample report</a>
+                  <a class="ds-link" href="/reports/tIXNgi2BR-VthZ48ibiRvMvB2Fjqhn8K">Sample report</a>
                 {% endif %}
               </div>
               <form
@@ -41,16 +41,16 @@
                 enctype="multipart/form-data"
                 class="ds-stack ds-stack--tight"
                 data-upload-form
-                data-billing-disabled="{{ 'true' if (billing_required and not subscription_active) else 'false' }}"
+                data-billing-disabled="{{ 'true' if (billing_required and not billing_ready) else 'false' }}"
                 data-maintenance-disabled="{{ 'true' if maintenance_mode else 'false' }}"
               >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <div class="form-field">
                   <label class="form-label" for="file">Manuscript file</label>
                   <div
-                    class="ds-dropzone {{ 'is-disabled' if (billing_required and not subscription_active) or maintenance_mode else '' }}"
+                    class="ds-dropzone {{ 'is-disabled' if (billing_required and not billing_ready) or maintenance_mode else '' }}"
                     data-dropzone
-                    aria-disabled="{{ 'true' if (billing_required and not subscription_active) or maintenance_mode else 'false' }}"
+                    aria-disabled="{{ 'true' if (billing_required and not billing_ready) or maintenance_mode else 'false' }}"
                   >
                     <input
                       id="file"
@@ -60,7 +60,7 @@
                       accept=".pdf,.docx"
                       required
                       aria-describedby="upload-constraints upload-selected"
-                      {{ "disabled" if (billing_required and not subscription_active) or maintenance_mode else "" }}
+                      {{ "disabled" if (billing_required and not billing_ready) or maintenance_mode else "" }}
                     />
                     <div class="ds-dropzone-body">
                       <span class="ds-dropzone-title">
@@ -140,12 +140,12 @@
                     type="submit"
                     data-upload-submit
                     disabled
-                    {{ "disabled" if (billing_required and not subscription_active) or maintenance_mode else "" }}
+                    {{ "disabled" if (billing_required and not billing_ready) or maintenance_mode else "" }}
                   >
                     Generate report
                   </button>
                   {% if jobs|length == 0 %}
-                    <a class="ds-button ds-button--ghost" href="#sample-report">Sample report</a>
+                    <a class="ds-button ds-button--ghost" href="/reports/tIXNgi2BR-VthZ48ibiRvMvB2Fjqhn8K">Sample report</a>
                   {% endif %}
                 </div>
               </form>
@@ -175,7 +175,7 @@
               <p class="eyebrow">Account</p>
               <h3>Workspace overview</h3>
             </div>
-            <span class="ds-badge ds-badge--neutral">{{ subscription_status }}</span>
+            <span class="ds-badge ds-badge--neutral">{{ balance_display }}</span>
           </div>
           <div class="ds-panel-body">
             <div class="ds-stat-grid ds-stat-grid--compact">
@@ -206,17 +206,17 @@
     </div>
   </section>
 
-  {% if billing_required and not subscription_active %}
+  {% if billing_required and not billing_ready %}
     <section class="ds-section ds-section--banner">
       <div class="ds-banner ds-banner--warning" role="status">
         <div>
           <p class="eyebrow">Billing</p>
-          <h3>Billing inactive — activate to generate reports</h3>
+          <h3>Billing setup required</h3>
           <p class="miscite-muted">
-            Your workspace needs an active subscription before we can run new citation analyses.
+            Top up your balance (pay as you go). Optionally add a payment method and enable auto-charge to keep citation analyses running.
           </p>
         </div>
-        <a class="ds-button ds-button--primary" href="/billing">Activate billing</a>
+        <a class="ds-button ds-button--primary" href="/billing">Manage billing</a>
       </div>
     </section>
   {% endif %}
@@ -293,7 +293,7 @@
         <div class="ds-card ds-card--plain">
           <div class="card-content">
             <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
-              <table class="ds-table">
+              <table class="ds-table ds-table--wide">
                 <thead>
                   <tr>
                     <th scope="col">Created</th>

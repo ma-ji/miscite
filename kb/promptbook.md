@@ -300,3 +300,91 @@ THINK HARD: Refactor and reorganize the codebase to be more modularized:
 2. Under each such folder, there is a readme file documenting the details.
 3. Simplify the contents of the main readme file under the root folder, with links to readme files under subfolders that provide more details.
 4. Optimize this strategy if necessary.
+
+====
+
+THINK HARD: create a fully functional billing system.
+
+1. Pull latest model price from openrouter via API, update hourly: <https://openrouter.ai/docs/api/api-reference/models/get-models>
+
+2. Monitor the use of LLM API, calculate actual cost using the latest price.
+
+3. Allowing setting up a multiplier in .env file for calculating final cost.
+
+4. Deduct that final cost from user's balance only after job successfully completed.
+
+5. Allow users to charge balance via Stripe. Have an auto-charge option. Minimal charge amount is configurable via .env. Auto-charge option mimics how OpenAI billing system works.
+
+====
+
+2026-02-02
+Goal: Update LLM cache matching criteria.
+Prompt: Change LLM cache matching to model + temperature + prompt texts.
+Files touched: server/miscite/llm/openrouter.py
+Decision/rationale: Use global cache scope and key parts derived directly from model/temperature/system/user text to ensure cache hits across identical prompts regardless of document scope.
+
+2026-02-02
+Goal: Avoid worker crashes on OpenRouter provider errors during match disambiguation.
+Prompt: Traceback showed OpenRouter error response "Provider returned error" bubbling from resolve LLM matching.
+Files touched: server/miscite/llm/openrouter.py, server/miscite/analysis/pipeline/resolve.py, kb/promptbook.md
+Decision/rationale: Treat provider errors as retryable when possible, and skip LLM disambiguation on failure so optional matching does not abort the job.
+
+2026-02-02
+Goal: Make Stripe auto-charge workflow robust and idempotent.
+Prompt: Double check the auto-charge function and confirm the end-to-end workflow works correctly.
+Files touched: server/miscite/worker/__init__.py, server/miscite/billing/stripe.py, server/miscite/routes/billing.py, server/miscite/routes/dashboard.py, server/miscite/core/models.py, server/miscite/core/config.py, server/miscite/templates/billing.html, .env.example, docs/DEVELOPMENT.md, kb/promptbook.md
+Decision/rationale: Add an in-flight auto-charge lock (plus Stripe idempotency keys) to prevent duplicate charges under concurrency, require webhook configuration for top-ups/auto-charge, verify a saved payment method exists before treating auto-charge as “ready”, clear in-flight state on webhook success/failure, and enforce uniqueness for Stripe IDs on billing transactions to prevent double-credits.
+
+2026-02-02
+Goal: Improve billing/auto-charge UX clarity.
+Prompt: Improve the UI/UX to make it easy and simple to follow.
+Files touched: server/miscite/routes/billing.py, server/miscite/templates/billing.html, server/miscite/templates/dashboard.html, kb/promptbook.md
+Decision/rationale: Add a clear on-page auto-charge setup checklist, surface missing Stripe/webhook prerequisites, and disable top-up actions when billing is not fully configured to reduce user confusion.
+
+2026-02-02
+Goal: Make pay-as-you-go the primary billing path and fix confusing auto-charge saves.
+Prompt: List pay-as-you-go option first; after clicking "save auto-charge", nothing changed.
+Files touched: server/miscite/routes/billing.py, server/miscite/templates/billing.html, server/miscite/templates/dashboard.html, kb/promptbook.md
+Decision/rationale: Reframe the billing checklist around pay-as-you-go first (with a primary CTA), adjust banner copy to match, and ensure auto-charge threshold/amount edits persist with accurate success messages for enable/disable/save flows.
+
+2026-02-02
+Goal: Refresh the Billing balance and usage UI for clearer hierarchy, payment-grade trust, and better validation feedback.
+Prompt: Improve the Billing -> Balance & usage page layout, copy, states, and accessibility without changing billing logic.
+Files touched: server/miscite/templates/billing.html, server/miscite/static/styles.css, server/miscite/routes/billing.py, server/miscite/routes/test_billing_formatting.py, kb/promptbook.md
+Decision/rationale: Replace the redundant billing setup block with a contextual payment-method stepper, build a two-column layout with prominent balance/actions, add presets and inline validation/disabled states with loading feedback, improve activity formatting and mobile responsiveness, and fix currency display for negative balances.
+
+2026-02-02
+Goal: Reposition billing balance summary and reorder billing layout for clearer hierarchy.
+Prompt: Move balance block to top-right aligned with title, remove actions, and place recent activity left with add funds and auto-charge stacked on the right.
+Files touched: server/miscite/templates/billing.html, server/miscite/static/styles.css, kb/promptbook.md
+Decision/rationale: Align balance summary with the page title using the existing ds-panel style, simplify the balance block by removing CTAs, and reorder the billing grid so recent activity leads on the left with add funds and auto-charge stacked on the right.
+
+2026-02-02
+Goal: Align billing UI with shared design system and add client-side activity filters.
+Prompt: Remove billing-specific CSS, auto-save auto-charge on toggle, and add transaction type/date filters.
+Files touched: server/miscite/templates/billing.html, server/miscite/static/styles.css, kb/promptbook.md
+Decision/rationale: Rebuild the billing layout using existing ds-* components only, switch auto-charge to automatic submission on toggle/value changes, and add client-side filters for transaction type/date without changing backend logic.
+
+2026-02-02
+Goal: Prevent grid column overlap from wide content (tables/filters) in billing and other pages.
+Prompt: Recent activity card still overlaps the right column; ensure proper spacing.
+Files touched: server/miscite/static/styles.css, kb/promptbook.md
+Decision/rationale: Add `min-width: 0` to immediate children of `.ds-grid` so grid items can shrink and let internal overflow/scroll behave correctly instead of bleeding into adjacent columns.
+
+2026-02-02
+Goal: Stop tables from forcing oversized widths in multi-column layouts.
+Prompt: Recent activity table in billing still overflows/bleeds into the adjacent column.
+Files touched: server/miscite/static/styles.css, server/miscite/templates/dashboard.html, kb/promptbook.md
+Decision/rationale: Remove the hard-coded min-width from the base `ds-table` and introduce `ds-table--wide` for pages that want an intentional horizontal-scroll minimum, so narrower columns (like Billing activity) can shrink without overflowing.
+
+2026-02-02
+Goal: Align auto-charge threshold and recharge fields in the billing UI.
+Prompt: Auto-charge trigger/recharge inputs are misaligned.
+Files touched: server/miscite/static/styles.css, server/miscite/templates/billing.html, kb/promptbook.md
+Decision/rationale: Add a general design-system modifier (`ds-input-row--top`) to top-align multi-field rows when help text heights differ, preventing input misalignment without introducing billing-specific CSS.
+
+2026-02-02
+Goal: Move auto-charge trigger/recharge settings into a popout to avoid alignment issues.
+Prompt: In the auto-charge block, make trigger balance and recharge amount a popout window and show the current settings as text.
+Files touched: server/miscite/templates/billing.html, server/miscite/static/styles.css, kb/promptbook.md
+Decision/rationale: Use a native `<dialog>` styled as a reusable design-system component (`ds-dialog`) with an embedded `ds-card` to keep a payment-grade feel while avoiding brittle side-by-side alignment; keep auto-save on toggle and apply setting edits via a modal “Done” action so users can update both fields together.

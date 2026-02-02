@@ -459,6 +459,16 @@ def resolve_references(
                 if len(note) > 200:
                     note = note[:200] + "..."
                 return None, 0.0, f"LLM disambiguation failed: {note}"
+            except Exception as e:
+                logger.exception(
+                    "LLM match disambiguation failed; skipping (ref_id=%s, source=%s).",
+                    ref.ref_id,
+                    source_label,
+                )
+                note = str(e).strip() or "Unknown error."
+                if len(note) > 200:
+                    note = note[:200] + "..."
+                return None, 0.0, f"LLM disambiguation failed: {note}"
 
         def _openalex_search_query() -> str:
             base = title or ref.raw

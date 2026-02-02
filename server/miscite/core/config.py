@@ -180,11 +180,19 @@ class Settings:
     deep_analysis_display_max_openalex_fetches: int
 
     billing_enabled: bool
+    billing_cost_multiplier: float
+    billing_currency: str
+    billing_min_charge_cents: int
+    billing_min_balance_cents: int
+    billing_auto_charge_default_threshold_cents: int
+    billing_auto_charge_default_amount_cents: int
+    billing_auto_charge_in_flight_ttl_seconds: int
     stripe_secret_key: str
     stripe_webhook_secret: str
-    stripe_price_id: str
     stripe_success_url: str
     stripe_cancel_url: str
+    openrouter_pricing_url: str
+    openrouter_pricing_refresh_minutes: int
 
     worker_poll_seconds: float
     worker_processes: int
@@ -357,11 +365,27 @@ class Settings:
         )
 
         billing_enabled = _env_bool("MISCITE_BILLING_ENABLED", False)
+        billing_cost_multiplier = _env_float("MISCITE_BILLING_COST_MULTIPLIER", 1.0, min_value=0.0, max_value=100.0)
+        billing_currency = _env_str("MISCITE_BILLING_CURRENCY", "usd").lower()
+        billing_min_charge_cents = _env_int("MISCITE_BILLING_MIN_CHARGE_CENTS", 500, min_value=1, max_value=1_000_000)
+        billing_min_balance_cents = _env_int("MISCITE_BILLING_MIN_BALANCE_CENTS", 0, min_value=0, max_value=1_000_000)
+        billing_auto_charge_default_threshold_cents = _env_int(
+            "MISCITE_BILLING_AUTO_CHARGE_THRESHOLD_CENTS", 500, min_value=0, max_value=1_000_000
+        )
+        billing_auto_charge_default_amount_cents = _env_int(
+            "MISCITE_BILLING_AUTO_CHARGE_AMOUNT_CENTS", 2000, min_value=0, max_value=1_000_000
+        )
+        billing_auto_charge_in_flight_ttl_seconds = _env_int(
+            "MISCITE_BILLING_AUTO_CHARGE_IN_FLIGHT_TTL_SECONDS", 1800, min_value=30, max_value=86_400
+        )
         stripe_secret_key = _env_str("STRIPE_SECRET_KEY", "")
         stripe_webhook_secret = _env_str("STRIPE_WEBHOOK_SECRET", "")
-        stripe_price_id = _env_str("STRIPE_PRICE_ID", "")
         stripe_success_url = _env_str("STRIPE_SUCCESS_URL", "http://localhost:8000/billing/success")
         stripe_cancel_url = _env_str("STRIPE_CANCEL_URL", "http://localhost:8000/billing/cancel")
+        openrouter_pricing_url = _env_str("MISCITE_OPENROUTER_PRICING_URL", "https://openrouter.ai/api/v1/models")
+        openrouter_pricing_refresh_minutes = _env_int(
+            "MISCITE_OPENROUTER_PRICING_REFRESH_MINUTES", 60, min_value=5, max_value=1440
+        )
 
         worker_poll_seconds = _env_float("MISCITE_WORKER_POLL_SECONDS", 1.5, min_value=0.1, max_value=10.0)
         cpu_count = os.cpu_count() or 1
@@ -492,11 +516,19 @@ class Settings:
             deep_analysis_display_max_per_category=deep_analysis_display_max_per_category,
             deep_analysis_display_max_openalex_fetches=deep_analysis_display_max_openalex_fetches,
             billing_enabled=billing_enabled,
+            billing_cost_multiplier=billing_cost_multiplier,
+            billing_currency=billing_currency,
+            billing_min_charge_cents=billing_min_charge_cents,
+            billing_min_balance_cents=billing_min_balance_cents,
+            billing_auto_charge_default_threshold_cents=billing_auto_charge_default_threshold_cents,
+            billing_auto_charge_default_amount_cents=billing_auto_charge_default_amount_cents,
+            billing_auto_charge_in_flight_ttl_seconds=billing_auto_charge_in_flight_ttl_seconds,
             stripe_secret_key=stripe_secret_key,
             stripe_webhook_secret=stripe_webhook_secret,
-            stripe_price_id=stripe_price_id,
             stripe_success_url=stripe_success_url,
             stripe_cancel_url=stripe_cancel_url,
+            openrouter_pricing_url=openrouter_pricing_url,
+            openrouter_pricing_refresh_minutes=openrouter_pricing_refresh_minutes,
             worker_poll_seconds=worker_poll_seconds,
             worker_processes=worker_processes,
             cookie_secure=cookie_secure,

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from server.miscite.billing.usage import UsageTracker
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.parse.citation_parsing import (
     CitationInstance,
@@ -71,6 +72,7 @@ def analyze_document(
     *,
     settings: Settings,
     document_sha256: str | None = None,
+    usage_tracker: UsageTracker | None = None,
     progress_cb: ProgressCallback | None = None,
 ) -> tuple[dict, list[dict], str]:
     started = time.time()
@@ -136,11 +138,13 @@ def analyze_document(
         api_key=settings.openrouter_api_key,
         model=settings.llm_parse_model,
         cache=doc_cache,
+        usage_tracker=usage_tracker,
     )
     llm_match_client = OpenRouterClient(
         api_key=settings.openrouter_api_key,
         model=settings.llm_match_model,
         cache=doc_cache,
+        usage_tracker=usage_tracker,
     )
     llm_parsing_used = True
     llm_bib_used = True
@@ -357,12 +361,16 @@ def analyze_document(
             "MISCITE_ENABLE_LLM_INAPPROPRIATE must be true (no heuristic fallback)."
         )
     llm_client = OpenRouterClient(
-        api_key=settings.openrouter_api_key, model=settings.llm_model, cache=doc_cache
+        api_key=settings.openrouter_api_key,
+        model=settings.llm_model,
+        cache=doc_cache,
+        usage_tracker=usage_tracker,
     )
     llm_deep_client = OpenRouterClient(
         api_key=settings.openrouter_api_key,
         model=settings.llm_deep_analysis_model,
         cache=doc_cache,
+        usage_tracker=usage_tracker,
     )
     llm_used = False
     used_sources.append(
@@ -452,7 +460,7 @@ def analyze_document(
         elif issue_type in {"potentially_inappropriate", "needs_manual_review"}:
             issue_counts["potentially_inappropriate"] += 1
     summary = {
-        "total_citations": len(citations),
+        "total_citations": len(references),
         "missing_bibliography_refs": issue_counts["missing_bibliography_refs"],
         "unresolved_references": issue_counts["unresolved_references"],
         "retracted_references": issue_counts["retracted_references"],

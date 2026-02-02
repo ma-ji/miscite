@@ -315,6 +315,11 @@ textarea {
   gap: var(--space-4);
 }
 
+.ds-stack > * {
+  /* Allow children (cards, tables, etc.) to shrink within grid layouts without overflowing adjacent columns. */
+  min-width: 0;
+}
+
 .ds-stack--tight {
   gap: var(--space-2);
 }
@@ -339,6 +344,11 @@ textarea {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-5);
+}
+
+.ds-grid > * {
+  /* Let grid children shrink so wide tables/controls don't overlap adjacent columns. */
+  min-width: 0;
 }
 
 .span-12 {
@@ -777,6 +787,26 @@ a.miscite-wordmark:hover {
   box-shadow: none;
 }
 
+/* Native <dialog> wrapper used for settings popouts (e.g., auto-charge). */
+.ds-dialog {
+  border: none;
+  padding: var(--space-3);
+  background: transparent;
+  width: min(560px, calc(100vw - var(--space-5) - var(--space-5)));
+  max-width: 100%;
+  max-height: calc(100vh - var(--space-6) - var(--space-6));
+  margin: auto;
+  overflow: auto;
+}
+
+.ds-dialog::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.ds-dialog:focus-visible {
+  outline: none;
+}
+
 .ds-badge,
 .miscite-badge {
   display: inline-flex;
@@ -1018,6 +1048,10 @@ input[type="file"]::-webkit-file-upload-button:hover {
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: flex-end;
+}
+
+.ds-input-row--top {
+  align-items: flex-start;
 }
 
 .ds-input-row .form-field {
@@ -1358,6 +1392,9 @@ p {
 .ds-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* Allow table wrappers to shrink inside grid/flex layouts instead of overflowing adjacent columns. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ds-table-wrap:focus-visible {
@@ -1365,7 +1402,7 @@ p {
   outline-offset: 2px;
 }
 
-.ds-table {
+.ds-table--wide {
   min-width: 640px;
 }
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import threading
@@ -9,6 +8,7 @@ from dataclasses import dataclass, field
 import json_repair
 import requests
 
+from server.miscite.billing.usage import UsageTracker
 from server.miscite.core.cache import Cache
 from server.miscite.sources.http import backoff_sleep
 
@@ -19,6 +19,7 @@ class OpenRouterClient:
     model: str
     timeout_seconds: float = 45.0
     cache: Cache | None = None
+    usage_tracker: UsageTracker | None = None
     _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -34,12 +35,25 @@ class OpenRouterClient:
 
         cache = self.cache
         cache_ttl_days = cache.settings.cache_llm_ttl_days if cache and cache.settings.cache_enabled else 0
+        temperature = 0.2
+        cache_parts: list[str] | None = None
         if cache and cache_ttl_days > 0:
-            system_h = hashlib.sha256(system.encode("utf-8")).hexdigest()
-            user_h = hashlib.sha256(user.encode("utf-8")).hexdigest()
-            hit, cached = cache.get_json("openrouter.chat_json", [self.model, "temp:0.2", system_h, user_h])
+            cache = cache.scoped("global")
+            cache_parts = [self.model, f"temp:{temperature}", system, user]
+            hit, cached = cache.get_json("openrouter.chat_json", cache_parts)
             if hit and isinstance(cached, dict):
                 return cached
+            # Fallback to file cache to avoid SQLite lock contention.
+            hit, cached_text = cache.get_text_file(
+                "openrouter.chat_json", cache_parts, ttl_days=int(cache_ttl_days)
+            )
+            if hit:
+                try:
+                    cached_file = json.loads(cached_text)
+                except Exception:
+                    cached_file = None
+                if isinstance(cached_file, dict):
+                    return cached_file
 
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
@@ -52,7 +66,7 @@ class OpenRouterClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": 0.2,
+            "temperature": temperature,
         }
 
         last_err: Exception | None = None
@@ -61,22 +75,62 @@ class OpenRouterClient:
                 resp = self._client().post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json() or {}
+                self._record_usage(data)
                 content = _extract_message_content(data)
                 if not content:
-                    err = (data.get("error") or {}).get("message")
+                    err_payload = data.get("error")
+                    err = ""
+                    err_code = None
+                    err_provider = None
+                    if isinstance(err_payload, dict):
+                        err = str(err_payload.get("message") or "").strip()
+                        err_code = err_payload.get("code")
+                        err_provider = err_payload.get("provider")
+                    elif isinstance(err_payload, str):
+                        err = err_payload.strip()
                     if err:
-                        raise RuntimeError(f"OpenRouter error response: {err}")
+                        extras: list[str] = []
+                        if err_code:
+                            extras.append(f"code={err_code}")
+                        if err_provider:
+                            extras.append(f"provider={err_provider}")
+                        request_id = (
+                            resp.headers.get("x-request-id")
+                            or resp.headers.get("x-openrouter-request-id")
+                            or resp.headers.get("x-req-id")
+                        )
+                        if request_id:
+                            extras.append(f"request_id={request_id}")
+                        detail = err
+                        if extras:
+                            detail = f"{detail} ({', '.join(extras)})"
+                        if _is_retryable_openrouter_error(err, err_code):
+                            last_err = RuntimeError(f"OpenRouter error response: {detail}")
+                            backoff_sleep(attempt)
+                            continue
+                        raise RuntimeError(f"OpenRouter error response: {detail}")
                     snippet = json.dumps(data, ensure_ascii=True)[:1000]
-                    raise RuntimeError(f"OpenRouter response missing message content. First 1000 chars: {snippet}")
+                    raise RuntimeError(
+                        "OpenRouter response missing message content. "
+                        f"First 1000 chars: {snippet}"
+                    )
                 try:
                     payload = _load_json_payload(content)
                     if cache and cache_ttl_days > 0:
                         cache.set_json(
                             "openrouter.chat_json",
-                            [self.model, "temp:0.2", system_h, user_h],
+                            cache_parts or [self.model, f"temp:{temperature}", system, user],
                             payload,
                             ttl_seconds=float(cache_ttl_days) * 86400.0,
                         )
+                        try:
+                            cache.set_text_file(
+                                "openrouter.chat_json",
+                                cache_parts or [self.model, f"temp:{temperature}", system, user],
+                                json.dumps(payload, ensure_ascii=False),
+                            )
+                        except Exception:
+                            pass
                     return payload
                 except json.JSONDecodeError as e:
                     snippet = content[:500].replace("\n", "\\n")
@@ -88,9 +142,91 @@ class OpenRouterClient:
                 backoff_sleep(attempt)
         raise RuntimeError("OpenRouter request failed after retries") from last_err
 
+    def _record_usage(self, data: dict) -> None:
+        if not self.usage_tracker:
+            return
+        usage = data.get("usage") or {}
+        if not isinstance(usage, dict):
+            return
+
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+
+        if prompt_tokens is None:
+            prompt_tokens = usage.get("input_tokens")
+        if completion_tokens is None:
+            completion_tokens = usage.get("output_tokens")
+        if total_tokens is None:
+            total_tokens = usage.get("totalTokens") or usage.get("total_tokens")
+
+        try:
+            prompt_tokens = int(prompt_tokens or 0)
+            completion_tokens = int(completion_tokens or 0)
+            total_tokens = int(total_tokens or 0)
+        except Exception:
+            return
+
+        model = str(data.get("model") or self.model or "").strip()
+        self.usage_tracker.record(
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
+
 
 class LlmOutputError(RuntimeError):
     """Raised when LLM output cannot be parsed into the expected JSON object."""
+
+
+def _is_retryable_openrouter_error(message: str | None, code: object | None) -> bool:
+    if code is not None:
+        code_str = str(code).strip().lower()
+        if code_str in {
+            "rate_limit",
+            "overloaded",
+            "timeout",
+            "provider_error",
+            "server_error",
+            "429",
+            "500",
+            "502",
+            "503",
+            "504",
+        }:
+            return True
+        if code_str.isdigit():
+            try:
+                code_int = int(code_str)
+            except Exception:
+                code_int = None
+            if code_int in {429, 500, 502, 503, 504}:
+                return True
+
+    if message:
+        msg = message.lower()
+        retry_tokens = (
+            "rate limit",
+            "overload",
+            "overloaded",
+            "timeout",
+            "timed out",
+            "temporarily",
+            "temporary",
+            "try again",
+            "provider returned error",
+            "bad gateway",
+            "gateway",
+            "unavailable",
+            "server error",
+            "upstream",
+            "service unavailable",
+        )
+        for token in retry_tokens:
+            if token in msg:
+                return True
+    return False
 
 
 def _extract_message_content(data: dict) -> str | None:
