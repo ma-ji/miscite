@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from server.miscite.billing.ledger import credit_balance, get_or_create_account
 from server.miscite.billing.stripe import auto_charge_payment_method_available, create_topup_checkout, ensure_customer
+from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import db_session
 from server.miscite.core.models import BillingAccount, BillingTransaction, User
@@ -67,6 +68,13 @@ def _load_billing_context(
     error: str | None = None,
     success: str | None = None,
 ) -> dict:
+    hostname = (request.url.hostname or "").strip().lower()
+    is_local_dev = hostname in {"localhost", "127.0.0.1"} or hostname.endswith(".local")
+
+    stripe_configured = bool(settings.stripe_secret_key)
+    stripe_webhook_configured = bool(settings.stripe_webhook_secret)
+    stripe_ready = stripe_configured and stripe_webhook_configured
+
     account = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user.id))
     if account is None and settings.billing_enabled:
         account = get_or_create_account(db, user_id=user.id, currency=settings.billing_currency)
@@ -81,6 +89,15 @@ def _load_billing_context(
     auto_charge_amount_cents = (
         account.auto_charge_amount_cents if account and account.auto_charge_amount_cents else settings.billing_auto_charge_default_amount_cents
     )
+
+    billing_profile_ready = bool(account and account.stripe_customer_id)
+    has_payment_method = False
+    if settings.billing_enabled and stripe_configured and billing_profile_ready and account and account.stripe_customer_id:
+        has_payment_method = auto_charge_payment_method_available(
+            settings=settings,
+            customer_id=account.stripe_customer_id,
+            cache=Cache(settings=settings),
+        )
 
     transactions = (
         db.execute(
@@ -120,7 +137,13 @@ def _load_billing_context(
         "auto_charge_amount_display": f"${_format_cents_plain(auto_charge_amount_cents)}",
         "auto_charge_amount_value": f"{auto_charge_amount_cents / 100:.2f}",
         "auto_charge_last_error": account.auto_charge_last_error if account else None,
-        "can_open_portal": bool(account and account.stripe_customer_id),
+        "can_open_portal": bool(settings.stripe_secret_key),
+        "stripe_configured": stripe_configured,
+        "stripe_webhook_configured": stripe_webhook_configured,
+        "stripe_ready": stripe_ready,
+        "billing_profile_ready": billing_profile_ready,
+        "has_payment_method": has_payment_method,
+        "is_local_dev": is_local_dev,
         "transactions": transactions_payload,
         "billing_error": error,
         "billing_success": success,
@@ -166,13 +189,47 @@ def billing_topup(
     require_csrf(request, csrf_token)
 
     if not settings.billing_enabled:
-        raise HTTPException(status_code=400, detail="Billing disabled")
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error="Billing disabled"),
+            ),
+        )
     if settings.maintenance_mode:
-        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=settings.maintenance_message),
+            ),
+        )
     if not settings.stripe_secret_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error="Stripe is not configured."),
+            ),
+        )
     if not settings.stripe_webhook_secret:
-        raise HTTPException(status_code=500, detail="Stripe webhook not configured")
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(
+                    request,
+                    user=user,
+                    db=db,
+                    settings=settings,
+                    error="Stripe webhook is not configured; top-ups cannot be credited.",
+                ),
+            ),
+        )
 
     amount_cents, error = _parse_amount_to_cents(amount)
     if error:
@@ -196,6 +253,8 @@ def billing_topup(
         )
 
     account = ensure_customer(db, user=user, settings=settings)
+    db.add(account)
+    db.commit()
     checkout = create_topup_checkout(
         settings=settings,
         account=account,
@@ -227,9 +286,23 @@ def billing_auto_charge(
     require_csrf(request, csrf_token)
 
     if not settings.billing_enabled:
-        raise HTTPException(status_code=400, detail="Billing disabled")
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error="Billing disabled"),
+            ),
+        )
     if settings.maintenance_mode:
-        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=settings.maintenance_message),
+            ),
+        )
 
     account = get_or_create_account(db, user_id=user.id, currency=settings.billing_currency)
 
@@ -268,15 +341,21 @@ def billing_auto_charge(
         )
 
     if not account.stripe_customer_id:
-        error = "Add a payment method by completing a top-up before enabling auto-charge."
-        return templates.TemplateResponse(
-            "billing.html",
-            template_context(
-                request,
-                title="Billing",
-                **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
-            ),
-        )
+        try:
+            account = ensure_customer(db, user=user, settings=settings)
+            db.add(account)
+            db.commit()
+        except Exception:
+            db.rollback()
+            error = "Unable to create a Stripe customer for this account."
+            return templates.TemplateResponse(
+                "billing.html",
+                template_context(
+                    request,
+                    title="Billing",
+                    **_load_billing_context(request, user=user, db=db, settings=settings, error=error),
+                ),
+            )
 
     if not auto_charge_payment_method_available(settings=settings, customer_id=account.stripe_customer_id):
         error = "Add a payment method (complete a top-up or use the portal) before enabling auto-charge."
@@ -341,15 +420,36 @@ def billing_portal(
     require_csrf(request, csrf_token)
 
     if not settings.billing_enabled:
-        raise HTTPException(status_code=400, detail="Billing disabled")
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error="Billing disabled"),
+            ),
+        )
     if settings.maintenance_mode:
-        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error=settings.maintenance_message),
+            ),
+        )
     if not settings.stripe_secret_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+        return templates.TemplateResponse(
+            "billing.html",
+            template_context(
+                request,
+                title="Billing",
+                **_load_billing_context(request, user=user, db=db, settings=settings, error="Stripe is not configured."),
+            ),
+        )
 
-    account = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user.id))
-    if not account or not account.stripe_customer_id:
-        raise HTTPException(status_code=400, detail="No Stripe customer on file")
+    account = ensure_customer(db, user=user, settings=settings)
+    db.add(account)
+    db.commit()
 
     stripe.api_key = settings.stripe_secret_key
     return_url = str(request.base_url).rstrip("/") + "/billing"

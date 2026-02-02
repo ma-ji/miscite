@@ -48,12 +48,68 @@
     {% endif %}
 
     <section class="ds-section">
+      <div class="ds-card ds-card--subtle">
+        <div class="card-content">
+          <h3>Auto-charge setup</h3>
+          <p class="miscite-muted">A simple checklist to get billing + auto-charge working.</p>
+          <ol class="ds-stepper">
+            <li class="ds-stepper-step {{ 'is-complete' if stripe_ready else 'is-active' }}">
+              <span class="ds-stepper-bullet"></span>
+              Configure Stripe
+            </li>
+            <li class="ds-stepper-step {{ 'is-complete' if billing_profile_ready and has_payment_method else ('is-active' if stripe_ready else '') }}">
+              <span class="ds-stepper-bullet"></span>
+              Add a payment method
+            </li>
+            <li class="ds-stepper-step {{ 'is-complete' if auto_charge_enabled else ('is-active' if stripe_ready and billing_profile_ready and has_payment_method else '') }}">
+              <span class="ds-stepper-bullet"></span>
+              Enable auto-charge
+            </li>
+          </ol>
+
+          {% if not stripe_configured %}
+            <div class="ds-alert ds-alert--warning ds-mt-3">
+              Stripe isn’t configured on this deployment yet.
+            </div>
+          {% elif not stripe_webhook_configured %}
+            <div class="ds-alert ds-alert--warning ds-mt-3">
+              Stripe webhooks aren’t configured, so top-ups and auto-charge can’t be credited.
+            </div>
+            {% if is_local_dev %}
+              <p class="form-help ds-mt-2">
+                Dev tip: run <span class="miscite-mono">stripe listen --forward-to {{ public_origin }}/billing/webhook</span>
+                and set <span class="miscite-mono">STRIPE_WEBHOOK_SECRET</span>.
+              </p>
+            {% endif %}
+          {% elif not (billing_profile_ready and has_payment_method) %}
+            <div class="ds-alert ds-alert--info ds-mt-3">
+              Next: add a payment method using the billing portal (recommended) or complete a top-up.
+            </div>
+          {% elif not auto_charge_enabled %}
+            <div class="ds-alert ds-alert--info ds-mt-3">
+              Next: enable auto-charge and choose a trigger + recharge amount.
+            </div>
+          {% endif %}
+
+          {% if stripe_ready and not (billing_profile_ready and has_payment_method) and can_open_portal %}
+            <form method="post" action="/billing/portal" class="ds-mt-3">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <button class="ds-button ds-button--secondary" type="submit">Add payment method</button>
+            </form>
+          {% elif stripe_ready and billing_profile_ready and has_payment_method and not auto_charge_enabled %}
+            <a class="ds-button ds-button--secondary ds-mt-3" href="#auto-charge">Enable auto-charge</a>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="ds-section" id="add-funds">
       <div class="ds-grid">
         <div class="span-6">
           <div class="ds-card">
             <div class="card-content">
               <h3>Add funds</h3>
-              <p class="miscite-muted">Top up your balance. Minimum {{ min_charge_display }}.</p>
+              <p class="miscite-muted">Top up your balance and save your payment method. Minimum {{ min_charge_display }}.</p>
               <form method="post" action="/billing/topup" class="ds-stack ds-stack--tight">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <div class="form-field">
@@ -67,10 +123,11 @@
                     step="0.01"
                     placeholder="25.00"
                     required
+                    {{ "disabled" if not stripe_ready else "" }}
                   />
                   <p class="form-help">You will be redirected to Stripe to complete payment.</p>
                 </div>
-                <button class="ds-button ds-button--primary" type="submit">Add funds</button>
+                <button class="ds-button ds-button--primary" type="submit" {{ "disabled" if not stripe_ready else "" }}>Add funds</button>
               </form>
             </div>
           </div>
@@ -78,8 +135,9 @@
         <div class="span-6">
           <div class="ds-card">
             <div class="card-content">
-              <h3>Auto-charge</h3>
+              <h3 id="auto-charge">Auto-charge</h3>
               <p class="miscite-muted">Automatically recharge when your balance dips below a threshold.</p>
+              <p class="form-help">Requires a saved payment method. Auto-charge runs after a billed analysis; it won’t charge immediately just by enabling.</p>
               <form method="post" action="/billing/auto-charge" class="ds-stack ds-stack--tight">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <label class="ds-toggle">
@@ -119,7 +177,7 @@
               {% if can_open_portal %}
                 <form method="post" action="/billing/portal" class="ds-mt-4">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                  <button class="ds-button ds-button--ghost" type="submit">Manage payment method</button>
+                  <button class="ds-button ds-button--ghost" type="submit">Add / manage payment method</button>
                 </form>
               {% endif %}
             </div>
