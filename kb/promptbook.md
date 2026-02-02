@@ -322,3 +322,9 @@ Goal: Update LLM cache matching criteria.
 Prompt: Change LLM cache matching to model + temperature + prompt texts.
 Files touched: server/miscite/llm/openrouter.py
 Decision/rationale: Use global cache scope and key parts derived directly from model/temperature/system/user text to ensure cache hits across identical prompts regardless of document scope.
+
+2026-02-02
+Goal: Avoid worker crashes on OpenRouter provider errors during match disambiguation.
+Prompt: Traceback showed OpenRouter error response "Provider returned error" bubbling from resolve LLM matching.
+Files touched: server/miscite/llm/openrouter.py, server/miscite/analysis/pipeline/resolve.py, kb/promptbook.md
+Decision/rationale: Treat provider errors as retryable when possible, and skip LLM disambiguation on failure so optional matching does not abort the job.

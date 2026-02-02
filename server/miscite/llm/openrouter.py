@@ -78,11 +78,42 @@ class OpenRouterClient:
                 self._record_usage(data)
                 content = _extract_message_content(data)
                 if not content:
-                    err = (data.get("error") or {}).get("message")
+                    err_payload = data.get("error")
+                    err = ""
+                    err_code = None
+                    err_provider = None
+                    if isinstance(err_payload, dict):
+                        err = str(err_payload.get("message") or "").strip()
+                        err_code = err_payload.get("code")
+                        err_provider = err_payload.get("provider")
+                    elif isinstance(err_payload, str):
+                        err = err_payload.strip()
                     if err:
-                        raise RuntimeError(f"OpenRouter error response: {err}")
+                        extras: list[str] = []
+                        if err_code:
+                            extras.append(f"code={err_code}")
+                        if err_provider:
+                            extras.append(f"provider={err_provider}")
+                        request_id = (
+                            resp.headers.get("x-request-id")
+                            or resp.headers.get("x-openrouter-request-id")
+                            or resp.headers.get("x-req-id")
+                        )
+                        if request_id:
+                            extras.append(f"request_id={request_id}")
+                        detail = err
+                        if extras:
+                            detail = f"{detail} ({', '.join(extras)})"
+                        if _is_retryable_openrouter_error(err, err_code):
+                            last_err = RuntimeError(f"OpenRouter error response: {detail}")
+                            backoff_sleep(attempt)
+                            continue
+                        raise RuntimeError(f"OpenRouter error response: {detail}")
                     snippet = json.dumps(data, ensure_ascii=True)[:1000]
-                    raise RuntimeError(f"OpenRouter response missing message content. First 1000 chars: {snippet}")
+                    raise RuntimeError(
+                        "OpenRouter response missing message content. "
+                        f"First 1000 chars: {snippet}"
+                    )
                 try:
                     payload = _load_json_payload(content)
                     if cache and cache_ttl_days > 0:
@@ -147,6 +178,55 @@ class OpenRouterClient:
 
 class LlmOutputError(RuntimeError):
     """Raised when LLM output cannot be parsed into the expected JSON object."""
+
+
+def _is_retryable_openrouter_error(message: str | None, code: object | None) -> bool:
+    if code is not None:
+        code_str = str(code).strip().lower()
+        if code_str in {
+            "rate_limit",
+            "overloaded",
+            "timeout",
+            "provider_error",
+            "server_error",
+            "429",
+            "500",
+            "502",
+            "503",
+            "504",
+        }:
+            return True
+        if code_str.isdigit():
+            try:
+                code_int = int(code_str)
+            except Exception:
+                code_int = None
+            if code_int in {429, 500, 502, 503, 504}:
+                return True
+
+    if message:
+        msg = message.lower()
+        retry_tokens = (
+            "rate limit",
+            "overload",
+            "overloaded",
+            "timeout",
+            "timed out",
+            "temporarily",
+            "temporary",
+            "try again",
+            "provider returned error",
+            "bad gateway",
+            "gateway",
+            "unavailable",
+            "server error",
+            "upstream",
+            "service unavailable",
+        )
+        for token in retry_tokens:
+            if token in msg:
+                return True
+    return False
 
 
 def _extract_message_content(data: dict) -> str | None:
