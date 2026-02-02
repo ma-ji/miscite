@@ -67,4 +67,6 @@ def build_methodology_md(
     lines.append(f"- LLM max calls (inappropriate checks): `{settings.llm_max_calls}`")
     lines.append(f"- LLM max calls (match disambiguation): `{settings.llm_match_max_calls}`")
     lines.append(f"- Billing enabled: `{settings.billing_enabled}`")
+    lines.append(f"- Billing cost multiplier: `{settings.billing_cost_multiplier}`")
+    lines.append(f"- Billing currency: `{settings.billing_currency}`")
     return "\n".join(lines)

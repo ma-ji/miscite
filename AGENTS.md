@@ -8,6 +8,7 @@ Repository guide for future assistants working on **miscite**.
 - This project is in active development; do not preserve backward compatibility or add fallbacks unless explicitly requested.
 - When adding or refactoring steps, split data prep from matching/analysis into separate modules or folders when appropriate (e.g., `sources/*/data.py` + `sources/*/match.py`, and thin orchestrators under `analysis/pipeline/` / `analysis/deep_analysis/`).
 - Keep documentation centralized under `docs/` (avoid adding many small per-folder `README.md` files unless there's a strong reason).
+- Log major agent prompts in `kb/promptbook.md`.
 
 ## Product summary
 
@@ -47,6 +48,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/worker.py`: worker process launcher.
 - `server/miscite/worker/`: job loop, progress events, dataset auto-sync.
 - `server/miscite/core/`: shared config, db, models, cache, security, storage, middleware, email, rate limiting.
+- `server/miscite/billing/`: OpenRouter pricing cache, LLM usage tracking, cost calculation, Stripe helpers, ledger updates.
 - `server/miscite/web/`: Jinja template helpers + filters.
 - `server/miscite/analysis/`: pipeline steps (extract/parse/checks/deep_analysis/report/shared + pipeline/).
 - `server/miscite/prompts/`: LLM prompts organized by stage (parsing/matching/checks/deep_analysis) with paired `system.txt` + `user.txt`.
@@ -61,7 +63,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/templates/report_access.html`: token-based public report access form.
 - `server/miscite/static/styles.css`: design system (see `DESIGN.md`).
 - `server/miscite/static/favicon.svg`: brand favicon (referenced in `base.html`).
-- `kb/`: research and promptbook material (not wired into the runtime app). Don't read or edit `promptbook.md`, it is for dev use.
+- `kb/`: research and promptbook material (not wired into the runtime app). Don't delete contents in `promptbook.md`.
 - `deploy/monitoring.md`: deployment monitoring options.
 - `scripts/`: helper scripts (dev runner, nginx install, Docker install, VPS bootstrap, backups, Zotero helper).
 
@@ -76,7 +78,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
    - Flag issues: missing bibliography, unresolved refs, retractions, predatory venues, inappropriate citations (LLM + optional local NLI).
    - Optional deep analysis: expands citation neighborhood via OpenAlex and suggests additions/removals (`analysis/deep_analysis/deep_analysis.py`).
    - Report assembled + methodology markdown.
-   - On completion, the worker issues the access token and emails it to the user.
+   - On completion, the worker issues the access token, deducts LLM usage cost from balance, and emails the access token.
 4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can manage access tokens + delete reports here).
 
 ## Report schema contract
@@ -95,7 +97,8 @@ Defined in `server/miscite/core/models.py`:
 - `Document`: uploaded file metadata.
 - `AnalysisJob`: status, report JSON, methodology markdown, access-token hash/hint/value + expiry for shared report access.
 - `AnalysisJobEvent`: streaming progress events for SSE.
-- `BillingAccount`: Stripe subscription status.
+- `BillingAccount`: Stripe customer + balance + auto-charge settings.
+- `BillingTransaction`: balance ledger entries (top-ups, usage charges, auto-charge).
 
 No migrations are present; schema changes require manual DB resets or a future migration plan.
 
@@ -110,7 +113,7 @@ Settings live in `server/miscite/core/config.py` and `.env.example`. Critical en
 - Auth email: `MISCITE_MAILGUN_API_KEY`, `MISCITE_MAILGUN_DOMAIN`, `MISCITE_MAILGUN_SENDER`, `MISCITE_LOGIN_CODE_TTL_MINUTES`.
 - Bot protection: `MISCITE_TURNSTILE_SITE_KEY`, `MISCITE_TURNSTILE_SECRET_KEY`.
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
-- Billing (optional): Stripe keys and flags.
+- Billing (optional): Stripe keys, pricing refresh, multipliers, auto-charge thresholds.
 - Ops/security: maintenance mode, load shedding, rate limits, upload scan, job reaper, access-token TTL.
 - Cache (optional): `MISCITE_CACHE_*` controls for HTTP/LLM/text caching.
 - Email login: Mailgun API keys + login code TTL/length.

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import json_repair
 import requests
 
+from server.miscite.billing.usage import UsageTracker
 from server.miscite.core.cache import Cache
 from server.miscite.sources.http import backoff_sleep
 
@@ -19,6 +20,7 @@ class OpenRouterClient:
     model: str
     timeout_seconds: float = 45.0
     cache: Cache | None = None
+    usage_tracker: UsageTracker | None = None
     _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -61,6 +63,7 @@ class OpenRouterClient:
                 resp = self._client().post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json() or {}
+                self._record_usage(data)
                 content = _extract_message_content(data)
                 if not content:
                     err = (data.get("error") or {}).get("message")
@@ -87,6 +90,39 @@ class OpenRouterClient:
                 last_err = e
                 backoff_sleep(attempt)
         raise RuntimeError("OpenRouter request failed after retries") from last_err
+
+    def _record_usage(self, data: dict) -> None:
+        if not self.usage_tracker:
+            return
+        usage = data.get("usage") or {}
+        if not isinstance(usage, dict):
+            return
+
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+
+        if prompt_tokens is None:
+            prompt_tokens = usage.get("input_tokens")
+        if completion_tokens is None:
+            completion_tokens = usage.get("output_tokens")
+        if total_tokens is None:
+            total_tokens = usage.get("totalTokens") or usage.get("total_tokens")
+
+        try:
+            prompt_tokens = int(prompt_tokens or 0)
+            completion_tokens = int(completion_tokens or 0)
+            total_tokens = int(total_tokens or 0)
+        except Exception:
+            return
+
+        model = str(data.get("model") or self.model or "").strip()
+        self.usage_tracker.record(
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
 
 
 class LlmOutputError(RuntimeError):

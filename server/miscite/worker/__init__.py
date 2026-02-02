@@ -4,18 +4,23 @@ import datetime as dt
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
+from server.miscite.billing.costing import compute_cost
+from server.miscite.billing.ledger import apply_usage_charge
+from server.miscite.billing.pricing import get_openrouter_pricing
+from server.miscite.billing.stripe import create_auto_charge_payment_intent
+from server.miscite.billing.usage import UsageTracker
 from server.miscite.analysis.pipeline import analyze_document
 from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import get_sessionmaker, init_db
 from server.miscite.core.email import send_access_token_email
-from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, Document, JobStatus, User
+from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
 from server.miscite.core.security import access_token_hint, generate_access_token, hash_token
 from server.miscite.sources.predatory_sync import sync_predatory_datasets
 from server.miscite.sources.retractionwatch_sync import sync_retractionwatch_dataset
@@ -156,12 +161,15 @@ def _process_job(settings: Settings, job_id: str) -> None:
                 raise JobCanceled("Canceled by user.")
             _record_progress(settings, job_id, stage, message, progress, db=progress_db)
 
+        usage_tracker = UsageTracker()
         report, sources, methodology_md = analyze_document(
             Path(doc.storage_path),
             settings=settings,
             document_sha256=doc.sha256,
+            usage_tracker=usage_tracker,
             progress_cb=progress_cb,
         )
+        usage_summary = usage_tracker.summary()
 
         if _is_job_canceled(db, job_id):
             raise JobCanceled("Canceled by user.")
@@ -169,10 +177,57 @@ def _process_job(settings: Settings, job_id: str) -> None:
         job.report_json = json.dumps(report, ensure_ascii=False)
         job.sources_json = json.dumps(sources, ensure_ascii=False)
         job.methodology_md = methodology_md
+        job.llm_usage_json = json.dumps(usage_summary, ensure_ascii=False)
+
+        pricing_snapshot = get_openrouter_pricing(settings, cache=Cache(settings=settings), allow_stale=True)
+        cost_result = None
+        if pricing_snapshot is not None:
+            cost_result = compute_cost(
+                usage_summary=usage_summary,
+                pricing=pricing_snapshot,
+                multiplier=settings.billing_cost_multiplier,
+                currency=settings.billing_currency,
+            )
+            job.llm_cost_json = json.dumps(asdict(cost_result), ensure_ascii=False)
+            job.llm_cost_currency = cost_result.currency
+            job.llm_cost_raw_cents = cost_result.raw_cost_cents
+            job.llm_cost_cents = cost_result.final_cost_cents
+            job.llm_cost_multiplier = cost_result.multiplier
+
+        billing_status = None
+        billing_error = None
+        if settings.billing_enabled:
+            if cost_result is None:
+                billing_status = "pricing_unavailable"
+                billing_error = "OpenRouter pricing unavailable."
+            elif cost_result.missing_models:
+                billing_status = "pricing_missing"
+                billing_error = "Missing pricing for: " + ", ".join(sorted(cost_result.missing_models))
+            else:
+                billing_result = apply_usage_charge(
+                    db,
+                    settings=settings,
+                    user_id=job.user_id,
+                    job_id=job.id,
+                    amount_cents=cost_result.final_cost_cents,
+                    currency=cost_result.currency,
+                )
+                billing_status = billing_result.status
+                billing_error = billing_result.error
+                if billing_result.status == "charged":
+                    job.billing_debited_at = dt.datetime.now(dt.UTC)
+        else:
+            billing_status = "disabled"
+
+        job.billing_status = billing_status
+        job.billing_error = billing_error
         job.status = JobStatus.completed.value
         job.finished_at = dt.datetime.now(dt.UTC)
         db.commit()
         _record_progress(settings, job_id, "completed", "Report ready", 1.0, db=progress_db)
+
+        if settings.billing_enabled and job.billing_status == "charged":
+            _maybe_auto_charge(settings, user_id=job.user_id)
     except JobCanceled as e:
         try:
             row = _load_job(db, job_id)
@@ -239,6 +294,44 @@ def _record_progress(
     finally:
         if owns_session:
             db.close()
+
+
+def _maybe_auto_charge(settings: Settings, *, user_id: str) -> None:
+    if not settings.billing_enabled or not settings.stripe_secret_key:
+        return
+    SessionLocal = get_sessionmaker(settings)
+    db = SessionLocal()
+    try:
+        account = db.scalar(select(BillingAccount).where(BillingAccount.user_id == user_id))
+        if account is None:
+            return
+        if not account.auto_charge_enabled:
+            return
+        if not account.stripe_customer_id:
+            account.auto_charge_last_error = "No Stripe customer on file for auto-charge."
+            db.commit()
+            return
+
+        threshold = account.auto_charge_threshold_cents or settings.billing_auto_charge_default_threshold_cents
+        amount = account.auto_charge_amount_cents or settings.billing_auto_charge_default_amount_cents
+        if amount < settings.billing_min_charge_cents:
+            amount = settings.billing_min_charge_cents
+        if amount <= 0:
+            return
+        if account.balance_cents >= threshold:
+            return
+
+        try:
+            create_auto_charge_payment_intent(settings=settings, account=account, amount_cents=amount)
+            account.auto_charge_last_error = None
+        except Exception as e:
+            account.auto_charge_last_error = str(e)
+        db.add(account)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 def _reap_stale_jobs(settings: Settings) -> None:
@@ -371,6 +464,13 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
             log.info("Predatory lists synced: %s", result.target_csv)
         next_pred_sync_at = time.time() + 3600.0
 
+    next_pricing_sync_at = 0.0
+    if settings.billing_enabled:
+        snapshot = get_openrouter_pricing(settings, cache=Cache(settings=settings), force_refresh=True)
+        if snapshot is not None:
+            log.info("OpenRouter pricing synced (%s models, source=%s)", len(snapshot.models), snapshot.source)
+        next_pricing_sync_at = time.time() + float(settings.openrouter_pricing_refresh_minutes) * 60.0
+
     next_reap_at = time.time() + float(settings.job_reap_interval_seconds)
 
     SessionLocal = get_sessionmaker(settings)
@@ -388,6 +488,12 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
             if result.updated:
                 log.info("Predatory lists synced: %s", result.target_csv)
             next_pred_sync_at = time.time() + 3600.0
+
+        if settings.billing_enabled and time.time() >= next_pricing_sync_at:
+            snapshot = get_openrouter_pricing(settings, cache=Cache(settings=settings), force_refresh=True)
+            if snapshot is not None:
+                log.info("OpenRouter pricing synced (%s models, source=%s)", len(snapshot.models), snapshot.source)
+            next_pricing_sync_at = time.time() + float(settings.openrouter_pricing_refresh_minutes) * 60.0
 
         if time.time() >= next_reap_at:
             _reap_stale_jobs(settings)

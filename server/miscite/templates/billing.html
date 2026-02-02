@@ -4,49 +4,162 @@
     <div class="ds-grid">
       <div class="span-7">
         <p class="eyebrow">Billing</p>
-        <h1>Manage subscription</h1>
-        <p class="lead">Keep uploads flowing with an active subscription plan.</p>
+        <h1>Balance & usage</h1>
+        <p class="lead">Prepay for analyses and keep your balance topped up with auto-charge.</p>
       </div>
       <div class="span-5">
         <div class="ds-card ds-card--subtle">
           <div class="card-content">
-            <h3>Status</h3>
-            <p class="miscite-muted">Current plan state.</p>
+            <h3>Current balance</h3>
+            <p class="miscite-muted">Available credit for new analyses.</p>
             <div class="ds-alert ds-alert--info">
-              <span class="miscite-mono">{{ subscription_status }}</span>
+              <span class="miscite-mono">{{ balance_display }}</span>
             </div>
+            {% if auto_charge_enabled %}
+              <p class="form-help">Auto-charge on • Triggers below {{ auto_charge_threshold_display }}.</p>
+            {% else %}
+              <p class="form-help">Auto-charge is off.</p>
+            {% endif %}
+            {% if auto_charge_last_error %}
+              <div class="ds-alert ds-alert--warning ds-mt-3">{{ auto_charge_last_error }}</div>
+            {% endif %}
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="ds-section">
-    {% if not billing_enabled %}
+  {% if not billing_enabled %}
+    <section class="ds-section">
       <div class="ds-alert ds-alert--info">
         Billing is disabled in this environment.
       </div>
-    {% else %}
-      <div class="ds-card">
-        <div class="card-content">
-          <h3>Subscription actions</h3>
-          <p class="miscite-muted">
-            Start a subscription to run new analyses or open the customer portal to manage billing.
-          </p>
-          <div class="hero-actions">
-            <form method="post" action="/billing/checkout">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <button class="ds-button ds-button--primary" type="submit">Subscribe</button>
-            </form>
-            {% if can_open_portal %}
-              <form method="post" action="/billing/portal">
+    </section>
+  {% else %}
+    {% if billing_error %}
+      <section class="ds-section">
+        <div class="ds-alert ds-alert--error">{{ billing_error }}</div>
+      </section>
+    {% endif %}
+    {% if billing_success %}
+      <section class="ds-section">
+        <div class="ds-alert ds-alert--success">{{ billing_success }}</div>
+      </section>
+    {% endif %}
+
+    <section class="ds-section">
+      <div class="ds-grid">
+        <div class="span-6">
+          <div class="ds-card">
+            <div class="card-content">
+              <h3>Add funds</h3>
+              <p class="miscite-muted">Top up your balance. Minimum {{ min_charge_display }}.</p>
+              <form method="post" action="/billing/topup" class="ds-stack ds-stack--tight">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button class="ds-button ds-button--secondary" type="submit">Open customer portal</button>
+                <div class="form-field">
+                  <label class="form-label" for="topup-amount">Top-up amount (USD)</label>
+                  <input
+                    id="topup-amount"
+                    name="amount"
+                    type="number"
+                    inputmode="decimal"
+                    min="{{ min_charge_cents / 100 }}"
+                    step="0.01"
+                    placeholder="25.00"
+                    required
+                  />
+                  <p class="form-help">You will be redirected to Stripe to complete payment.</p>
+                </div>
+                <button class="ds-button ds-button--primary" type="submit">Add funds</button>
               </form>
-            {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="span-6">
+          <div class="ds-card">
+            <div class="card-content">
+              <h3>Auto-charge</h3>
+              <p class="miscite-muted">Automatically recharge when your balance dips below a threshold.</p>
+              <form method="post" action="/billing/auto-charge" class="ds-stack ds-stack--tight">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <label class="ds-toggle">
+                  <input type="checkbox" name="enabled" value="true" {{ "checked" if auto_charge_enabled else "" }} />
+                  <span>Enable auto-charge</span>
+                </label>
+                <div class="ds-input-row">
+                  <div class="form-field">
+                    <label class="form-label" for="auto-charge-threshold">Trigger balance (USD)</label>
+                    <input
+                      id="auto-charge-threshold"
+                      name="threshold"
+                      type="number"
+                      inputmode="decimal"
+                      min="0"
+                      step="0.01"
+                      value="{{ auto_charge_threshold_value }}"
+                      required
+                    />
+                  </div>
+                  <div class="form-field">
+                    <label class="form-label" for="auto-charge-amount">Recharge amount (USD)</label>
+                    <input
+                      id="auto-charge-amount"
+                      name="amount"
+                      type="number"
+                      inputmode="decimal"
+                      min="{{ min_charge_cents / 100 }}"
+                      step="0.01"
+                      value="{{ auto_charge_amount_value }}"
+                      required
+                    />
+                  </div>
+                </div>
+                <button class="ds-button ds-button--secondary" type="submit">Save auto-charge</button>
+              </form>
+              {% if can_open_portal %}
+                <form method="post" action="/billing/portal" class="ds-mt-4">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button class="ds-button ds-button--ghost" type="submit">Manage payment method</button>
+                </form>
+              {% endif %}
+            </div>
           </div>
         </div>
       </div>
-    {% endif %}
-  </section>
+    </section>
+
+    <section class="ds-section">
+      <div class="ds-card">
+        <div class="card-content">
+          <h3>Recent activity</h3>
+          {% if transactions|length == 0 %}
+            <p class="miscite-muted">No billing activity yet.</p>
+          {% else %}
+            <div class="ds-table-wrap" role="region" aria-label="Recent billing activity" tabindex="0">
+              <table class="ds-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Amount</th>
+                    <th scope="col">Balance after</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for txn in transactions %}
+                    <tr>
+                      <td>{{ txn.created_at_human }}</td>
+                      <td class="miscite-mono">{{ txn.kind }}</td>
+                      <td class="miscite-mono">{{ txn.amount_display }}</td>
+                      <td class="miscite-mono">{{ txn.balance_after_display }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
 {% endblock %}

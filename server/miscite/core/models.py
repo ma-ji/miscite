@@ -4,7 +4,7 @@ import datetime as dt
 import uuid
 from enum import Enum
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from server.miscite.core.db import Base
@@ -33,6 +33,7 @@ class User(Base):
     sessions: Mapped[list["UserSession"]] = relationship(back_populates="user")
     jobs: Mapped[list["AnalysisJob"]] = relationship(back_populates="user")
     billing: Mapped["BillingAccount | None"] = relationship(back_populates="user")
+    billing_transactions: Mapped[list["BillingTransaction"]] = relationship(back_populates="user")
 
 
 class UserSession(Base):
@@ -94,6 +95,16 @@ class AnalysisJob(Base):
     access_token_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     access_token_expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
+    llm_usage_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_cost_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_cost_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    llm_cost_raw_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_cost_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_cost_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
+    billing_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    billing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    billing_debited_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
     user: Mapped["User"] = relationship(back_populates="jobs")
 
 
@@ -118,9 +129,36 @@ class BillingAccount(Base):
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     subscription_status: Mapped[str] = mapped_column(String(32), default="inactive", index=True)
     current_period_end: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    balance_cents: Mapped[int] = mapped_column(Integer, default=0)
+    currency: Mapped[str] = mapped_column(String(8), default="usd")
+    auto_charge_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_charge_threshold_cents: Mapped[int] = mapped_column(Integer, default=0)
+    auto_charge_amount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    auto_charge_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
 
     user: Mapped["User"] = relationship(back_populates="billing")
+
+
+class BillingTransaction(Base):
+    __tablename__ = "billing_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id"), index=True)
+    job_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("analysis_jobs.id"), nullable=True, index=True)
+
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(8), default="usd")
+    balance_after_cents: Mapped[int] = mapped_column(Integer)
+
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC), index=True)
+
+    user: Mapped["User"] = relationship(back_populates="billing_transactions")
 
 
 class CacheEntry(Base):

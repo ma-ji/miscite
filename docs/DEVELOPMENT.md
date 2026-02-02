@@ -48,6 +48,17 @@ make check
   - `MISCITE_RETRACTIONWATCH_CSV` (Retraction Watch CSV)
   - `MISCITE_PREDATORY_CSV` (predatory venues CSV)
 
+## Billing (optional)
+
+Usage billing is disabled by default. To enable Stripe balance top-ups and auto-charge, set:
+
+- `MISCITE_BILLING_ENABLED=true`
+- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_SUCCESS_URL` and `STRIPE_CANCEL_URL`
+- Optional tuning: `MISCITE_BILLING_COST_MULTIPLIER`, `MISCITE_BILLING_MIN_CHARGE_CENTS`,
+  `MISCITE_BILLING_AUTO_CHARGE_THRESHOLD_CENTS`, `MISCITE_BILLING_AUTO_CHARGE_AMOUNT_CENTS`,
+  `MISCITE_OPENROUTER_PRICING_REFRESH_MINUTES`
+
 ## Optional dependencies
 
 - Local NLI checks: `pip install -r requirements-optional.txt`
