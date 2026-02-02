@@ -52,11 +52,11 @@ def _fetch_openrouter_pricing(settings: Settings) -> PricingSnapshot:
                 pricing = item.get("pricing") or {}
                 if not model_id or not isinstance(pricing, dict):
                     continue
-                prompt = _parse_decimal(pricing.get("prompt"))
-                completion = _parse_decimal(pricing.get("completion"))
-                if prompt is None or completion is None:
-                    continue
-                models[model_id] = {"prompt": prompt, "completion": completion}
+                # OpenRouter returns pricing as USD per token/request/unit.
+                prompt = _parse_decimal(pricing.get("prompt")) or Decimal("0")
+                completion = _parse_decimal(pricing.get("completion")) or Decimal("0")
+                request_cost = _parse_decimal(pricing.get("request")) or Decimal("0")
+                models[model_id] = {"prompt": prompt, "completion": completion, "request": request_cost}
             return PricingSnapshot(fetched_at=_now_utc(), models=models, source="openrouter")
         except Exception as e:
             last_err = e
@@ -69,7 +69,11 @@ def _serialize_snapshot(snapshot: PricingSnapshot) -> dict:
         "fetched_at": snapshot.fetched_at.isoformat(),
         "source": snapshot.source,
         "models": {
-            model: {"prompt": str(pricing["prompt"]), "completion": str(pricing["completion"])}
+            model: {
+                "prompt": str(pricing.get("prompt") or Decimal("0")),
+                "completion": str(pricing.get("completion") or Decimal("0")),
+                "request": str(pricing.get("request") or Decimal("0")),
+            }
             for model, pricing in snapshot.models.items()
         },
     }
@@ -90,11 +94,10 @@ def _deserialize_snapshot(payload: dict) -> PricingSnapshot | None:
     for model, pricing in models_raw.items():
         if not isinstance(pricing, dict):
             continue
-        prompt = _parse_decimal(pricing.get("prompt"))
-        completion = _parse_decimal(pricing.get("completion"))
-        if prompt is None or completion is None:
-            continue
-        models[str(model)] = {"prompt": prompt, "completion": completion}
+        prompt = _parse_decimal(pricing.get("prompt")) or Decimal("0")
+        completion = _parse_decimal(pricing.get("completion")) or Decimal("0")
+        request_cost = _parse_decimal(pricing.get("request")) or Decimal("0")
+        models[str(model)] = {"prompt": prompt, "completion": completion, "request": request_cost}
 
     source = str(payload.get("source") or "cache")
     return PricingSnapshot(fetched_at=fetched_at, models=models, source=source)
