@@ -314,3 +314,11 @@ THINK HARD: create a fully functional billing system.
 4. Deduct that final cost from user's balance only after job successfully completed.
 
 5. Allow users to charge balance via Stripe. Have an auto-charge option. Minimal charge amount is configurable via .env. Auto-charge option mimics how OpenAI billing system works.
+
+====
+
+2026-02-02
+Goal: Update LLM cache matching criteria.
+Prompt: Change LLM cache matching to model + temperature + prompt texts.
+Files touched: server/miscite/llm/openrouter.py
+Decision/rationale: Use global cache scope and key parts derived directly from model/temperature/system/user text to ensure cache hits across identical prompts regardless of document scope.

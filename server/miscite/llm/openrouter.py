@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import threading
@@ -36,11 +35,11 @@ class OpenRouterClient:
 
         cache = self.cache
         cache_ttl_days = cache.settings.cache_llm_ttl_days if cache and cache.settings.cache_enabled else 0
+        temperature = 0.2
         cache_parts: list[str] | None = None
         if cache and cache_ttl_days > 0:
-            system_h = hashlib.sha256(system.encode("utf-8")).hexdigest()
-            user_h = hashlib.sha256(user.encode("utf-8")).hexdigest()
-            cache_parts = [self.model, "temp:0.2", system_h, user_h]
+            cache = cache.scoped("global")
+            cache_parts = [self.model, f"temp:{temperature}", system, user]
             hit, cached = cache.get_json("openrouter.chat_json", cache_parts)
             if hit and isinstance(cached, dict):
                 return cached
@@ -67,7 +66,7 @@ class OpenRouterClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": 0.2,
+            "temperature": temperature,
         }
 
         last_err: Exception | None = None
@@ -89,14 +88,14 @@ class OpenRouterClient:
                     if cache and cache_ttl_days > 0:
                         cache.set_json(
                             "openrouter.chat_json",
-                            cache_parts or [self.model, "temp:0.2", system_h, user_h],
+                            cache_parts or [self.model, f"temp:{temperature}", system, user],
                             payload,
                             ttl_seconds=float(cache_ttl_days) * 86400.0,
                         )
                         try:
                             cache.set_text_file(
                                 "openrouter.chat_json",
-                                cache_parts or [self.model, "temp:0.2", system_h, user_h],
+                                cache_parts or [self.model, f"temp:{temperature}", system, user],
                                 json.dumps(payload, ensure_ascii=False),
                             )
                         except Exception:
