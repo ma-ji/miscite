@@ -257,7 +257,9 @@ def _extract_year(year_value, csl: dict | None) -> int | None:
 def _extract_first_author(value, csl: dict | None) -> str | None:
     v = str(value or "").strip()
     if v:
-        return v.lower()
+        cleaned = _clean_first_author_family(v)
+        if cleaned:
+            return cleaned.lower()
     if isinstance(csl, dict):
         authors = csl.get("author")
         if isinstance(authors, list) and authors:
@@ -267,6 +269,46 @@ def _extract_first_author(value, csl: dict | None) -> str | None:
                 if family:
                     return family.lower()
     return None
+
+
+_INITIALS_TOKEN_RE = re.compile(r"^(?:[A-Z]\.?){1,6}$")
+_YEAR_TOKEN_RE = re.compile(r"^(?:19|20)\d{2}[a-z]?$", re.IGNORECASE)
+
+
+def _clean_first_author_family(value: str) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+
+    raw = raw.strip(" \t\r\n,;()[]{}")
+    if not raw:
+        return None
+
+    lower = raw.lower()
+    cut_positions: list[int] = []
+    for sep in [",", "&", ";"]:
+        pos = raw.find(sep)
+        if pos != -1:
+            cut_positions.append(pos)
+    for sep in [" and ", " et al"]:
+        pos = lower.find(sep)
+        if pos != -1:
+            cut_positions.append(pos)
+    if cut_positions:
+        raw = raw[: min(cut_positions)].strip()
+        if not raw:
+            return None
+
+    parts = raw.split()
+    while len(parts) >= 2:
+        last = parts[-1].strip().strip(",;()[]{}.")
+        if _INITIALS_TOKEN_RE.fullmatch(last) or _YEAR_TOKEN_RE.fullmatch(last):
+            parts = parts[:-1]
+            continue
+        break
+    raw = " ".join(parts).strip()
+
+    return raw or None
 
 
 _YEAR_HINT_RE = re.compile(r"\b(19|20)\d{2}[a-z]?\b")

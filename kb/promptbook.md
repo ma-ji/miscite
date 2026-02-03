@@ -443,3 +443,9 @@ Goal: Standardize resolver lookup order across all references.
 Prompt: Keep the citation pipeline standardized: even if a record has PMID/PMCID, still use the standard source order and short-circuits.
 Files touched: server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/test_resolve_order.py, server/miscite/analysis/report/methodology.py, docs/DEVELOPMENT.md, kb/promptbook.md
 Decision/rationale: Remove PMID/PMCID PubMed prefetch so every reference follows the same deterministic resolver order (OpenAlex → Crossref → PubMed → arXiv) with predictable short-circuiting. Treat PMID/PMCID as strong identifiers when the PubMed stage is reached and preserve PMID/PMCID from the bibliography for verification links without adding extra upstream lookups.
+
+2026-02-03
+Goal: Prevent false unmatched in-text citations due to multi-author locators and noisy first-author fields.
+Prompt: Fix citation↔bibliography matching where citations like "(Matta, 2026a)" and "(Varela, Thompson, & Rosch, 1991)" were reported as not found in the reference list.
+Files touched: server/miscite/analysis/shared/normalize.py, server/miscite/analysis/parse/llm_parsing.py, server/miscite/analysis/match/match.py, server/miscite/analysis/match/test_match.py, kb/promptbook.md
+Decision/rationale: Normalize author-year locators and LLM-parsed bibliography `first_author` down to the first-author family token when multi-author strings/initials leak into those fields; add a conservative fallback that extracts the first surname from the raw in-text citation when the locator author doesn’t correspond to any bibliography author; cover with offline regression tests.

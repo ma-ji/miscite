@@ -46,6 +46,19 @@ def _extract_surnames_from_citation(raw: str) -> set[str]:
     return out
 
 
+def _extract_primary_surname_from_citation(raw: str) -> str | None:
+    if not raw:
+        return None
+    for hit in _SURNAME_RE.finditer(raw):
+        token = hit.group(0).strip().lower()
+        if not token or token in _CITATION_NAME_STOPWORDS:
+            continue
+        norm = normalize_author_name(token)
+        if norm:
+            return norm
+    return None
+
+
 def _ref_year_int(ref: ReferenceEntry, *, year_token_by_ref_id: dict[str, str | None]) -> int | None:
     if ref.year:
         return int(ref.year)
@@ -111,6 +124,11 @@ def match_citations_to_references(
             continue
 
         author_norm, year_token = _parse_author_year_locator(cit.locator)
+        raw_primary = _extract_primary_surname_from_citation(cit.raw)
+        used_raw_author = False
+        if raw_primary and (not author_norm or author_norm not in index.by_author) and raw_primary in index.by_author:
+            used_raw_author = True
+            author_norm = raw_primary
         if not author_norm:
             matches.append(
                 CitationMatch(
@@ -129,6 +147,8 @@ def match_citations_to_references(
         candidates = list(index.by_author_year.get(key_full, [])) if key_full else []
         method = "author_year_exact"
         notes: list[str] = []
+        if used_raw_author:
+            notes.append("Used author extracted from raw citation text (locator author looked malformed).")
 
         if not candidates and year_token and len(year_token) >= 5 and year_token[:4].isdigit():
             # Handle cases where suffix letters were lost in bibliography parsing.
