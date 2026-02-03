@@ -20,19 +20,26 @@ def build_methodology_md(
     lines.append(f"1) **Text extraction**: extract manuscript content using {backend_label}.")
     lines.append("2) **LLM parsing**: extract in-text citations and bibliography entries into structured records.")
     lines.append(
-        "3) **Reference resolution**: attempt to link bibliography entries to OpenAlex, then Crossref, then arXiv. "
+        "3) **Citation ↔ bibliography matching**: link each in-text citation to a bibliography entry when possible. "
+        "Ambiguous matches are tracked (multiple plausible candidates). A configured LLM may be used to conservatively "
+        "choose among candidates (or abstain) within a per-job match-call budget."
+    )
+    lines.append(
+        "4) **Reference resolution**: attempt to link bibliography entries to OpenAlex, then Crossref, then PubMed, then arXiv "
+        "(PubMed treats explicit PMID/PMCID in the bibliography as strong identifiers when reached). "
         "Each source prefers DOI/ID lookup when available; otherwise it searches by title/author/year. "
         "For ambiguous search results, a configured LLM may be used to conservatively choose a match (or abstain). "
         "Resolution stops after the first matching source."
     )
-    lines.append("4) **Objective flags**:")
+    lines.append("5) **Objective flags**:")
     lines.append("   - In-text citation missing from bibliography.")
+    lines.append("   - In-text citation maps to multiple bibliography candidates (ambiguous match).")
     lines.append("   - Bibliography item unresolved in metadata sources (potentially non-existent / incomplete / non-indexed).")
     lines.append(
         "   - Retracted works (via OpenAlex/Crossref retraction flags when present, plus optional custom retraction API and/or local dataset file)."
     )
     lines.append("   - Predatory venue matches (via optional custom predatory API and/or local dataset file).")
-    lines.append("5) **Potentially inappropriate citations**:")
+    lines.append("6) **Potentially inappropriate citations**:")
     lines.append("   - Compute a lightweight relevance heuristic between the citing context and the cited work’s title/abstract (when available).")
     if llm_used:
         lines.append("   - For low-relevance cases, optionally ask a configured LLM to classify as appropriate/inappropriate/uncertain.")
@@ -66,6 +73,7 @@ def build_methodology_md(
     lines.append(f"- LLM match model: `{settings.llm_match_model}`")
     lines.append(f"- LLM max calls (inappropriate checks): `{settings.llm_max_calls}`")
     lines.append(f"- LLM max calls (match disambiguation): `{settings.llm_match_max_calls}`")
+    lines.append(f"- Preprint year gap max: `{settings.preprint_year_gap_max}`")
     lines.append(f"- Billing enabled: `{settings.billing_enabled}`")
     lines.append(f"- Billing cost multiplier: `{settings.billing_cost_multiplier}`")
     lines.append(f"- Billing currency: `{settings.billing_currency}`")

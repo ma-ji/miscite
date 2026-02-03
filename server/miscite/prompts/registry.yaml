@@ -39,6 +39,17 @@ prompts:
       - doi
       - candidates
     output_schema: schemas/match_candidate.schema.json
+  - id: matching.bibliography_candidate
+    stage: matching
+    purpose: Select the best bibliography entry for an in-text citation.
+    system: matching/bibliography_candidate/system.txt
+    user: matching/bibliography_candidate/user.txt
+    inputs:
+      - citation_raw
+      - citation_locator
+      - citation_context
+      - candidates
+    output_schema: schemas/match_candidate.schema.json
   - id: checks.inappropriate
     stage: checks
     purpose: Classify citation appropriateness based on metadata.

@@ -21,7 +21,8 @@ from server.miscite.analysis.deep_analysis.types import (
     ProgressFn,
     ResolvedWorkLike,
 )
-from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
+from server.miscite.analysis.match.types import CitationMatch
+from server.miscite.analysis.parse.citation_parsing import ReferenceEntry
 from server.miscite.analysis.shared.normalize import normalize_doi
 from server.miscite.core.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
@@ -35,7 +36,7 @@ def run_deep_analysis(
     openalex: OpenAlexClient,
     references: list[ReferenceEntry],
     resolved_by_ref_id: dict[str, ResolvedWorkLike],
-    citation_to_ref: list[tuple[CitationInstance, ReferenceEntry | None]],
+    citation_matches: list[CitationMatch],
     paper_excerpt: str,
     progress: ProgressFn | None = None,
     llm_budget: int | None = None,
@@ -59,7 +60,7 @@ def run_deep_analysis(
     # Original refs + contexts
     # -------------------------
     _p("Preparing verified reference set", 0.02)
-    cite_counts, cite_contexts = build_citation_stats(citation_to_ref)
+    cite_counts, cite_contexts = build_citation_stats(citation_matches)
     verified_original_refs = filter_verified_original_refs(
         settings=settings,
         references=references,

@@ -19,6 +19,10 @@ from server.miscite.analysis.parse.llm_parsing import (
     parse_citations_with_llm,
     parse_references_with_llm,
 )
+from server.miscite.analysis.match import (
+    disambiguate_citation_matches_with_llm,
+    match_citations_to_references,
+)
 from server.miscite.analysis.checks.local_nli import get_local_nli
 from server.miscite.analysis.checks.reference_flags import (
     check_missing_bibliography_refs,
@@ -27,16 +31,13 @@ from server.miscite.analysis.checks.reference_flags import (
 from server.miscite.analysis.checks.inappropriate import check_inappropriate_citations
 from server.miscite.analysis.pipeline.resolve import resolve_references
 from server.miscite.analysis.report.methodology import build_methodology_md
-from server.miscite.analysis.shared.normalize import (
-    normalize_author_year_key,
-    normalize_author_year_locator,
-)
 from server.miscite.analysis.extract.text_extract import extract_text
 from server.miscite.core.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.sources.arxiv import ArxivClient
 from server.miscite.sources.crossref import CrossrefClient
 from server.miscite.sources.openalex import OpenAlexClient
+from server.miscite.sources.pubmed import PubMedClient
 from server.miscite.sources.predatory_api import PredatoryApiClient
 from server.miscite.sources.predatory.data import load_predatory_data
 from server.miscite.sources.predatory.match import PredatoryMatcher
@@ -180,7 +181,9 @@ def analyze_document(
     used_sources.append(
         {
             "name": "OpenRouter (LLM matching)",
-            "detail": f"LLM-assisted match disambiguation (OpenAlex/Crossref/arXiv) via {settings.llm_match_model}.",
+            "detail": (
+                f"LLM-assisted disambiguation for citation↔bibliography and metadata matching via {settings.llm_match_model}."
+            ),
         }
     )
 
@@ -228,34 +231,20 @@ def analyze_document(
     citations = normalize_llm_citations(citations)
     _progress("parse", f"Parsed {len(citations)} in-text citations", 0.38)
 
-    numeric_map: dict[str, ReferenceEntry] = {}
-    author_year_map: dict[str, list[ReferenceEntry]] = {}
-    for ref in references:
-        if ref.ref_number is not None:
-            numeric_map[str(ref.ref_number)] = ref
-        if ref.first_author and ref.year:
-            raw_key = f"{ref.first_author}-{ref.year}"
-            norm_key = normalize_author_year_key(ref.first_author, ref.year)
-            if norm_key:
-                author_year_map.setdefault(norm_key, []).append(ref)
-            if raw_key and raw_key != norm_key:
-                author_year_map.setdefault(raw_key, []).append(ref)
-
-    citation_to_ref: list[tuple[CitationInstance, ReferenceEntry | None]] = []
-    for cit in citations:
-        ref: ReferenceEntry | None = None
-        if cit.kind == "numeric":
-            ref = numeric_map.get(cit.locator)
-        else:
-            key = normalize_author_year_locator(cit.locator) or cit.locator
-            candidates = (
-                author_year_map.get(key) or author_year_map.get(cit.locator) or []
-            )
-            if len(candidates) == 1:
-                ref = candidates[0]
-            elif len(candidates) > 1:
-                ref = candidates[0]
-        citation_to_ref.append((cit, ref))
+    citation_matches = match_citations_to_references(
+        citations,
+        references,
+        reference_records=reference_records,
+    )
+    llm_match_budget_total = int(settings.llm_match_max_calls)
+    citation_matches, match_llm_calls_citation = disambiguate_citation_matches_with_llm(
+        settings=settings,
+        llm_client=llm_match_client,
+        matches=citation_matches,
+        references=references,
+        reference_records=reference_records,
+        max_calls=llm_match_budget_total,
+    )
 
     crossref = CrossrefClient(
         user_agent=settings.crossref_user_agent,
@@ -264,6 +253,14 @@ def analyze_document(
         cache=cache,
     )
     openalex = OpenAlexClient(timeout_seconds=settings.api_timeout_seconds, cache=cache)
+    pubmed = PubMedClient(
+        tool=settings.ncbi_tool,
+        email=settings.ncbi_email,
+        api_key=settings.ncbi_api_key,
+        user_agent=settings.crossref_user_agent,
+        timeout_seconds=settings.api_timeout_seconds,
+        cache=cache,
+    )
     arxiv = ArxivClient(
         timeout_seconds=settings.api_timeout_seconds,
         user_agent=settings.crossref_user_agent,
@@ -285,6 +282,15 @@ def analyze_document(
         {
             "name": "OpenAlex API",
             "detail": "Resolve references to OpenAlex works (DOI first; otherwise search by title/author/year) and fetch abstracts + retraction flag.",
+        }
+    )
+    used_sources.append(
+        {
+            "name": "NCBI E-utilities (PubMed)",
+            "detail": (
+                "Resolve biomedical references in PubMed (PMID/DOI lookup when available; otherwise search by title/author/year) and fetch abstracts when available. "
+                "Includes NCBI-recommended tool/email parameters and optional API key when configured."
+            ),
         }
     )
     used_sources.append(
@@ -395,10 +401,13 @@ def analyze_document(
         reference_records=reference_records,
         openalex=openalex,
         crossref=crossref,
+        pubmed=pubmed,
         arxiv=arxiv,
         llm_match_client=llm_match_client,
+        llm_call_budget=max(0, llm_match_budget_total - match_llm_calls_citation),
         progress=(lambda msg, frac: _progress("resolve", msg, 0.42 + 0.28 * frac)),
     )
+    match_llm_calls_resolve = int(_match_llm_calls_used)
     resolved_count = sum(1 for w in resolved_by_ref_id.values() if w.source)
     if resolved_count < len(references):
         limitations.append(
@@ -408,8 +417,8 @@ def analyze_document(
 
     issues: list[dict] = []
 
-    new_issues, _missing_bib = check_missing_bibliography_refs(
-        citation_to_ref=citation_to_ref,
+    new_issues, _missing_bib, _ambiguous_bib = check_missing_bibliography_refs(
+        citation_matches=citation_matches,
         progress=(lambda msg, frac: _progress("flags", msg, 0.72 + 0.03 * frac)),
     )
     issues.extend(new_issues)
@@ -431,7 +440,7 @@ def analyze_document(
         settings=settings,
         llm_client=llm_client,
         local_nli=local_nli,
-        citation_to_ref=citation_to_ref,
+        citation_matches=citation_matches,
         resolved_by_ref_id=resolved_by_ref_id,
         progress=(lambda msg, frac: _progress("nli", msg, 0.86 + 0.10 * frac)),
     )
@@ -439,6 +448,7 @@ def analyze_document(
         llm_used = True
     issues.extend(new_issues)
     issue_counts = {
+        "ambiguous_bibliography_refs": 0,
         "missing_bibliography_refs": 0,
         "unresolved_references": 0,
         "retracted_references": 0,
@@ -449,7 +459,9 @@ def analyze_document(
         if not isinstance(issue, dict):
             continue
         issue_type = str(issue.get("type") or "")
-        if issue_type == "missing_bibliography_ref":
+        if issue_type == "ambiguous_bibliography_ref":
+            issue_counts["ambiguous_bibliography_refs"] += 1
+        elif issue_type == "missing_bibliography_ref":
             issue_counts["missing_bibliography_refs"] += 1
         elif issue_type == "unresolved_reference":
             issue_counts["unresolved_references"] += 1
@@ -461,6 +473,8 @@ def analyze_document(
             issue_counts["potentially_inappropriate"] += 1
     summary = {
         "total_citations": len(references),
+        "total_intext_citations": len(citations),
+        "ambiguous_bibliography_refs": issue_counts["ambiguous_bibliography_refs"],
         "missing_bibliography_refs": issue_counts["missing_bibliography_refs"],
         "unresolved_references": issue_counts["unresolved_references"],
         "retracted_references": issue_counts["retracted_references"],
@@ -477,7 +491,7 @@ def analyze_document(
             openalex=openalex,
             references=references,
             resolved_by_ref_id=resolved_by_ref_id,
-            citation_to_ref=citation_to_ref,
+            citation_matches=citation_matches,
             paper_excerpt=main_text,
             progress=(lambda msg, frac: _progress("deep", msg, 0.96 + 0.015 * frac)),
             llm_budget=deep_budget,
@@ -492,6 +506,20 @@ def analyze_document(
         "summary": summary,
         "issues": issues,
         "deep_analysis": deep_analysis_report,
+        "citations": [
+            {
+                "citation": match.citation.__dict__,
+                "match": {
+                    "ref_id": match.ref.ref_id if match.ref else None,
+                    "status": match.status,
+                    "confidence": match.confidence,
+                    "method": match.method,
+                    "notes": match.notes,
+                    "candidates": [c.__dict__ for c in match.candidates],
+                },
+            }
+            for match in citation_matches
+        ],
         "references": [
             {
                 "ref_id": ref.ref_id,
@@ -512,6 +540,12 @@ def analyze_document(
             "llm_parsing_used": llm_parsing_used,
             "llm_bib_used": llm_bib_used,
             "llm_citation_used": llm_citation_used,
+            "llm_match": {
+                "budget_total": llm_match_budget_total,
+                "citation_bibliography": match_llm_calls_citation,
+                "metadata_resolution": match_llm_calls_resolve,
+                "total_used": match_llm_calls_citation + match_llm_calls_resolve,
+            },
             "notes": parse_notes,
         },
         "timing": {"seconds": round(time.time() - started, 3)},

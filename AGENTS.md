@@ -51,10 +51,11 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/billing/`: OpenRouter pricing cache, LLM usage tracking, cost calculation, Stripe helpers, ledger updates.
 - `server/miscite/web/`: Jinja template helpers + filters.
 - `server/miscite/analysis/`: pipeline steps (extract/parse/checks/deep_analysis/report/shared + pipeline/).
+- `server/miscite/analysis/match/`: citation↔bibliography matching (indexes + ambiguity/confidence).
 - `server/miscite/prompts/`: LLM prompts organized by stage (parsing/matching/checks/deep_analysis) with paired `system.txt` + `user.txt`.
 - `server/miscite/prompts/registry.yaml`: prompt catalog (purpose, inputs, schema).
 - `server/miscite/prompts/schemas/`: JSON Schemas for LLM prompt outputs.
-- `server/miscite/sources/`: OpenAlex, Crossref, arXiv, datasets, optional APIs, sync helpers (`sources/predatory/` and `sources/retraction/` split data prep vs matching).
+- `server/miscite/sources/`: OpenAlex, Crossref, PubMed, arXiv, datasets, optional APIs, sync helpers (`sources/predatory/` and `sources/retraction/` split data prep vs matching).
 - `server/miscite/routes/`: auth, dashboard, billing, health endpoints.
 - `server/miscite/routes/seo.py`: robots.txt + sitemap.xml + favicon redirect endpoints.
 - `server/miscite/core/email.py`: Mailgun email delivery helpers.
@@ -74,7 +75,8 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 3) **Analyze document**: `server/miscite/analysis/pipeline/`:
    - Text extraction via Docling (`analysis/extract/docling_extract.py`).
    - LLM parsing (OpenRouter) to get bibliography + citations (`analysis/parse/llm_parsing.py`).
-   - Resolve references in order: OpenAlex -> Crossref -> arXiv (LLM assists ambiguous matches).
+   - Match in-text citations to bibliography entries (`analysis/match/`).
+   - Resolve references in order: OpenAlex -> Crossref -> PubMed -> arXiv (LLM assists ambiguous matches).
    - Flag issues: missing bibliography, unresolved refs, retractions, predatory venues, inappropriate citations (LLM + optional local NLI).
    - Optional deep analysis: expands citation neighborhood via OpenAlex and suggests additions/removals (`analysis/deep_analysis/deep_analysis.py`).
    - Report assembled + methodology markdown.
@@ -87,6 +89,11 @@ The report JSON returned by `analysis/pipeline/` is rendered in `server/miscite/
 
 - `server/miscite/templates/job.html`
 - any clients reading `/api/jobs/{id}`
+
+Recent additions to the report shape:
+- `report.citations[]` includes per-citation match status/confidence + top candidates (for traceability).
+- New issue type: `ambiguous_bibliography_ref` (separate from `missing_bibliography_ref`).
+- New summary fields: `total_intext_citations`, `ambiguous_bibliography_refs`.
 
 ## Data model (SQLAlchemy)
 
@@ -110,10 +117,11 @@ Settings live in `server/miscite/core/config.py` and `.env.example`. Critical en
 - Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate, deep analysis).
+- Matching/verification: `MISCITE_PREPRINT_YEAR_GAP_MAX` controls year-gap tolerance for preprint/working-paper → published matches.
 - Auth email: `MISCITE_MAILGUN_API_KEY`, `MISCITE_MAILGUN_DOMAIN`, `MISCITE_MAILGUN_SENDER`, `MISCITE_LOGIN_CODE_TTL_MINUTES`.
 - Public URLs: `MISCITE_PUBLIC_ORIGIN` for absolute links in emails.
 - Bot protection: `MISCITE_TURNSTILE_SITE_KEY`, `MISCITE_TURNSTILE_SECRET_KEY`.
-- Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
+- Sources: Crossref mailto/user-agent, NCBI/PubMed tool/email/api key, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys, pricing refresh, multipliers, auto-charge thresholds.
 - Ops/security: maintenance mode, load shedding, rate limits, upload scan, job reaper, access-token TTL.
 - Cache (optional): `MISCITE_CACHE_*` controls for HTTP/LLM/text caching.
@@ -129,6 +137,7 @@ If you add new env vars:
 - **OpenRouter**: LLM parsing, matching, and inappropriate-citation classification.
 - **OpenAlex**: metadata resolution, retraction flags, deep analysis network expansion.
 - **Crossref**: metadata resolution, retraction info.
+- **NCBI/PubMed**: metadata resolution via NCBI E-utilities (PMID/DOI and title-based search).
 - **arXiv**: metadata resolution fallback.
 - **Retraction Watch**: local CSV dataset; sync via `server/sync_retractionwatch.py`.
 - **Predatory lists**: local CSV or Google Sheets sync; optional custom API.

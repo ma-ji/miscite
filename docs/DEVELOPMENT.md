@@ -49,6 +49,16 @@ make check
   - `MISCITE_RETRACTIONWATCH_CSV` (Retraction Watch CSV)
   - `MISCITE_PREDATORY_CSV` (predatory venues CSV)
 
+## Matching and verification tuning (optional)
+
+- `MISCITE_LLM_MATCH_MAX_CALLS` limits LLM disambiguation calls used for citation↔bibliography matching and metadata resolution.
+- `MISCITE_PREPRINT_YEAR_GAP_MAX` (default `5`) controls how many years of gap are treated as plausible for preprint/working-paper → published matches during metadata resolution.
+- PubMed (NCBI E-utilities) request identity / rate tuning:
+  - `MISCITE_NCBI_TOOL` (default `miscite`)
+  - `MISCITE_NCBI_EMAIL` (defaults to `MISCITE_CROSSREF_MAILTO`)
+  - `MISCITE_NCBI_API_KEY` (optional)
+  - References containing `PMID` / `PMCID` are treated as strong identifiers during the PubMed stage of resolution (without changing the overall lookup order).
+
 ## Billing (optional)
 
 Usage billing is disabled by default. To enable Stripe balance top-ups and auto-charge, set:

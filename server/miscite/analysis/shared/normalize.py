@@ -6,6 +6,7 @@ import unicodedata
 
 _DOI_CLEAN_RE = re.compile(r"^[\s\[\(\{<]*(?P<doi>10\.\d{4,9}/[-._;()/:A-Z0-9]+)", re.IGNORECASE)
 _DOI_CORE_RE = re.compile(r"(10\.\d{4,9}/[-._;()/:A-Z0-9]+)", re.IGNORECASE)
+_AUTHOR_TOKEN_RE = re.compile(r"[a-z][a-z'’\\-]+", re.IGNORECASE)
 
 
 def normalize_doi(raw: str) -> str | None:
@@ -117,6 +118,28 @@ def normalize_author_year_locator(locator: str | None) -> str | None:
             if match:
                 year_raw = match.group(0)
                 author_raw = loc[: match.start()]
+    author_raw = author_raw.strip()
+    if author_raw:
+        multi_author_hint = (
+            "," in author_raw
+            or "&" in author_raw
+            or ";" in author_raw
+            or " and " in author_raw
+            or " et al" in author_raw
+        )
+        if multi_author_hint:
+            cut = author_raw
+            for sep in [",", "&", ";"]:
+                if sep in cut:
+                    cut = cut.split(sep, 1)[0]
+            if " and " in cut:
+                cut = cut.split(" and ", 1)[0]
+            if " et al" in cut:
+                cut = cut.split(" et al", 1)[0]
+            cut = cut.strip()
+            m = _AUTHOR_TOKEN_RE.search(cut)
+            if m:
+                author_raw = m.group(0)
     author_norm = normalize_author_name(author_raw)
     year_norm = normalize_year_token(year_raw)
     if author_norm and year_norm:

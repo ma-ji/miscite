@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
+from server.miscite.analysis.match.types import CitationMatch
+from server.miscite.analysis.parse.citation_parsing import ReferenceEntry
 from server.miscite.analysis.pipeline.types import ResolvedWork
 from server.miscite.core.config import Settings
 from server.miscite.sources.predatory_api import PredatoryApiClient
@@ -13,31 +14,63 @@ from server.miscite.sources.retraction.match import RetractionMatcher
 
 def check_missing_bibliography_refs(
     *,
-    citation_to_ref: list[tuple[CitationInstance, ReferenceEntry | None]],
+    citation_matches: list[CitationMatch],
     progress: Callable[[str, float], None] | None = None,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict], int, int]:
     if progress:
         progress("Checking missing bibliography references", 0.0)
 
     issues: list[dict] = []
     missing_bib = 0
-    for cit, ref in citation_to_ref:
-        if ref is not None:
+    ambiguous_bib = 0
+    for match in citation_matches:
+        cit = match.citation
+        ref = match.ref
+        if match.status == "unmatched" or ref is None:
+            missing_bib += 1
+            issues.append(
+                {
+                    "type": "missing_bibliography_ref",
+                    "title": f"In-text citation not found in bibliography: {cit.raw}",
+                    "severity": "high",
+                    "details": {
+                        "citation": cit.__dict__,
+                        "match": {
+                            "status": match.status,
+                            "confidence": match.confidence,
+                            "method": match.method,
+                            "notes": match.notes,
+                            "candidates": [c.__dict__ for c in match.candidates],
+                        },
+                    },
+                }
+            )
             continue
-        missing_bib += 1
-        issues.append(
-            {
-                "type": "missing_bibliography_ref",
-                "title": f"In-text citation not found in bibliography: {cit.raw}",
-                "severity": "high",
-                "details": {"citation": cit.__dict__},
-            }
-        )
+
+        if match.status == "ambiguous":
+            ambiguous_bib += 1
+            issues.append(
+                {
+                    "type": "ambiguous_bibliography_ref",
+                    "title": f"Ambiguous bibliography match for in-text citation: {cit.raw}",
+                    "severity": "medium",
+                    "details": {
+                        "citation": cit.__dict__,
+                        "match": {
+                            "status": match.status,
+                            "confidence": match.confidence,
+                            "method": match.method,
+                            "notes": match.notes,
+                            "candidates": [c.__dict__ for c in match.candidates],
+                        },
+                    },
+                }
+            )
 
     if progress:
         progress("Checked missing bibliography references", 1.0)
 
-    return issues, missing_bib
+    return issues, missing_bib, ambiguous_bib
 
 
 def check_retractions_and_predatory_venues(
@@ -111,7 +144,7 @@ def check_retractions_and_predatory_venues(
             db_sources = {
                 hit["source"]
                 for hit in retraction_hits
-                if hit["source"] in {"openalex", "crossref", "arxiv"}
+                if hit["source"] in {"openalex", "crossref", "pubmed", "arxiv"}
             }
             high_conf = bool(strong_sources) or len(db_sources) >= 2
             issues.append(

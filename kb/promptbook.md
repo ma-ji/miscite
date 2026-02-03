@@ -401,3 +401,51 @@ Goal: Document citation style landscape and a robust plan for citation matching 
 Prompt: Provide a detailed analysis of popular citation styles (sciences/social sciences/humanities) and draft a plan to (1) match in-text citations to reference list entries and (2) verify references via OpenAlex/Crossref/arXiv with selective LLM assistance.
 Files touched: kb/citation-styles-and-matching-plan.md, kb/promptbook.md
 Decision/rationale: Organize styles by the three core citation systems (author–date, numeric, notes+bibliography) and propose a traceable matching/verification pipeline that prioritizes strong identifiers, uses deterministic scoring for candidate selection, and reserves LLM calls for borderline disambiguation.
+
+2026-02-03
+Goal: Implement robust citation↔bibliography matching and type-aware year handling in reference resolution.
+Prompt: Update the citation check pipeline to follow kb/citation-styles-and-matching-plan.md (better in-text↔bibliography matching, ambiguity handling, and improved verification behavior for preprint→published year gaps).
+Files touched: AGENTS.md, docs/ARCHITECTURE.md, server/miscite/analysis/match/__init__.py, server/miscite/analysis/match/index.py, server/miscite/analysis/match/match.py, server/miscite/analysis/match/types.py, server/miscite/analysis/parse/citation_parsing.py, server/miscite/analysis/parse/llm_parsing.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/checks/inappropriate.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Introduce a dedicated `analysis/match/` module to index references and link citations with confidence/ambiguity and candidate evidence; propagate match objects through checks and deep analysis for traceability; relax year usage in OpenAlex/Crossref search/scoring when a reference looks preprint/working-paper-like to avoid false mismatches due to multi-year publication gaps.
+
+2026-02-03
+Goal: Make preprint year-gap tolerance configurable and use LLM to disambiguate ambiguous citation↔bibliography matches.
+Prompt: Make the preprint year gap configurable (default 5 years max) and enable LLM disambiguation for ambiguous citation matches.
+Files touched: .env.example, AGENTS.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/prompts/matching/bibliography_candidate/system.txt, server/miscite/prompts/matching/bibliography_candidate/user.txt, server/miscite/prompts/registry.yaml, server/miscite/analysis/match/__init__.py, server/miscite/analysis/match/llm_disambiguate.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
+Decision/rationale: Add `MISCITE_PREPRINT_YEAR_GAP_MAX` to tune how metadata resolution scores year differences for preprint/working-paper-like references; add an LLM-only disambiguation step for ambiguous citation→bibliography links (with memoization and a shared per-job match-call budget) to improve matching accuracy while bounding cost.
+
+2026-02-03
+Goal: Add NCBI/PubMed as an additional metadata source in reference resolution.
+Prompt: Also add NCBI/PubMed to data sources (E-utilities guidance).
+Files touched: .env.example, AGENTS.md, docs/ARCHITECTURE.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/sources/pubmed.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/types.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
+Decision/rationale: Implement an NCBI E-utilities client (ESearch/ESummary) with caching and NCBI-recommended `tool`/`email` (plus optional `api_key`), extract PMID signals from references when present, and insert PubMed into the resolver chain (OpenAlex → Crossref → PubMed → arXiv) with deterministic scoring and optional LLM disambiguation for borderline candidates.
+
+2026-02-03
+Goal: Prefer PubMed first when PMID is present, fetch PubMed abstracts, and improve report link UX for verification.
+Prompt: If explicit PMID try PubMed first; fetch abstracts; show DOI and other IDs (PMID/arXiv/OpenAlex) as clickable links, with DOI first.
+Files touched: server/miscite/sources/pubmed.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/report/methodology.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Treat explicit PMIDs as strong identifiers (prefer PubMed before DOI/title search), fetch abstracts via EFetch to improve downstream relevance checks, and render DOI/PMID/arXiv/OpenAlex identifiers as outbound links to make manual verification fast and reliable.
+
+2026-02-03
+Goal: Add PMCID support and a complete bibliography section with verification links.
+Prompt: Also recognize/link PMCID, and show an "All bibliography references" section with DOI first and all IDs as links.
+Files touched: server/miscite/sources/pubmed.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/types.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Extract PMCID from both references and PubMed metadata, map PMCID to PubMed records when possible, and surface a full bibliography view so users can quickly verify each entry across DOI/PubMed/PMC/arXiv/OpenAlex.
+
+2026-02-03
+Goal: Fix PubMed first-author parsing for reliable matching.
+Prompt: Some records can be searched on PubMed but appear unresolved; analyze root causes and validate PubMed API responses.
+Files touched: server/miscite/sources/pubmed.py, server/miscite/sources/test_pubmed.py, kb/promptbook.md
+Decision/rationale: PubMed ESummary author names are typically formatted as "Family Initials" (e.g., "Smyth EC"); extracting the last token incorrectly treated initials as the surname, reducing match scores and causing false unresolved results. Parse the family token instead and add an offline regression test.
+
+2026-02-03
+Goal: Standardize resolver lookup order across all references.
+Prompt: Keep the citation pipeline standardized: even if a record has PMID/PMCID, still use the standard source order and short-circuits.
+Files touched: server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/test_resolve_order.py, server/miscite/analysis/report/methodology.py, docs/DEVELOPMENT.md, kb/promptbook.md
+Decision/rationale: Remove PMID/PMCID PubMed prefetch so every reference follows the same deterministic resolver order (OpenAlex → Crossref → PubMed → arXiv) with predictable short-circuiting. Treat PMID/PMCID as strong identifiers when the PubMed stage is reached and preserve PMID/PMCID from the bibliography for verification links without adding extra upstream lookups.
+
+2026-02-03
+Goal: Prevent false unmatched in-text citations due to multi-author locators and noisy first-author fields.
+Prompt: Fix citation↔bibliography matching where citations like "(Matta, 2026a)" and "(Varela, Thompson, & Rosch, 1991)" were reported as not found in the reference list.
+Files touched: server/miscite/analysis/shared/normalize.py, server/miscite/analysis/parse/llm_parsing.py, server/miscite/analysis/match/match.py, server/miscite/analysis/match/test_match.py, kb/promptbook.md
+Decision/rationale: Normalize author-year locators and LLM-parsed bibliography `first_author` down to the first-author family token when multi-author strings/initials leak into those fields; add a conservative fallback that extracts the first surname from the raw in-text citation when the locator author doesn’t correspond to any bibliography author; cover with offline regression tests.
