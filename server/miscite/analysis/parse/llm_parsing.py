@@ -11,6 +11,26 @@ from server.miscite.prompts import get_prompt, render_prompt
 
 logger = logging.getLogger(__name__)
 
+_REFNUM_RE = re.compile(
+    r"^\s*(?:\[(?P<bracket>\d{1,4})\]\s*|(?P<plain>\d{1,4})[\).]\s+)"
+)
+
+
+def _extract_ref_number_from_raw(raw: str) -> int | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    m = _REFNUM_RE.match(text)
+    if not m:
+        return None
+    hit = m.group("bracket") or m.group("plain")
+    if not hit:
+        return None
+    try:
+        return int(hit)
+    except Exception:
+        return None
+
 
 @dataclass(frozen=True)
 class LlmParseResult:
@@ -52,6 +72,7 @@ def parse_references_with_llm(
 
     reference_records: dict[str, dict] = {}
     references: list[ReferenceEntry] = []
+    used_ids: set[str] = set()
     for i, item in enumerate(refs_raw[:max_refs], start=1):
         if not isinstance(item, dict):
             continue
@@ -60,6 +81,8 @@ def parse_references_with_llm(
             continue
 
         ref_number = _safe_int(item.get("ref_number"))
+        if ref_number is None:
+            ref_number = _extract_ref_number_from_raw(raw)
         doi = normalize_doi(str(item.get("doi") or ""))
 
         csl = item.get("csl")
@@ -69,7 +92,13 @@ def parse_references_with_llm(
         year = _extract_year(item.get("year"), csl)
         first_author = _extract_first_author(item.get("first_author"), csl)
 
-        ref_id = str(ref_number) if ref_number is not None else str(item.get("id") or f"ref-{i}")
+        candidate_id = str(ref_number) if ref_number is not None else str(item.get("id") or f"ref-{i}")
+        ref_id = candidate_id
+        if ref_id in used_ids:
+            ref_id = f"ref-{i}"
+        if ref_id in used_ids:
+            ref_id = f"{ref_id}-{len(used_ids) + 1}"
+        used_ids.add(ref_id)
         references.append(
             ReferenceEntry(ref_id=ref_id, raw=raw, ref_number=ref_number, doi=doi, year=year, first_author=first_author)
         )

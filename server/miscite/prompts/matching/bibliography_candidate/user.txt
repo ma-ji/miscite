@@ -1,0 +1,19 @@
+Pick the best matching bibliography entry for this in-text citation, or null.
+
+Return JSON with keys:
+- best_id: string|null (must be one of the candidate ids)
+- confidence: number 0..1
+- rationale: string (brief; only based on the provided candidates and citation text)
+
+CITATION_RAW:
+$citation_raw
+
+CITATION_LOCATOR:
+$citation_locator
+
+CITATION_CONTEXT:
+$citation_context
+
+CANDIDATES:
+$candidates
+

@@ -19,6 +19,43 @@ from server.miscite.analysis.pipeline.types import ResolvedWork
 
 logger = logging.getLogger(__name__)
 
+_PREPRINT_HINT_RE = re.compile(
+    r"\b(arxiv|preprint|working\s+paper|discussion\s+paper|ssrn|nber|repec|cepr|iza)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_preprint_like(ref_raw: str | None, csl: dict | None, arxiv_id: str | None) -> bool:
+    if arxiv_id:
+        return True
+    raw = (ref_raw or "").lower()
+    if raw and _PREPRINT_HINT_RE.search(raw):
+        return True
+    if isinstance(csl, dict):
+        csl_type = str(csl.get("type") or "").strip().lower()
+        if csl_type in {"manuscript", "report"}:
+            return True
+    return False
+
+
+def _year_bonus(
+    target_year: int | None,
+    candidate_year: int | None,
+    *,
+    allow_large_gap_max_years: int,
+) -> float:
+    if not target_year or not candidate_year:
+        return 0.0
+    diff = abs(int(candidate_year) - int(target_year))
+    if diff == 0:
+        return 0.08
+    if diff <= 1:
+        return 0.04
+    # Preprint/working-paper pipelines can legitimately have multi-year gaps between versions.
+    if allow_large_gap_max_years > 0 and diff <= allow_large_gap_max_years:
+        return 0.02
+    return 0.0
+
 
 def _crossref_title(msg: dict | None) -> str | None:
     if not msg:
@@ -355,6 +392,7 @@ def resolve_references(
     crossref: CrossrefClient,
     arxiv: ArxivClient,
     llm_match_client: OpenRouterClient,
+    llm_call_budget: int | None = None,
     progress: Callable[[str, float], None] | None = None,
 ) -> tuple[dict[str, ResolvedWork], int]:
     resolution_cache: dict[str, ResolvedWork] = {}
@@ -398,6 +436,7 @@ def resolve_references(
                     str(csl.get("id") or "")
                 )
         arxiv_id_from_ref = arxiv_id_from_ref or _extract_arxiv_id_from_text(ref.raw)
+        preprint_like = _is_preprint_like(ref.raw, csl if isinstance(csl, dict) else None, arxiv_id_from_ref)
 
         def _clip_query(text_in: str, max_len: int = 180) -> str:
             cleaned = " ".join(text_in.replace('"', "").split())
@@ -411,10 +450,11 @@ def resolve_references(
             if not candidates:
                 return None, 0.0, f"No {source_label} candidates with ids."
             with match_llm_calls_lock:
-                if match_llm_calls >= settings.llm_match_max_calls:
-                    raise RuntimeError(
-                        "LLM match call limit exceeded; increase MISCITE_LLM_MATCH_MAX_CALLS."
-                    )
+                budget = settings.llm_match_max_calls if llm_call_budget is None else int(llm_call_budget)
+                if budget < 0:
+                    budget = 0
+                if match_llm_calls >= budget:
+                    return None, 0.0, "LLM disambiguation skipped: match-call budget exhausted."
                 match_llm_calls += 1
 
             try:
@@ -475,7 +515,7 @@ def resolve_references(
             parts = [base]
             if first_author:
                 parts.append(first_author)
-            if year:
+            if year and not preprint_like:
                 parts.append(str(year))
             return " ".join(parts)
 
@@ -491,10 +531,11 @@ def resolve_references(
             if year:
                 cy = candidate.get("publication_year")
                 if isinstance(cy, int):
-                    if cy == year:
-                        score += 0.08
-                    elif abs(cy - year) <= 1:
-                        score += 0.04
+                    score += _year_bonus(
+                        year,
+                        cy,
+                        allow_large_gap_max_years=settings.preprint_year_gap_max if preprint_like else 0,
+                    )
             cdoi = _openalex_doi(candidate)
             if doi and cdoi and cdoi == doi:
                 score += 0.2
@@ -559,7 +600,7 @@ def resolve_references(
             parts = [base]
             if first_author:
                 parts.append(first_author)
-            if year:
+            if year and not preprint_like:
                 parts.append(str(year))
             return " ".join(parts)
 
@@ -573,10 +614,11 @@ def resolve_references(
             if year:
                 cy = _crossref_year(candidate)
                 if isinstance(cy, int):
-                    if cy == year:
-                        score += 0.08
-                    elif abs(cy - year) <= 1:
-                        score += 0.04
+                    score += _year_bonus(
+                        year,
+                        cy,
+                        allow_large_gap_max_years=settings.preprint_year_gap_max if preprint_like else 0,
+                    )
             cdoi = _crossref_doi(candidate)
             if doi and cdoi and cdoi == doi:
                 score += 0.2
@@ -643,7 +685,8 @@ def resolve_references(
             parts = [base]
             if first_author:
                 parts.append(f'au:"{first_author}"')
-            if year:
+            include_year = bool(year and (arxiv_id_from_ref or "arxiv" in (ref.raw or "").lower()))
+            if include_year:
                 parts.append(str(year))
             return " AND ".join(parts)
 
@@ -657,10 +700,7 @@ def resolve_references(
             if year:
                 cy = _arxiv_year(candidate)
                 if isinstance(cy, int):
-                    if cy == year:
-                        score += 0.08
-                    elif abs(cy - year) <= 1:
-                        score += 0.04
+                    score += _year_bonus(year, cy, allow_large_gap_max_years=0)
             cdoi = _arxiv_doi(candidate)
             if doi and cdoi and cdoi == doi:
                 score += 0.2

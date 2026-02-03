@@ -58,6 +58,7 @@ Stages:
 
 - Extract: `server/miscite/analysis/extract/` (Docling/MarkItDown backends)
 - Parse: `server/miscite/analysis/parse/` (heuristics + OpenRouter-assisted parsing)
+- Match: `server/miscite/analysis/match/` (in-text citations ↔ bibliography linking + ambiguity tracking)
 - Resolve: `server/miscite/analysis/pipeline/resolve.py` (OpenAlex -> Crossref -> arXiv)
 - Checks: `server/miscite/analysis/checks/` (retraction, predatory, inappropriate, missing refs)
 - Deep analysis (optional): `server/miscite/analysis/deep_analysis/`
@@ -72,6 +73,9 @@ Stages:
 - Parse:
   - `server/miscite/analysis/parse/citation_parsing.py`: heuristic parsing/normalization helpers
   - `server/miscite/analysis/parse/llm_parsing.py`: OpenRouter-assisted parsing
+- Match:
+  - `server/miscite/analysis/match/index.py`: reference indexing + normalization for fast lookup
+  - `server/miscite/analysis/match/match.py`: citation→reference matching + confidence/ambiguity
 - Checks:
   - `server/miscite/analysis/checks/local_nli.py`: optional local NLI model
   - `server/miscite/analysis/checks/inappropriate.py`: heuristic + NLI + LLM inappropriate-citation checks

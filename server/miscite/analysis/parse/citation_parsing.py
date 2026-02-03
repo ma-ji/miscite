@@ -24,7 +24,9 @@ def split_references(text: str) -> tuple[str, str]:
 
 _DOI_RE = re.compile(r"(10\.\d{4,9}/[-._;()/:A-Z0-9]+)", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b((?:19|20)\d{2})\b")
-_REFNUM_RE = re.compile(r"^\s*\[?(\d{1,4})\]?\s*[\).]\s+")
+_REFNUM_RE = re.compile(
+    r"^\s*(?:\[(?P<bracket>\d{1,4})\]\s*|(?P<plain>\d{1,4})[\).]\s+)"
+)
 _AUTHOR_START_RE = re.compile(r"^\s*([A-Z][A-Za-z'’\-]+)")
 
 
@@ -71,7 +73,8 @@ def parse_reference_entries(references_text: str) -> list[ReferenceEntry]:
         mnum = _REFNUM_RE.match(entry)
         if mnum:
             try:
-                num = int(mnum.group(1))
+                hit = mnum.group("bracket") or mnum.group("plain")
+                num = int(hit) if hit else None
             except ValueError:
                 num = None
 

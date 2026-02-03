@@ -159,6 +159,7 @@ class Settings:
 
     resolve_max_workers: int
     inappropriate_max_workers: int
+    preprint_year_gap_max: int
 
     enable_local_nli: bool
     local_nli_model: str
@@ -343,6 +344,7 @@ class Settings:
 
         resolve_max_workers = _env_int("MISCITE_RESOLVE_MAX_WORKERS", 8, min_value=1, max_value=64)
         inappropriate_max_workers = _env_int("MISCITE_INAPPROPRIATE_MAX_WORKERS", 4, min_value=1, max_value=64)
+        preprint_year_gap_max = _env_int("MISCITE_PREPRINT_YEAR_GAP_MAX", 5, min_value=0, max_value=50)
 
         enable_local_nli = _env_bool("MISCITE_ENABLE_LOCAL_NLI", False)
         local_nli_model = _env_str("MISCITE_LOCAL_NLI_MODEL", "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli")
@@ -502,6 +504,7 @@ class Settings:
             llm_citation_parse_max_candidate_chars=llm_citation_parse_max_candidate_chars,
             resolve_max_workers=resolve_max_workers,
             inappropriate_max_workers=inappropriate_max_workers,
+            preprint_year_gap_max=preprint_year_gap_max,
             enable_local_nli=enable_local_nli,
             local_nli_model=local_nli_model,
             enable_deep_analysis=enable_deep_analysis,

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from server.miscite.analysis.checks.local_nli import LocalNliModel
+from server.miscite.analysis.match.types import CitationMatch
 from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
 from server.miscite.analysis.pipeline.types import ResolvedWork
 from server.miscite.analysis.shared.normalize import content_tokens
@@ -50,7 +51,7 @@ def check_inappropriate_citations(
     settings: Settings,
     llm_client: OpenRouterClient,
     local_nli: LocalNliModel | None,
-    citation_to_ref: list[tuple[CitationInstance, ReferenceEntry | None]],
+    citation_matches: list[CitationMatch],
     resolved_by_ref_id: dict[str, ResolvedWork],
     progress: Callable[[str, float], None] | None = None,
 ) -> tuple[list[dict], int, int, bool]:
@@ -176,9 +177,14 @@ def check_inappropriate_citations(
 
     checks: list[tuple[CitationInstance, ReferenceEntry, ResolvedWork]] = []
 
-    for cit, ref in citation_to_ref:
-        if ref is None:
+    for match in citation_matches:
+        if match.ref is None:
             continue
+        # Avoid running downstream checks on ambiguous/low-confidence matches.
+        if match.status != "matched" or match.confidence < 0.75:
+            continue
+        cit = match.citation
+        ref = match.ref
         work = resolved_by_ref_id.get(ref.ref_id)
         if not work or not work.title:
             continue
