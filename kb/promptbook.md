@@ -413,3 +413,33 @@ Goal: Make preprint year-gap tolerance configurable and use LLM to disambiguate 
 Prompt: Make the preprint year gap configurable (default 5 years max) and enable LLM disambiguation for ambiguous citation matches.
 Files touched: .env.example, AGENTS.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/prompts/matching/bibliography_candidate/system.txt, server/miscite/prompts/matching/bibliography_candidate/user.txt, server/miscite/prompts/registry.yaml, server/miscite/analysis/match/__init__.py, server/miscite/analysis/match/llm_disambiguate.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
 Decision/rationale: Add `MISCITE_PREPRINT_YEAR_GAP_MAX` to tune how metadata resolution scores year differences for preprint/working-paper-like references; add an LLM-only disambiguation step for ambiguous citation→bibliography links (with memoization and a shared per-job match-call budget) to improve matching accuracy while bounding cost.
+
+2026-02-03
+Goal: Add NCBI/PubMed as an additional metadata source in reference resolution.
+Prompt: Also add NCBI/PubMed to data sources (E-utilities guidance).
+Files touched: .env.example, AGENTS.md, docs/ARCHITECTURE.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/sources/pubmed.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/types.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
+Decision/rationale: Implement an NCBI E-utilities client (ESearch/ESummary) with caching and NCBI-recommended `tool`/`email` (plus optional `api_key`), extract PMID signals from references when present, and insert PubMed into the resolver chain (OpenAlex → Crossref → PubMed → arXiv) with deterministic scoring and optional LLM disambiguation for borderline candidates.
+
+2026-02-03
+Goal: Prefer PubMed first when PMID is present, fetch PubMed abstracts, and improve report link UX for verification.
+Prompt: If explicit PMID try PubMed first; fetch abstracts; show DOI and other IDs (PMID/arXiv/OpenAlex) as clickable links, with DOI first.
+Files touched: server/miscite/sources/pubmed.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/report/methodology.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Treat explicit PMIDs as strong identifiers (prefer PubMed before DOI/title search), fetch abstracts via EFetch to improve downstream relevance checks, and render DOI/PMID/arXiv/OpenAlex identifiers as outbound links to make manual verification fast and reliable.
+
+2026-02-03
+Goal: Add PMCID support and a complete bibliography section with verification links.
+Prompt: Also recognize/link PMCID, and show an "All bibliography references" section with DOI first and all IDs as links.
+Files touched: server/miscite/sources/pubmed.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/types.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Extract PMCID from both references and PubMed metadata, map PMCID to PubMed records when possible, and surface a full bibliography view so users can quickly verify each entry across DOI/PubMed/PMC/arXiv/OpenAlex.
+
+2026-02-03
+Goal: Fix PubMed first-author parsing for reliable matching.
+Prompt: Some records can be searched on PubMed but appear unresolved; analyze root causes and validate PubMed API responses.
+Files touched: server/miscite/sources/pubmed.py, server/miscite/sources/test_pubmed.py, kb/promptbook.md
+Decision/rationale: PubMed ESummary author names are typically formatted as "Family Initials" (e.g., "Smyth EC"); extracting the last token incorrectly treated initials as the surname, reducing match scores and causing false unresolved results. Parse the family token instead and add an offline regression test.
+
+2026-02-03
+Goal: Standardize resolver lookup order across all references.
+Prompt: Keep the citation pipeline standardized: even if a record has PMID/PMCID, still use the standard source order and short-circuits.
+Files touched: server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/test_resolve_order.py, server/miscite/analysis/report/methodology.py, docs/DEVELOPMENT.md, kb/promptbook.md
+Decision/rationale: Remove PMID/PMCID PubMed prefetch so every reference follows the same deterministic resolver order (OpenAlex → Crossref → PubMed → arXiv) with predictable short-circuiting. Treat PMID/PMCID as strong identifiers when the PubMed stage is reached and preserve PMID/PMCID from the bibliography for verification links without adding extra upstream lookups.

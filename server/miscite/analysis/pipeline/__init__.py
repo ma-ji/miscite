@@ -37,6 +37,7 @@ from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.sources.arxiv import ArxivClient
 from server.miscite.sources.crossref import CrossrefClient
 from server.miscite.sources.openalex import OpenAlexClient
+from server.miscite.sources.pubmed import PubMedClient
 from server.miscite.sources.predatory_api import PredatoryApiClient
 from server.miscite.sources.predatory.data import load_predatory_data
 from server.miscite.sources.predatory.match import PredatoryMatcher
@@ -252,6 +253,14 @@ def analyze_document(
         cache=cache,
     )
     openalex = OpenAlexClient(timeout_seconds=settings.api_timeout_seconds, cache=cache)
+    pubmed = PubMedClient(
+        tool=settings.ncbi_tool,
+        email=settings.ncbi_email,
+        api_key=settings.ncbi_api_key,
+        user_agent=settings.crossref_user_agent,
+        timeout_seconds=settings.api_timeout_seconds,
+        cache=cache,
+    )
     arxiv = ArxivClient(
         timeout_seconds=settings.api_timeout_seconds,
         user_agent=settings.crossref_user_agent,
@@ -273,6 +282,15 @@ def analyze_document(
         {
             "name": "OpenAlex API",
             "detail": "Resolve references to OpenAlex works (DOI first; otherwise search by title/author/year) and fetch abstracts + retraction flag.",
+        }
+    )
+    used_sources.append(
+        {
+            "name": "NCBI E-utilities (PubMed)",
+            "detail": (
+                "Resolve biomedical references in PubMed (PMID/DOI lookup when available; otherwise search by title/author/year) and fetch abstracts when available. "
+                "Includes NCBI-recommended tool/email parameters and optional API key when configured."
+            ),
         }
     )
     used_sources.append(
@@ -383,6 +401,7 @@ def analyze_document(
         reference_records=reference_records,
         openalex=openalex,
         crossref=crossref,
+        pubmed=pubmed,
         arxiv=arxiv,
         llm_match_client=llm_match_client,
         llm_call_budget=max(0, llm_match_budget_total - match_llm_calls_citation),

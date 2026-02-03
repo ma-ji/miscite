@@ -25,7 +25,8 @@ def build_methodology_md(
         "choose among candidates (or abstain) within a per-job match-call budget."
     )
     lines.append(
-        "4) **Reference resolution**: attempt to link bibliography entries to OpenAlex, then Crossref, then arXiv. "
+        "4) **Reference resolution**: attempt to link bibliography entries to OpenAlex, then Crossref, then PubMed, then arXiv "
+        "(PubMed treats explicit PMID/PMCID in the bibliography as strong identifiers when reached). "
         "Each source prefers DOI/ID lookup when available; otherwise it searches by title/author/year. "
         "For ambiguous search results, a configured LLM may be used to conservatively choose a match (or abstain). "
         "Resolution stops after the first matching source."

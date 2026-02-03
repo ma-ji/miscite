@@ -14,6 +14,7 @@ from server.miscite.prompts import render_prompt
 from server.miscite.sources.arxiv import ArxivClient
 from server.miscite.sources.crossref import CrossrefClient
 from server.miscite.sources.openalex import OpenAlexClient
+from server.miscite.sources.pubmed import PubMedClient
 
 from server.miscite.analysis.pipeline.types import ResolvedWork
 
@@ -252,6 +253,17 @@ _ARXIV_URL_RE = re.compile(
 )
 _ARXIV_TAG_RE = re.compile(r"\barxiv\s*:?\s*(?P<id>[A-Za-z0-9.\-_/]+)", re.IGNORECASE)
 
+_PUBMED_URL_RE = re.compile(
+    r"(?:pubmed\.ncbi\.nlm\.nih\.gov|ncbi\.nlm\.nih\.gov/pubmed)/(?P<id>\d{4,12})",
+    re.IGNORECASE,
+)
+_PMID_TAG_RE = re.compile(r"\bpmid\s*:?\s*(?P<id>\d{4,12})\b", re.IGNORECASE)
+
+_PMC_URL_RE = re.compile(
+    r"pmc\.ncbi\.nlm\.nih\.gov/articles/(?P<id>PMC\d+)", re.IGNORECASE
+)
+_PMCID_TAG_RE = re.compile(r"\bpmcid\s*:?\s*(?P<id>PMC?\d+)\b", re.IGNORECASE)
+
 
 def _clean_arxiv_id(raw: str | None) -> str | None:
     if not raw:
@@ -272,6 +284,40 @@ def _extract_arxiv_id_from_text(text: str | None) -> str | None:
     m = _ARXIV_TAG_RE.search(text)
     if m:
         return _clean_arxiv_id(m.group("id"))
+    return None
+
+
+def _extract_pmid_from_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    m = _PUBMED_URL_RE.search(text)
+    if m:
+        return str(m.group("id")).strip()
+    m = _PMID_TAG_RE.search(text)
+    if m:
+        return str(m.group("id")).strip()
+    return None
+
+
+def _extract_pmcid_from_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    m = _PMC_URL_RE.search(text)
+    if m:
+        return str(m.group("id")).strip().upper()
+    m = _PMCID_TAG_RE.search(text)
+    if m:
+        raw = str(m.group("id")).strip()
+        if not raw:
+            return None
+        if raw.upper().startswith("PMC"):
+            return raw.upper()
+        if raw.isdigit():
+            return f"PMC{raw}"
+        return raw.upper()
+    m = re.search(r"\bPMC\d+\b", text, flags=re.IGNORECASE)
+    if m:
+        return str(m.group(0)).strip().upper()
     return None
 
 
@@ -390,6 +436,7 @@ def resolve_references(
     reference_records: dict[str, dict],
     openalex: OpenAlexClient,
     crossref: CrossrefClient,
+    pubmed: PubMedClient,
     arxiv: ArxivClient,
     llm_match_client: OpenRouterClient,
     llm_call_budget: int | None = None,
@@ -425,8 +472,23 @@ def resolve_references(
         openalex_match: dict | None = None
         crossref_msg: dict | None = None
         crossref_match: dict | None = None
+        pubmed_record: dict | None = None
+        pubmed_match: dict | None = None
         arxiv_entry: dict | None = None
         arxiv_match: dict | None = None
+
+        def _pmid_from_value(val: object) -> str | None:
+            if val is None:
+                return None
+            if isinstance(val, int):
+                s = str(val)
+                return s if s.isdigit() and 4 <= len(s) <= 12 else None
+            if isinstance(val, str):
+                s = val.strip()
+                if s.isdigit() and 4 <= len(s) <= 12:
+                    return s
+                return _extract_pmid_from_text(s)
+            return None
 
         arxiv_id_from_ref = None
         if isinstance(csl, dict):
@@ -436,6 +498,31 @@ def resolve_references(
                     str(csl.get("id") or "")
                 )
         arxiv_id_from_ref = arxiv_id_from_ref or _extract_arxiv_id_from_text(ref.raw)
+
+        pmid_from_ref = None
+        if isinstance(csl, dict):
+            pmid_from_ref = _pmid_from_value(csl.get("PMID"))
+            if not pmid_from_ref:
+                pmid_from_ref = _pmid_from_value(csl.get("pmid"))
+            if not pmid_from_ref:
+                pmid_from_ref = _extract_pmid_from_text(str(csl.get("URL") or ""))
+            if not pmid_from_ref:
+                # Avoid treating numeric citation IDs as PMIDs; only accept explicit PMID signals.
+                pmid_from_ref = _extract_pmid_from_text(str(csl.get("id") or ""))
+        pmid_from_ref = pmid_from_ref or _extract_pmid_from_text(ref.raw)
+
+        pmcid_from_ref = None
+        if isinstance(csl, dict):
+            pmcid_from_ref = _extract_pmcid_from_text(str(csl.get("PMCID") or ""))
+            if not pmcid_from_ref:
+                pmcid_from_ref = _extract_pmcid_from_text(str(csl.get("pmcid") or ""))
+            if not pmcid_from_ref:
+                pmcid_from_ref = _extract_pmcid_from_text(str(csl.get("URL") or ""))
+            if not pmcid_from_ref:
+                # Avoid treating generic CSL ids as PMCID unless they contain an explicit PMC token.
+                pmcid_from_ref = _extract_pmcid_from_text(str(csl.get("id") or ""))
+        pmcid_from_ref = pmcid_from_ref or _extract_pmcid_from_text(ref.raw)
+
         preprint_like = _is_preprint_like(ref.raw, csl if isinstance(csl, dict) else None, arxiv_id_from_ref)
 
         def _clip_query(text_in: str, max_len: int = 180) -> str:
@@ -677,6 +764,156 @@ def resolve_references(
                     }
             return None, None
 
+        def _pubmed_pmid(rec: dict | None) -> str | None:
+            if not isinstance(rec, dict):
+                return None
+            pmid = rec.get("pmid") or rec.get("id")
+            if isinstance(pmid, int):
+                pmid = str(pmid)
+            if isinstance(pmid, str) and pmid.strip():
+                return pmid.strip()
+            return None
+
+        def _pubmed_pmcid(rec: dict | None) -> str | None:
+            if not isinstance(rec, dict):
+                return None
+            val = rec.get("pmcid")
+            if isinstance(val, str) and val.strip():
+                return val.strip().upper()
+            return None
+
+        def _pubmed_title(rec: dict | None) -> str | None:
+            if not isinstance(rec, dict):
+                return None
+            val = rec.get("title")
+            return str(val).strip() if isinstance(val, str) and val.strip() else None
+
+        def _pubmed_year(rec: dict | None) -> int | None:
+            if not isinstance(rec, dict):
+                return None
+            val = rec.get("publication_year")
+            if isinstance(val, int):
+                return val
+            if isinstance(val, str) and val.strip().isdigit():
+                try:
+                    return int(val.strip())
+                except Exception:
+                    return None
+            return None
+
+        def _pubmed_journal(rec: dict | None) -> str | None:
+            if not isinstance(rec, dict):
+                return None
+            val = rec.get("journal")
+            return str(val).strip() if isinstance(val, str) and val.strip() else None
+
+        def _pubmed_doi(rec: dict | None) -> str | None:
+            if not isinstance(rec, dict):
+                return None
+            return normalize_doi(str(rec.get("doi") or ""))
+
+        def _pubmed_first_author_family(rec: dict | None) -> str | None:
+            if not isinstance(rec, dict):
+                return None
+            val = rec.get("first_author")
+            return str(val).strip().lower() if isinstance(val, str) and val.strip() else None
+
+        def _pubmed_search_query() -> str:
+            if title:
+                base = f"\"{_clip_query(title)}\"[Title]"
+            else:
+                base = _clip_query(ref.raw)
+            parts = [base]
+            if first_author:
+                parts.append(f"{first_author}[Author]")
+            if year and not preprint_like:
+                parts.append(f"{year}[DP]")
+            return " AND ".join(parts)
+
+        def _pubmed_candidate_score(candidate: dict) -> float:
+            cand_title = _pubmed_title(candidate) or ""
+            score = _title_similarity(title or ref.raw, cand_title)
+            if first_author:
+                cand_author = _pubmed_first_author_family(candidate)
+                if cand_author and cand_author == first_author:
+                    score += 0.12
+            if year:
+                cy = _pubmed_year(candidate)
+                if isinstance(cy, int):
+                    score += _year_bonus(
+                        year,
+                        cy,
+                        allow_large_gap_max_years=settings.preprint_year_gap_max if preprint_like else 0,
+                    )
+            cdoi = _pubmed_doi(candidate)
+            if doi and cdoi and cdoi == doi:
+                score += 0.2
+            return min(1.0, score)
+
+        def _match_pubmed() -> tuple[dict | None, dict | None]:
+            if pmid_from_ref:
+                rec = pubmed.get_summary_by_pmid(pmid_from_ref)
+                if rec:
+                    return rec, {"method": "pmid", "confidence": 1.0}
+
+            if pmcid_from_ref:
+                rec = pubmed.get_work_by_pmcid(pmcid_from_ref)
+                if rec:
+                    return rec, {"method": "pmcid", "confidence": 1.0}
+
+            if doi:
+                rec = pubmed.get_work_by_doi(doi)
+                if rec:
+                    return rec, {"method": "doi", "confidence": 1.0}
+
+            candidates = pubmed.search(_pubmed_search_query(), rows=10)
+            scored = [
+                (_pubmed_candidate_score(c), c)
+                for c in candidates
+                if isinstance(c, dict) and _pubmed_pmid(c)
+            ]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            if scored:
+                top_score, top = scored[0]
+                if top_score >= 0.93:
+                    return top, {"method": "search", "confidence": float(top_score)}
+                if top_score >= 0.65:
+                    top_candidates = [c for _s, c in scored[:5]]
+                    packed = []
+                    for cand in top_candidates:
+                        packed.append(
+                            {
+                                "id": _pubmed_pmid(cand),
+                                "pmid": _pubmed_pmid(cand),
+                                "pmcid": _pubmed_pmcid(cand),
+                                "doi": _pubmed_doi(cand),
+                                "title": _pubmed_title(cand),
+                                "publication_year": _pubmed_year(cand),
+                                "first_author": _pubmed_first_author_family(cand),
+                                "venue": _pubmed_journal(cand),
+                            }
+                        )
+                    best_id, conf_f, rationale = _choose_candidate_with_llm(
+                        "PubMed", packed
+                    )
+                    if best_id:
+                        rec = pubmed.get_summary_by_pmid(best_id) or next(
+                            (c for c in candidates if _pubmed_pmid(c) == best_id), None
+                        )
+                        if rec:
+                            return rec, {
+                                "method": "search_llm",
+                                "confidence": conf_f,
+                                "rationale": rationale,
+                            }
+                    return None, {
+                        "method": "search_llm",
+                        "confidence": conf_f,
+                        "rationale": rationale,
+                        "no_match": True,
+                    }
+            return None, None
+
         def _arxiv_search_query() -> str:
             if title:
                 base = f'ti:"{_clip_query(title)}"'
@@ -768,7 +1005,9 @@ def resolve_references(
         if openalex_work is None:
             crossref_msg, crossref_match = _match_crossref()
             if crossref_msg is None:
-                arxiv_entry, arxiv_match = _match_arxiv()
+                pubmed_record, pubmed_match = _match_pubmed()
+                if pubmed_record is None:
+                    arxiv_entry, arxiv_match = _match_arxiv()
 
         if openalex_work:
             matched_doi = _openalex_doi(openalex_work)
@@ -778,6 +1017,12 @@ def resolve_references(
                 doi = matched_doi
         elif crossref_msg:
             matched_doi = _crossref_doi(crossref_msg)
+            if matched_doi:
+                if doi_from_ref and doi_from_ref != matched_doi:
+                    match_notes.append("Resolved DOI differs from reference DOI.")
+                doi = matched_doi
+        elif pubmed_record:
+            matched_doi = _pubmed_doi(pubmed_record)
             if matched_doi:
                 if doi_from_ref and doi_from_ref != matched_doi:
                     match_notes.append("Resolved DOI differs from reference DOI.")
@@ -794,22 +1039,30 @@ def resolve_references(
             source = "openalex"
         elif crossref_msg:
             source = "crossref"
+        elif pubmed_record:
+            source = "pubmed"
         elif arxiv_entry:
             source = "arxiv"
 
         abstract = None
         if openalex_work:
             abstract = _openalex_abstract(openalex_work)
-        elif arxiv_entry:
-            abstract = _arxiv_abstract(arxiv_entry)
-        elif crossref_msg:
+        if abstract is None and crossref_msg:
             abstract = _crossref_abstract(crossref_msg)
+        if abstract is None and arxiv_entry:
+            abstract = _arxiv_abstract(arxiv_entry)
+        if abstract is None and pubmed_record:
+            pmid_for_abs = _pubmed_pmid(pubmed_record)
+            if pmid_for_abs:
+                abstract = pubmed.get_abstract_by_pmid(pmid_for_abs)
 
         openalex_id = (
             str(openalex_work.get("id") or "")
             if isinstance(openalex_work, dict) and openalex_work.get("id")
             else None
         )
+        pmid = _pubmed_pmid(pubmed_record) or pmid_from_ref
+        pmcid = _pubmed_pmcid(pubmed_record) or pmcid_from_ref
         arxiv_id = _arxiv_id(arxiv_entry)
 
         is_retracted = None
@@ -858,6 +1111,10 @@ def resolve_references(
                 else None
             )
             issn = _crossref_issn(crossref_msg)
+        elif pubmed_record:
+            resolved_title = _pubmed_title(pubmed_record)
+            resolved_year = _pubmed_year(pubmed_record) or year
+            journal = _pubmed_journal(pubmed_record)
         elif arxiv_entry:
             resolved_title = _arxiv_title(arxiv_entry)
             resolved_year = _arxiv_year(arxiv_entry) or year
@@ -868,6 +1125,8 @@ def resolve_references(
             confidence = float(openalex_match.get("confidence") or 0.0)
         elif source == "crossref" and crossref_match:
             confidence = float(crossref_match.get("confidence") or 0.0)
+        elif source == "pubmed" and pubmed_match:
+            confidence = float(pubmed_match.get("confidence") or 0.0)
         elif source == "arxiv" and arxiv_match:
             confidence = float(arxiv_match.get("confidence") or 0.0)
 
@@ -886,6 +1145,17 @@ def resolve_references(
                 notes = "Resolved via Crossref search (LLM disambiguation)."
             elif crossref_msg:
                 notes = "Resolved via Crossref search."
+        elif source == "pubmed":
+            if pubmed_match and pubmed_match.get("method") == "pmid":
+                notes = "Linked to PubMed by PMID."
+            elif pubmed_match and pubmed_match.get("method") == "pmcid":
+                notes = "Linked to PubMed by PMCID."
+            elif pubmed_match and pubmed_match.get("method") == "doi":
+                notes = "Linked to PubMed by DOI."
+            elif pubmed_match and pubmed_match.get("method") == "search_llm":
+                notes = "Resolved via PubMed search (LLM disambiguation)."
+            elif pubmed_record:
+                notes = "Resolved via PubMed search."
         elif source == "arxiv":
             if arxiv_match and arxiv_match.get("method") == "arxiv_id":
                 notes = "Linked to arXiv by ID."
@@ -896,9 +1166,10 @@ def resolve_references(
             elif arxiv_entry:
                 notes = "Resolved via arXiv search."
         else:
-            notes = "Unresolved in OpenAlex/Crossref/arXiv."
+            notes = "Unresolved in OpenAlex/Crossref/PubMed/arXiv."
 
         if match_notes:
+            match_notes = list(dict.fromkeys(match_notes))
             notes = " ".join([notes] + match_notes).strip()
 
         resolved = ResolvedWork(
@@ -919,6 +1190,10 @@ def resolve_references(
             ),
             openalex_match=openalex_match,
             crossref_match=crossref_match,
+            pmid=pmid,
+            pmcid=pmcid,
+            pubmed_record=pubmed_record if isinstance(pubmed_record, dict) else None,
+            pubmed_match=pubmed_match,
             arxiv_id=arxiv_id,
             arxiv_record=arxiv_entry if isinstance(arxiv_entry, dict) else None,
             arxiv_match=arxiv_match,

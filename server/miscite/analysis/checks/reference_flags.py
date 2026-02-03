@@ -144,7 +144,7 @@ def check_retractions_and_predatory_venues(
             db_sources = {
                 hit["source"]
                 for hit in retraction_hits
-                if hit["source"] in {"openalex", "crossref", "arxiv"}
+                if hit["source"] in {"openalex", "crossref", "pubmed", "arxiv"}
             }
             high_conf = bool(strong_sources) or len(db_sources) >= 2
             issues.append(

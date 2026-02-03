@@ -10,7 +10,7 @@ analysis pipeline over uploaded PDF/DOCX documents.
 - Job loop: `server/miscite/worker/`
 - Core infrastructure (config/db/models/security/storage/etc): `server/miscite/core/`
 - Analysis pipeline (extract/parse/resolve/checks/deep_analysis/report): `server/miscite/analysis/`
-- External metadata + datasets (OpenAlex/Crossref/arXiv + local CSVs): `server/miscite/sources/`
+- External metadata + datasets (OpenAlex/Crossref/PubMed/arXiv + local CSVs): `server/miscite/sources/`
 - Prompts + JSON Schemas for LLM stages: `server/miscite/prompts/`
 - UI templates + assets: `server/miscite/templates/`, `server/miscite/static/`
 
@@ -59,7 +59,7 @@ Stages:
 - Extract: `server/miscite/analysis/extract/` (Docling/MarkItDown backends)
 - Parse: `server/miscite/analysis/parse/` (heuristics + OpenRouter-assisted parsing)
 - Match: `server/miscite/analysis/match/` (in-text citations ↔ bibliography linking + ambiguity tracking)
-- Resolve: `server/miscite/analysis/pipeline/resolve.py` (OpenAlex -> Crossref -> arXiv)
+- Resolve: `server/miscite/analysis/pipeline/resolve.py` (OpenAlex -> Crossref -> PubMed -> arXiv)
 - Checks: `server/miscite/analysis/checks/` (retraction, predatory, inappropriate, missing refs)
 - Deep analysis (optional): `server/miscite/analysis/deep_analysis/`
 - Report assembly: `server/miscite/analysis/report/`
@@ -111,7 +111,7 @@ When practical, keep "data loading/prep/indexing" separate from "matching/analys
 
 Source clients and dataset helpers live under `server/miscite/sources/`:
 
-- Metadata clients: `openalex.py`, `crossref.py`, `arxiv.py`
+- Metadata clients: `openalex.py`, `crossref.py`, `pubmed.py`, `arxiv.py`
 - Optional custom APIs: `retraction_api.py`, `predatory_api.py`
 - Dataset sync helpers: `retractionwatch_sync.py`, `predatory_sync.py`
 - Shared HTTP retry/backoff: `http.py`

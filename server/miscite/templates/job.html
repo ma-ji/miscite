@@ -434,7 +434,78 @@
                               {% endif %}
                               {% if resolution.doi %}
                                 <dt>DOI</dt>
-                                <dd class="miscite-mono">{{ resolution.doi }}</dd>
+                                <dd>
+                                  <a
+                                    class="miscite-mono"
+                                    href="https://doi.org/{{ resolution.doi }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {{ resolution.doi }}
+                                  </a>
+                                </dd>
+                              {% endif %}
+                              {% if resolution.pmid %}
+                                <dt>PMID</dt>
+                                <dd>
+                                  <a
+                                    class="miscite-mono"
+                                    href="https://pubmed.ncbi.nlm.nih.gov/{{ resolution.pmid }}/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {{ resolution.pmid }}
+                                  </a>
+                                </dd>
+                              {% endif %}
+                              {% if resolution.pmcid %}
+                                <dt>PMCID</dt>
+                                <dd>
+                                  <a
+                                    class="miscite-mono"
+                                    href="https://pmc.ncbi.nlm.nih.gov/articles/{{ resolution.pmcid }}/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {{ resolution.pmcid }}
+                                  </a>
+                                </dd>
+                              {% endif %}
+                              {% if resolution.arxiv_id %}
+                                <dt>arXiv</dt>
+                                <dd>
+                                  <a
+                                    class="miscite-mono"
+                                    href="https://arxiv.org/abs/{{ resolution.arxiv_id }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {{ resolution.arxiv_id }}
+                                  </a>
+                                </dd>
+                              {% endif %}
+                              {% if resolution.openalex_id %}
+                                {% set oa_url = resolution.openalex_id %}
+                                {% if oa_url.startswith("https://api.openalex.org/works/") %}
+                                  {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
+                                {% elif oa_url.startswith("W") %}
+                                  {% set oa_url = "https://openalex.org/" ~ oa_url %}
+                                {% endif %}
+                                {% set safe_oa_url = oa_url|safe_url %}
+                                {% if safe_oa_url %}
+                                  {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
+                                  <dt>OpenAlex</dt>
+                                  <dd>
+                                    <a
+                                      class="miscite-mono"
+                                      href="{{ safe_oa_url }}"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      {{ oa_label or resolution.openalex_id }}
+                                    </a>
+                                  </dd>
+                                {% endif %}
                               {% endif %}
                               {% if resolution.journal %}
                                 <dt>Journal</dt>
@@ -497,15 +568,146 @@
               {% endif %}
             </div>
           </div>
-        </div>
-      </div>
-    </section>
+	        </div>
+	      </div>
+	    </section>
 
-    {% if report.deep_analysis %}
+      {% set bibliography = report.references|default([]) %}
       <section class="ds-section">
         <div class="ds-card">
           <div class="card-content">
-            <h3>Recommendations</h3>
+            <h3>Bibliography</h3>
+            <p class="miscite-muted">
+              All parsed bibliography entries with resolved identifiers and verification links.
+            </p>
+            {% if bibliography|length == 0 %}
+              <div class="ds-empty">
+                <h4>No bibliography entries</h4>
+                <p class="miscite-muted">No reference list items were parsed for this report.</p>
+              </div>
+            {% else %}
+              <div class="ds-disclosure-list">
+                {% for item in bibliography %}
+                  {% set ref_id = item.ref_id|default("") %}
+                  {% set raw = item.raw|default("") %}
+                  {% set resolution = item.resolution or {} %}
+                  {% set title = resolution.title|default("") %}
+                  {% set source = resolution.source|default("") %}
+                  <details class="ds-disclosure ds-disclosure--low">
+                    <summary class="ds-disclosure-summary">
+                      <i class="material-icons ds-disclosure-icon" aria-hidden="true">menu_book</i>
+                      <span class="ds-disclosure-type"><span class="miscite-mono">{{ ref_id }}</span></span>
+                      <span class="ds-disclosure-title">
+                        {% if title %}{{ title }}{% else %}{{ raw }}{% endif %}
+                      </span>
+                      <span class="ds-severity">
+                        {% if source %}
+                          {{ source }}
+                        {% else %}
+                          unresolved
+                        {% endif %}
+                        {% if resolution.confidence is defined %}
+                          ({{ "%.2f"|format(resolution.confidence) }})
+                        {% endif %}
+                      </span>
+                      <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                    </summary>
+                    <div class="ds-disclosure-body">
+                      {% if raw %}
+                        <p class="ds-quote miscite-mono">{{ raw }}</p>
+                      {% endif %}
+                      <dl class="ds-meta ds-mt-3">
+                        {% if title %}
+                          <dt>Title</dt>
+                          <dd>{{ title }}</dd>
+                        {% endif %}
+                        {% if resolution.year %}
+                          <dt>Year</dt>
+                          <dd>{{ resolution.year }}</dd>
+                        {% endif %}
+                        {% if resolution.journal %}
+                          <dt>Journal</dt>
+                          <dd>{{ resolution.journal }}</dd>
+                        {% endif %}
+                        {% if resolution.publisher %}
+                          <dt>Publisher</dt>
+                          <dd>{{ resolution.publisher }}</dd>
+                        {% endif %}
+                      </dl>
+                      <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
+                        {% if resolution.doi %}
+                          <a
+                            class="ds-chip miscite-mono"
+                            href="https://doi.org/{{ resolution.doi }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            DOI: {{ resolution.doi }}
+                          </a>
+                        {% endif %}
+                        {% if resolution.pmid %}
+                          <a
+                            class="ds-chip miscite-mono"
+                            href="https://pubmed.ncbi.nlm.nih.gov/{{ resolution.pmid }}/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            PMID: {{ resolution.pmid }}
+                          </a>
+                        {% endif %}
+                        {% if resolution.pmcid %}
+                          <a
+                            class="ds-chip miscite-mono"
+                            href="https://pmc.ncbi.nlm.nih.gov/articles/{{ resolution.pmcid }}/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            PMCID: {{ resolution.pmcid }}
+                          </a>
+                        {% endif %}
+                        {% if resolution.arxiv_id %}
+                          <a
+                            class="ds-chip miscite-mono"
+                            href="https://arxiv.org/abs/{{ resolution.arxiv_id }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            arXiv: {{ resolution.arxiv_id }}
+                          </a>
+                        {% endif %}
+                        {% if resolution.openalex_id %}
+                          {% set oa_url = resolution.openalex_id %}
+                          {% if oa_url.startswith("https://api.openalex.org/works/") %}
+                            {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
+                          {% elif oa_url.startswith("W") %}
+                            {% set oa_url = "https://openalex.org/" ~ oa_url %}
+                          {% endif %}
+                          {% set safe_oa_url = oa_url|safe_url %}
+                          {% if safe_oa_url %}
+                            {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
+                            <a class="ds-chip miscite-mono" href="{{ safe_oa_url }}" target="_blank" rel="noopener noreferrer">
+                              OpenAlex: {{ oa_label or resolution.openalex_id }}
+                            </a>
+                          {% endif %}
+                        {% endif %}
+                      </div>
+                      {% if resolution.resolution_notes %}
+                        <p class="miscite-muted ds-mt-3">{{ resolution.resolution_notes }}</p>
+                      {% endif %}
+                    </div>
+                  </details>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+	    {% if report.deep_analysis %}
+	      <section class="ds-section">
+	        <div class="ds-card">
+	          <div class="card-content">
+	            <h3>Recommendations</h3>
             <p class="miscite-muted">
               Proprietary relevance analysis suggests additional references and improvement opportunities.
               Use the <span class="miscite-mono">[R#]</span> markers to jump to the reference list for this section.
@@ -623,7 +825,23 @@
                                     >
                                       DOI: {{ ref.doi }}
                                     </a>
-                                  {% else %}
+                                  {% endif %}
+                                  {% if ref.openalex_id %}
+                                    {% set oa_url = ref.openalex_id %}
+                                    {% if oa_url.startswith("https://api.openalex.org/works/") %}
+                                      {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
+                                    {% elif oa_url.startswith("W") %}
+                                      {% set oa_url = "https://openalex.org/" ~ oa_url %}
+                                    {% endif %}
+                                    {% set safe_oa_url = oa_url|safe_url %}
+                                    {% if safe_oa_url %}
+                                      {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
+                                      <a class="ds-chip miscite-mono" href="{{ safe_oa_url }}" target="_blank" rel="noopener noreferrer">
+                                        OpenAlex: {{ oa_label or ref.openalex_id }}
+                                      </a>
+                                    {% endif %}
+                                  {% endif %}
+                                  {% if not ref.doi %}
                                     {% set safe_url = ref.official_url|safe_url %}
                                     {% if safe_url %}
                                       <a

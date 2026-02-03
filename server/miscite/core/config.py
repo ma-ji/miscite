@@ -108,6 +108,9 @@ class Settings:
 
     crossref_mailto: str
     crossref_user_agent: str
+    ncbi_tool: str
+    ncbi_email: str
+    ncbi_api_key: str
 
     retractionwatch_csv: Path
     predatory_csv: Path
@@ -269,6 +272,9 @@ class Settings:
             "MISCITE_CROSSREF_USER_AGENT",
             f"miscite/0.1 (mailto:{crossref_mailto})" if crossref_mailto else "miscite/0.1",
         )
+        ncbi_tool = _env_str("MISCITE_NCBI_TOOL", "miscite")
+        ncbi_email = _env_str("MISCITE_NCBI_EMAIL", crossref_mailto)
+        ncbi_api_key = _env_str("MISCITE_NCBI_API_KEY", "")
 
         retractionwatch_csv = Path(
             _env_str(
@@ -463,6 +469,9 @@ class Settings:
             accelerator=accelerator,
             crossref_mailto=crossref_mailto,
             crossref_user_agent=crossref_user_agent,
+            ncbi_tool=ncbi_tool,
+            ncbi_email=ncbi_email,
+            ncbi_api_key=ncbi_api_key,
             retractionwatch_csv=retractionwatch_csv,
             predatory_csv=predatory_csv,
             rw_sync_enabled=rw_sync_enabled,
