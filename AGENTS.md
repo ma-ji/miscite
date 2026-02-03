@@ -111,6 +111,7 @@ Settings live in `server/miscite/core/config.py` and `.env.example`. Critical en
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate, deep analysis).
 - Auth email: `MISCITE_MAILGUN_API_KEY`, `MISCITE_MAILGUN_DOMAIN`, `MISCITE_MAILGUN_SENDER`, `MISCITE_LOGIN_CODE_TTL_MINUTES`.
+- Public URLs: `MISCITE_PUBLIC_ORIGIN` for absolute links in emails.
 - Bot protection: `MISCITE_TURNSTILE_SITE_KEY`, `MISCITE_TURNSTILE_SECRET_KEY`.
 - Sources: Crossref mailto/user-agent, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys, pricing refresh, multipliers, auto-charge thresholds.

@@ -198,6 +198,13 @@ D) “Latest analyses” → workspace upgrade
 - Use consistent status badges (icon + label) and tooltips for failure reasons.
 - If multiple rows share the same filename, consider grouping into a single item with version/history expandable.
 
+========
+Date: 2026-02-03
+Goal: Add absolute links in emails and send Stripe receipts after top-ups/auto-charges.
+Prompt: "THINK HARD and FIX: 1. Existing email templates does not have domain, only have path. 2. Send out an email with Strip receipt after charge or auto-charge."
+Files touched: server/miscite/core/config.py, server/miscite/core/email.py, server/miscite/routes/billing.py, .env.example, docs/DEVELOPMENT.md, AGENTS.md.
+Decision/rationale: Introduced `MISCITE_PUBLIC_ORIGIN` for absolute email links and added receipt-email helper invoked from Stripe webhook handlers for top-up and auto-charge events.
+
 E) Visual system & layout polish
 
 - Reduce excessive card backgrounds; increase whitespace and use fewer boxes.

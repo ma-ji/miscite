@@ -94,6 +94,7 @@ class Settings:
     mailgun_domain: str
     mailgun_sender: str
     mailgun_base_url: str
+    public_origin: str
     turnstile_site_key: str
     turnstile_secret_key: str
     turnstile_verify_url: str
@@ -238,6 +239,9 @@ class Settings:
         mailgun_domain = _env_str("MISCITE_MAILGUN_DOMAIN", "")
         mailgun_sender = _env_str("MISCITE_MAILGUN_SENDER", "")
         mailgun_base_url = _env_str("MISCITE_MAILGUN_BASE_URL", "https://api.mailgun.net/v3")
+        public_origin = _env_str("MISCITE_PUBLIC_ORIGIN", "http://localhost:8000").rstrip("/")
+        if public_origin and "://" not in public_origin:
+            public_origin = f"https://{public_origin}"
         turnstile_site_key = _env_str("MISCITE_TURNSTILE_SITE_KEY", "")
         turnstile_secret_key = _env_str("MISCITE_TURNSTILE_SECRET_KEY", "")
         turnstile_verify_url = _env_str(
@@ -445,6 +449,7 @@ class Settings:
             mailgun_domain=mailgun_domain,
             mailgun_sender=mailgun_sender,
             mailgun_base_url=mailgun_base_url,
+            public_origin=public_origin,
             turnstile_site_key=turnstile_site_key,
             turnstile_secret_key=turnstile_secret_key,
             turnstile_verify_url=turnstile_verify_url,

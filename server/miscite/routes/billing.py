@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 
 import stripe
@@ -15,12 +16,14 @@ from server.miscite.billing.stripe import auto_charge_payment_method_available, 
 from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import db_session
+from server.miscite.core.email import send_billing_receipt_email
 from server.miscite.core.models import BillingAccount, BillingTransaction, User
 from server.miscite.core.rate_limit import enforce_rate_limit
 from server.miscite.core.security import require_csrf, require_user
 from server.miscite.web import template_context, templates
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 def _success_message(raw: str | None) -> tuple[str | None, str | None]:
@@ -56,6 +59,46 @@ def _human_datetime(ts: dt.datetime | None) -> str:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=dt.UTC)
     return f"{ts.strftime('%b')} {ts.day}, {ts.year} at {ts.strftime('%H:%M')} UTC"
+
+
+def _event_created_at(payload: dict) -> dt.datetime | None:
+    created = payload.get("created")
+    if not created:
+        return None
+    try:
+        return dt.datetime.fromtimestamp(int(created), tz=dt.UTC)
+    except Exception:
+        return None
+
+
+def _receipt_url_from_charge(charge: object) -> str | None:
+    if isinstance(charge, dict):
+        return charge.get("receipt_url") or None
+    return getattr(charge, "receipt_url", None)
+
+
+def _receipt_url_from_intent(intent: object) -> str | None:
+    if not intent:
+        return None
+    if isinstance(intent, dict):
+        charges = intent.get("charges") or {}
+        data = charges.get("data") if isinstance(charges, dict) else None
+    else:
+        charges = getattr(intent, "charges", None)
+        data = getattr(charges, "data", None) if charges is not None else None
+    if not data:
+        return None
+    charge = data[0]
+    return _receipt_url_from_charge(charge)
+
+
+def _retrieve_payment_intent_with_receipt(payment_intent_id: str) -> object | None:
+    if not payment_intent_id:
+        return None
+    try:
+        return stripe.PaymentIntent.retrieve(payment_intent_id, expand=["charges.data"])
+    except Exception:
+        return None
 
 
 def _parse_amount_to_cents(raw: str) -> tuple[int | None, str | None]:
@@ -596,10 +639,13 @@ async def billing_webhook(request: Request, db: Session = Depends(db_session)):
             db.rollback()
             return {"received": True}
 
-        if customer_id and payment_intent_id:
+        intent = _retrieve_payment_intent_with_receipt(payment_intent_id) if payment_intent_id else None
+        if customer_id and payment_intent_id and intent:
             try:
-                intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-                payment_method = intent.get("payment_method")
+                if isinstance(intent, dict):
+                    payment_method = intent.get("payment_method")
+                else:
+                    payment_method = getattr(intent, "payment_method", None)
                 if payment_method:
                     stripe.Customer.modify(
                         customer_id,
@@ -607,6 +653,23 @@ async def billing_webhook(request: Request, db: Session = Depends(db_session)):
                     )
             except Exception:
                 pass
+
+        user = db.scalar(select(User).where(User.id == user_id))
+        if user:
+            receipt_url = _receipt_url_from_intent(intent)
+            try:
+                send_billing_receipt_email(
+                    settings,
+                    to_email=user.email,
+                    amount_cents=int(amount_total),
+                    currency=currency,
+                    kind="topup",
+                    receipt_url=receipt_url,
+                    payment_intent_id=payment_intent_id,
+                    occurred_at=_event_created_at(obj),
+                )
+            except Exception as e:
+                log.warning("Failed to send top-up receipt email for user %s: %s", user_id, e)
 
     elif event_type == "payment_intent.succeeded":
         metadata = obj.get("metadata") or {}
@@ -649,6 +712,26 @@ async def billing_webhook(request: Request, db: Session = Depends(db_session)):
         except IntegrityError:
             db.rollback()
             return {"received": True}
+
+        user = db.scalar(select(User).where(User.id == user_id))
+        if user:
+            receipt_url = _receipt_url_from_intent(obj)
+            if not receipt_url:
+                intent = _retrieve_payment_intent_with_receipt(payment_intent_id)
+                receipt_url = _receipt_url_from_intent(intent)
+            try:
+                send_billing_receipt_email(
+                    settings,
+                    to_email=user.email,
+                    amount_cents=int(amount_received),
+                    currency=currency,
+                    kind="auto_charge",
+                    receipt_url=receipt_url,
+                    payment_intent_id=payment_intent_id,
+                    occurred_at=_event_created_at(obj),
+                )
+            except Exception as e:
+                log.warning("Failed to send auto-charge receipt email for user %s: %s", user_id, e)
 
     elif event_type == "payment_intent.payment_failed":
         metadata = obj.get("metadata") or {}

@@ -44,6 +44,7 @@ make check
 ## Required configuration
 
 - `OPENROUTER_API_KEY` is required for core parsing/matching/checks.
+- `MISCITE_PUBLIC_ORIGIN` should be set in production so email links include the correct domain.
 - Dataset paths are required unless you enable an API-based source:
   - `MISCITE_RETRACTIONWATCH_CSV` (Retraction Watch CSV)
   - `MISCITE_PREDATORY_CSV` (predatory venues CSV)

@@ -14,6 +14,26 @@ _SURFACE_COLOR = "#ffffff"
 _BG_COLOR = "#f8efe2"
 
 
+def _public_origin(settings: Settings) -> str:
+    return (settings.public_origin or "").strip().rstrip("/")
+
+
+def _join_public_url(settings: Settings, path: str) -> str:
+    origin = _public_origin(settings)
+    if not origin:
+        return path
+    return f"{origin}/{path.lstrip('/')}"
+
+
+def _format_money(amount_cents: int, currency: str) -> str:
+    sign = "-" if amount_cents < 0 else ""
+    value = abs(int(amount_cents)) / 100.0
+    label = (currency or "usd").upper()
+    if label == "USD":
+        return f"{sign}${value:.2f}"
+    return f"{sign}{value:.2f} {label}"
+
+
 def _format_sender(sender: str) -> str:
     sender = (sender or "").strip()
     if not sender:
@@ -147,14 +167,16 @@ def send_access_token_email(
             f"{expires_at.strftime('%b')} {expires_at.day}, {expires_at.year} at {expires_at.strftime('%H:%M')} UTC"
         )
     subject = "Your Miscite.Review report is ready"
+    report_url = _join_public_url(settings, f"/reports/{token}")
+    access_url = _join_public_url(settings, "/reports/access")
     text = (
         "Your Miscite.Review report is ready.\n\n"
         "Access token (case-sensitive):\n"
         f"{token}\n\n"
         "Open the report with:\n"
-        f"/reports/{token}\n"
+        f"{report_url}\n"
         "Or enter the token here:\n"
-        "/reports/access\n\n"
+        f"{access_url}\n\n"
         f"Job: {filename} ({job_id})\n"
         f"Expires: {expires_label}\n"
         "Reports are deleted after the access token expires."
@@ -167,9 +189,9 @@ def send_access_token_email(
             f"<p style=\"margin:18px 0 6px; color:{_MUTED_COLOR};\">Access token (case-sensitive)</p>"
             f"<div style=\"margin:0 0 18px; padding:12px 16px; border-radius:12px; background:#f5e3cc; font-size:18px; font-weight:600; letter-spacing:0.06em; color:{_TEXT_COLOR};\">{token}</div>"
             "<p style=\"margin:0 0 12px;\">Open the report with:</p>"
-            f"<div style=\"margin:0 0 16px; padding:10px 14px; border-radius:10px; background:#f0f2f3; font-family:Arial, sans-serif; font-size:13px; color:{_TEXT_COLOR};\">/reports/{token}</div>"
+            f"<div style=\"margin:0 0 16px; padding:10px 14px; border-radius:10px; background:#f0f2f3; font-family:Arial, sans-serif; font-size:13px; color:{_TEXT_COLOR};\">{report_url}</div>"
             "<p style=\"margin:0 0 6px;\">Or enter the token here:</p>"
-            f"<div style=\"margin:0 0 18px; padding:10px 14px; border-radius:10px; background:#f0f2f3; font-family:Arial, sans-serif; font-size:13px; color:{_TEXT_COLOR};\">/reports/access</div>"
+            f"<div style=\"margin:0 0 18px; padding:10px 14px; border-radius:10px; background:#f0f2f3; font-family:Arial, sans-serif; font-size:13px; color:{_TEXT_COLOR};\">{access_url}</div>"
             f"<p style=\"margin:0; color:{_MUTED_COLOR};\">Job: {filename} ({job_id})</p>"
             f"<p style=\"margin:4px 0 0; color:{_MUTED_COLOR};\">Expires: {expires_label}</p>"
         ),
@@ -178,6 +200,74 @@ def send_access_token_email(
             "You can adjust expiration or renew the token from the report page.</p>"
         ),
     )
+    client = MailgunClient(
+        api_key=settings.mailgun_api_key,
+        domain=settings.mailgun_domain,
+        sender=settings.mailgun_sender,
+        base_url=settings.mailgun_base_url,
+        timeout_seconds=settings.api_timeout_seconds,
+    )
+    client.send_message(to_email=to_email, subject=subject, text=text, html=html)
+
+
+def send_billing_receipt_email(
+    settings: Settings,
+    *,
+    to_email: str,
+    amount_cents: int,
+    currency: str,
+    kind: str,
+    receipt_url: str | None,
+    payment_intent_id: str | None,
+    occurred_at: dt.datetime | None,
+) -> None:
+    amount_label = _format_money(amount_cents, currency)
+    flow_label = "Top-up" if kind == "topup" else "Auto-charge"
+    subject = f"Receipt for your Miscite.Review {flow_label.lower()}"
+    when_label = ""
+    if occurred_at:
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=dt.UTC)
+        when_label = f"{occurred_at.strftime('%b')} {occurred_at.day}, {occurred_at.year} at {occurred_at.strftime('%H:%M')} UTC"
+    billing_url = _join_public_url(settings, "/billing")
+
+    lines = [
+        f"{flow_label} receipt for Miscite.Review",
+        f"Amount: {amount_label}",
+    ]
+    if when_label:
+        lines.append(f"Date: {when_label}")
+    if payment_intent_id:
+        lines.append(f"Payment reference: {payment_intent_id}")
+    if receipt_url:
+        lines.append(f"Stripe receipt: {receipt_url}")
+    lines.append(f"Billing page: {billing_url}")
+
+    html_receipt = (
+        f"<p style=\"margin:0 0 12px;\">We received your {flow_label.lower()} payment.</p>"
+        f"<p style=\"margin:0 0 6px;\"><strong>Amount:</strong> {amount_label}</p>"
+    )
+    if when_label:
+        html_receipt += f"<p style=\"margin:0 0 6px;\"><strong>Date:</strong> {when_label}</p>"
+    if payment_intent_id:
+        html_receipt += (
+            f"<p style=\"margin:0 0 6px;\"><strong>Payment reference:</strong> {payment_intent_id}</p>"
+        )
+    if receipt_url:
+        html_receipt += (
+            f"<p style=\"margin:0 0 6px;\"><a href=\"{receipt_url}\" style=\"color:{_BRAND_COLOR};\">View Stripe receipt</a></p>"
+        )
+    html_receipt += (
+        f"<p style=\"margin:12px 0 0;\"><a href=\"{billing_url}\" style=\"color:{_BRAND_COLOR};\">Open billing</a></p>"
+    )
+
+    html = _email_shell(
+        title=f"{flow_label} receipt",
+        preheader=f"{flow_label} receipt for {amount_label}.",
+        body_html=html_receipt,
+        footer_html="<p style=\"margin:0;\">Keep this receipt for your records.</p>",
+    )
+    text = "\n".join(lines)
     client = MailgunClient(
         api_key=settings.mailgun_api_key,
         domain=settings.mailgun_domain,
