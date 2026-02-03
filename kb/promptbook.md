@@ -395,3 +395,9 @@ Goal: Move auto-charge trigger/recharge settings into a popout to avoid alignmen
 Prompt: In the auto-charge block, make trigger balance and recharge amount a popout window and show the current settings as text.
 Files touched: server/miscite/templates/billing.html, server/miscite/static/styles.css, kb/promptbook.md
 Decision/rationale: Use a native `<dialog>` styled as a reusable design-system component (`ds-dialog`) with an embedded `ds-card` to keep a payment-grade feel while avoiding brittle side-by-side alignment; keep auto-save on toggle and apply setting edits via a modal “Done” action so users can update both fields together.
+
+2026-02-03
+Goal: Document citation style landscape and a robust plan for citation matching + reference verification.
+Prompt: Provide a detailed analysis of popular citation styles (sciences/social sciences/humanities) and draft a plan to (1) match in-text citations to reference list entries and (2) verify references via OpenAlex/Crossref/arXiv with selective LLM assistance.
+Files touched: kb/citation-styles-and-matching-plan.md, kb/promptbook.md
+Decision/rationale: Organize styles by the three core citation systems (author–date, numeric, notes+bibliography) and propose a traceable matching/verification pipeline that prioritizes strong identifiers, uses deterministic scoring for candidate selection, and reserves LLM calls for borderline disambiguation.
