@@ -32,7 +32,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "base-uri 'self'",
             # Stripe Checkout / Customer Portal is launched via redirects from same-origin POSTs.
             # Browsers enforce CSP `form-action` on redirect chains, so allow Stripe here.
-            "form-action 'self' https://checkout.stripe.com https://billing.stripe.com https://api.stripe.com",
+            "form-action 'self' https://checkout.stripe.com https://billing.stripe.com https://api.stripe.com https://sdk.51.la",
         ]
         if self._settings.cookie_secure:
             csp_parts.append("upgrade-insecure-requests")
