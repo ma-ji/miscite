@@ -1318,6 +1318,11 @@ p {
   color: var(--muted);
 }
 
+.ds-source-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
 .ds-list li::before {
   content: "";
   position: absolute;

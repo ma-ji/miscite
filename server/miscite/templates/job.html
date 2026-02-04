@@ -226,12 +226,12 @@
     {% endif %}
   </section>
 
-  {% if job.status != "COMPLETED" %}
-    <section class="ds-section" id="job-progress-section" data-job-id="{{ job.id }}">
-      <div class="ds-card">
-        <div class="card-content">
-          <div class="ds-progress-header">
-            <h3>Live progress</h3>
+	  {% if job.status in ["PENDING", "RUNNING"] %}
+	    <section class="ds-section" id="job-progress-section" data-job-id="{{ job.id }}">
+	      <div class="ds-card">
+	        <div class="card-content">
+	          <div class="ds-progress-header">
+	            <h3>Live progress</h3>
 	            <div class="ds-progress-actions">
 	              <span class="ds-pill" id="job-status-pill">{{ job.status }}</span>
 	              {% if not public_view and job.status in ["PENDING", "RUNNING"] %}
@@ -367,16 +367,20 @@
                     {% set citation = details.citation or {} %}
                     {% set resolution = details.resolution or {} %}
                     {% set issue_label = issue.type %}
-                    {% set issue_description = "" %}
-                    {% set issue_action = "" %}
-                    {% if issue.type == "missing_bibliography_ref" %}
-                      {% set issue_label = "Missing bibliography entry" %}
-                      {% set issue_description = "The in-text citation does not appear in the bibliography list." %}
-                      {% set issue_action = "Add a matching bibliography entry or correct the citation formatting." %}
-                    {% elif issue.type == "unresolved_reference" %}
-                      {% set issue_label = "Unresolved reference" %}
-                      {% set issue_description = "We found the bibliography entry but could not match it to metadata." %}
-                      {% set issue_action = "Verify DOI, title, author, or year in the bibliography entry." %}
+	                    {% set issue_description = "" %}
+	                    {% set issue_action = "" %}
+	                    {% if issue.type == "missing_bibliography_ref" %}
+	                      {% set issue_label = "Missing bibliography entry" %}
+	                      {% set issue_description = "The in-text citation does not appear in the bibliography list." %}
+	                      {% set issue_action = "Add a matching bibliography entry or correct the citation formatting." %}
+	                    {% elif issue.type == "ambiguous_bibliography_ref" %}
+	                      {% set issue_label = "Ambiguous bibliography match" %}
+	                      {% set issue_description = "The in-text citation matched multiple bibliography entries with low confidence." %}
+	                      {% set issue_action = "Disambiguate the citation or adjust bibliography entries so only one match remains." %}
+	                    {% elif issue.type == "unresolved_reference" %}
+	                      {% set issue_label = "Unresolved reference" %}
+	                      {% set issue_description = "We found the bibliography entry but could not match it to metadata." %}
+	                      {% set issue_action = "Verify DOI, title, author, or year in the bibliography entry." %}
                     {% elif issue.type == "retracted_article" %}
                       {% set issue_label = "Retracted work cited" %}
                       {% set issue_description = "This reference matches a retracted record." %}
@@ -572,312 +576,124 @@
 	      </div>
 	    </section>
 
-      {% set bibliography = report.references|default([]) %}
-      <section class="ds-section">
-        <div class="ds-card">
-          <div class="card-content">
-            <h3>Bibliography</h3>
-            <p class="miscite-muted">
-              All parsed bibliography entries with resolved identifiers and verification links.
-            </p>
-            {% if bibliography|length == 0 %}
-              <div class="ds-empty">
-                <h4>No bibliography entries</h4>
-                <p class="miscite-muted">No reference list items were parsed for this report.</p>
-              </div>
-            {% else %}
-              <div class="ds-disclosure-list">
-                {% for item in bibliography %}
-                  {% set ref_id = item.ref_id|default("") %}
-                  {% set raw = item.raw|default("") %}
-                  {% set resolution = item.resolution or {} %}
-                  {% set title = resolution.title|default("") %}
-                  {% set source = resolution.source|default("") %}
-                  <details class="ds-disclosure ds-disclosure--low">
-                    <summary class="ds-disclosure-summary">
-                      <i class="material-icons ds-disclosure-icon" aria-hidden="true">menu_book</i>
-                      <span class="ds-disclosure-type"><span class="miscite-mono">{{ ref_id }}</span></span>
-                      <span class="ds-disclosure-title">
-                        {% if title %}{{ title }}{% else %}{{ raw }}{% endif %}
-                      </span>
-                      <span class="ds-severity">
-                        {% if source %}
-                          {{ source }}
-                        {% else %}
-                          unresolved
-                        {% endif %}
-                        {% if resolution.confidence is defined %}
-                          ({{ "%.2f"|format(resolution.confidence) }})
-                        {% endif %}
-                      </span>
-                      <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-                    </summary>
-                    <div class="ds-disclosure-body">
-                      {% if raw %}
-                        <p class="ds-quote miscite-mono">{{ raw }}</p>
-                      {% endif %}
-                      <dl class="ds-meta ds-mt-3">
-                        {% if title %}
-                          <dt>Title</dt>
-                          <dd>{{ title }}</dd>
-                        {% endif %}
-                        {% if resolution.year %}
-                          <dt>Year</dt>
-                          <dd>{{ resolution.year }}</dd>
-                        {% endif %}
-                        {% if resolution.journal %}
-                          <dt>Journal</dt>
-                          <dd>{{ resolution.journal }}</dd>
-                        {% endif %}
-                        {% if resolution.publisher %}
-                          <dt>Publisher</dt>
-                          <dd>{{ resolution.publisher }}</dd>
-                        {% endif %}
-                      </dl>
-                      <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
-                        {% if resolution.doi %}
-                          <a
-                            class="ds-chip miscite-mono"
-                            href="https://doi.org/{{ resolution.doi }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            DOI: {{ resolution.doi }}
-                          </a>
-                        {% endif %}
-                        {% if resolution.pmid %}
-                          <a
-                            class="ds-chip miscite-mono"
-                            href="https://pubmed.ncbi.nlm.nih.gov/{{ resolution.pmid }}/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            PMID: {{ resolution.pmid }}
-                          </a>
-                        {% endif %}
-                        {% if resolution.pmcid %}
-                          <a
-                            class="ds-chip miscite-mono"
-                            href="https://pmc.ncbi.nlm.nih.gov/articles/{{ resolution.pmcid }}/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            PMCID: {{ resolution.pmcid }}
-                          </a>
-                        {% endif %}
-                        {% if resolution.arxiv_id %}
-                          <a
-                            class="ds-chip miscite-mono"
-                            href="https://arxiv.org/abs/{{ resolution.arxiv_id }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            arXiv: {{ resolution.arxiv_id }}
-                          </a>
-                        {% endif %}
-                        {% if resolution.openalex_id %}
-                          {% set oa_url = resolution.openalex_id %}
-                          {% if oa_url.startswith("https://api.openalex.org/works/") %}
-                            {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
-                          {% elif oa_url.startswith("W") %}
-                            {% set oa_url = "https://openalex.org/" ~ oa_url %}
-                          {% endif %}
-                          {% set safe_oa_url = oa_url|safe_url %}
-                          {% if safe_oa_url %}
-                            {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
-                            <a class="ds-chip miscite-mono" href="{{ safe_oa_url }}" target="_blank" rel="noopener noreferrer">
-                              OpenAlex: {{ oa_label or resolution.openalex_id }}
-                            </a>
-                          {% endif %}
-                        {% endif %}
-                      </div>
-                      {% if resolution.resolution_notes %}
-                        <p class="miscite-muted ds-mt-3">{{ resolution.resolution_notes }}</p>
-                      {% endif %}
-                    </div>
-                  </details>
-                {% endfor %}
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      </section>
-
-	    {% if report.deep_analysis %}
-	      <section class="ds-section">
-	        <div class="ds-card">
-	          <div class="card-content">
-	            <h3>Recommendations</h3>
-            <p class="miscite-muted">
-              Proprietary relevance analysis suggests additional references and improvement opportunities.
-              Use the <span class="miscite-mono">[R#]</span> markers to jump to the reference list for this section.
-            </p>
+		    {% if report.deep_analysis %}
+		      <section class="ds-section">
+		        <div class="ds-card">
+		          <div class="card-content">
+		            <h3>Recommendations</h3>
+	            <p class="miscite-muted">
+	              Proprietary relevance analysis suggests additional references and improvement opportunities.
+	              Use the <span class="miscite-mono">[R#]</span> markers to jump to the complete reference list below.
+	            </p>
 
             {% if report.deep_analysis.status == "completed" %}
               {% set da = report.deep_analysis %}
-              {% set sug = da.suggestions %}
-
-              {% if sug and sug.status == "completed" %}
-                {% if sug.overview %}
-                  <p class="ds-issue-guidance">{{ sug.overview|da_cite }}</p>
-                {% endif %}
-                {% if sug.note %}
-                  <p class="miscite-muted">{{ sug.note }}</p>
-                {% endif %}
-                {% if sug.sections %}
-                  <div class="ds-stack ds-mt-4">
-                    {% for section in sug.sections %}
-                      <div>
-                        <h4>{{ section.title }}</h4>
-                        {% if section.bullets %}
-                          <ul class="ds-list ds-mt-3">
-                            {% for bullet in section.bullets %}
-                              <li>{{ bullet|da_cite }}</li>
-                            {% endfor %}
-                          </ul>
-                        {% endif %}
-                      </div>
-                    {% endfor %}
-                  </div>
-                {% endif %}
-              {% else %}
+	              {% set sug = da.suggestions %}
+	
+	              {% if sug and sug.status == "completed" %}
+	                <p class="miscite-muted">
+	                  Showing high-priority recommendations only (not already covered by the manuscript).
+	                </p>
+	                {% if sug.note %}
+	                  <p class="miscite-muted">{{ sug.note }}</p>
+	                {% endif %}
+	                {% if sug.sections %}
+	                  <div class="ds-stack ds-mt-4">
+	                    {% for section in sug.sections %}
+	                      <div>
+	                        <h4>{{ section.title }}</h4>
+	                        {% set buckets = namespace(core=[], bridge=[], add=[], remove=[], other=[]) %}
+	                        {% for bullet in section.bullets|default([]) %}
+	                          {% set rid = "" %}
+	                          {% if bullet and ("]" in bullet) %}
+	                            {% set rid = bullet.split("]", 1)[0]|replace("[", "")|trim %}
+	                          {% endif %}
+	                          {% set ref = da.references.get(rid) if rid and da.references else None %}
+	                          {% set in_paper = ref and ref.in_paper %}
+	                          {% if not in_paper %}
+	                            {% if rid %}
+	                              {% if "Core background refs" in bullet %}
+	                                {% set buckets.core = buckets.core + [rid] %}
+	                              {% elif "Refs connecting ideas" in bullet %}
+	                                {% set buckets.bridge = buckets.bridge + [rid] %}
+	                              {% elif "Refs to add" in bullet %}
+	                                {% set buckets.add = buckets.add + [rid] %}
+	                              {% elif "Refs to consider removing" in bullet %}
+	                                {% set buckets.remove = buckets.remove + [rid] %}
+	                              {% else %}
+	                                {% set buckets.other = buckets.other + [bullet] %}
+	                              {% endif %}
+	                            {% else %}
+	                              {% set buckets.other = buckets.other + [bullet] %}
+	                            {% endif %}
+	                          {% endif %}
+	                        {% endfor %}
+	                        {% set rid_limit = 10 %}
+	                        {% if buckets.core or buckets.bridge or buckets.add or buckets.remove or buckets.other %}
+	                          <div class="ds-prose ds-mt-3">
+	                            {% if buckets.core %}
+	                              <p>
+	                                <span class="ds-source-name">Core background refs to add:</span>
+	                                {% for rid in buckets.core[:rid_limit] %}
+	                                  <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+	                                {% endfor %}
+	                                {% if buckets.core|length > rid_limit %}
+	                                  <span class="miscite-muted"> and {{ buckets.core|length - rid_limit }} more</span>
+	                                {% endif %}
+	                              </p>
+	                            {% endif %}
+	                            {% if buckets.bridge %}
+	                              <p>
+	                                <span class="ds-source-name">Refs connecting ideas to add:</span>
+	                                {% for rid in buckets.bridge[:rid_limit] %}
+	                                  <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+	                                {% endfor %}
+	                                {% if buckets.bridge|length > rid_limit %}
+	                                  <span class="miscite-muted"> and {{ buckets.bridge|length - rid_limit }} more</span>
+	                                {% endif %}
+	                              </p>
+	                            {% endif %}
+	                            {% if buckets.add %}
+	                              <p>
+	                                <span class="ds-source-name">Additional refs to add:</span>
+	                                {% for rid in buckets.add[:rid_limit] %}
+	                                  <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+	                                {% endfor %}
+	                                {% if buckets.add|length > rid_limit %}
+	                                  <span class="miscite-muted"> and {{ buckets.add|length - rid_limit }} more</span>
+	                                {% endif %}
+	                              </p>
+	                            {% endif %}
+	                            {% if buckets.remove %}
+	                              <p>
+	                                <span class="ds-source-name">Citations to reconsider:</span>
+	                                {% for rid in buckets.remove[:rid_limit] %}
+	                                  <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+	                                {% endfor %}
+	                                {% if buckets.remove|length > rid_limit %}
+	                                  <span class="miscite-muted"> and {{ buckets.remove|length - rid_limit }} more</span>
+	                                {% endif %}
+	                              </p>
+	                            {% endif %}
+	                            {% for line in buckets.other %}
+	                              <p>{{ line|da_cite }}</p>
+	                            {% endfor %}
+	                          </div>
+	                        {% else %}
+	                          <p class="miscite-muted ds-mt-3">No new recommendations for this section.</p>
+	                        {% endif %}
+	                      </div>
+	                    {% endfor %}
+	                  </div>
+	                {% endif %}
+	              {% else %}
                 <p class="miscite-muted">No recommendations were generated for this run.</p>
               {% endif %}
 
-              {% if da.citation_groups and da.references %}
-                <h4 class="ds-mt-5">Shortlists</h4>
-                <p class="miscite-muted">
-                  Quick lists used by the suggestions above (each item links to the master reference list).
-                </p>
-                <div class="ds-grid ds-mt-4">
-                  {% for group in da.citation_groups %}
-                    {% set rids = group.rids|default([]) %}
-                    <div class="span-6 ds-mt-4">
-                      <details class="ds-disclosure ds-disclosure--low" open>
-                        <summary class="ds-disclosure-summary">
-                          <i class="material-icons ds-disclosure-icon" aria-hidden="true">bookmark</i>
-                          <span class="ds-disclosure-type">List</span>
-                          <span class="ds-disclosure-title">{{ group.title }}</span>
-                          <span class="ds-severity">{{ rids|length }} refs</span>
-                          <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-                        </summary>
-                        <div class="ds-disclosure-body">
-                          <ul class="ds-list">
-                            {% for rid in rids %}
-                              {% set ref = da.references.get(rid) %}
-                              {% if ref %}
-                                <li>
-                                  <div>
-                                    <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>
-                                    {{ ref.title|default("Untitled") }}
-                                    {% if ref.year %} ({{ ref.year }}){% endif %}
-                                  </div>
-                                  {% if ref.in_paper %}
-                                    <div class="ds-chip-row ds-mt-3" aria-label="Reference status">
-                                      <span class="ds-chip ds-chip--success">Already cited</span>
-                                    </div>
-                                  {% endif %}
-                                </li>
-                              {% endif %}
-                            {% endfor %}
-                          </ul>
-                        </div>
-                      </details>
-                    </div>
-                  {% endfor %}
-                </div>
-              {% endif %}
-
-              {% if da.reference_groups and da.references %}
-                <h4 class="ds-mt-5">Reference list for this section</h4>
-                <p class="miscite-muted">
-                  Each reference appears once (grouped); click <span class="miscite-mono">[R#]</span> anywhere above to jump
-                  here.
-                </p>
-                <div class="ds-stack ds-mt-4">
-                  {% for group in da.reference_groups %}
-                    {% set rids = group.rids|default([]) %}
-                    <details class="ds-disclosure ds-disclosure--low" {% if loop.index <= 2 %}open{% endif %}>
-                      <summary class="ds-disclosure-summary">
-                        <i class="material-icons ds-disclosure-icon" aria-hidden="true">menu_book</i>
-                        <span class="ds-disclosure-type">Group</span>
-                        <span class="ds-disclosure-title">{{ group.title }}</span>
-                        <span class="ds-severity">{{ rids|length }} refs</span>
-                        <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-                      </summary>
-                      <div class="ds-disclosure-body">
-                        <ol class="ds-list">
-                          {% for rid in rids %}
-                            {% set ref = da.references.get(rid) %}
-                            {% if ref %}
-                              <li id="da-ref-{{ rid }}">
-                                <div>
-                                  <span class="miscite-mono">[{{ rid }}]</span>
-                                  {{ ref.apa_base }}
-                                </div>
-                                <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
-                                  {% if ref.doi %}
-                                    <a
-                                      class="ds-chip miscite-mono"
-                                      href="https://doi.org/{{ ref.doi }}"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      DOI: {{ ref.doi }}
-                                    </a>
-                                  {% endif %}
-                                  {% if ref.openalex_id %}
-                                    {% set oa_url = ref.openalex_id %}
-                                    {% if oa_url.startswith("https://api.openalex.org/works/") %}
-                                      {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
-                                    {% elif oa_url.startswith("W") %}
-                                      {% set oa_url = "https://openalex.org/" ~ oa_url %}
-                                    {% endif %}
-                                    {% set safe_oa_url = oa_url|safe_url %}
-                                    {% if safe_oa_url %}
-                                      {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
-                                      <a class="ds-chip miscite-mono" href="{{ safe_oa_url }}" target="_blank" rel="noopener noreferrer">
-                                        OpenAlex: {{ oa_label or ref.openalex_id }}
-                                      </a>
-                                    {% endif %}
-                                  {% endif %}
-                                  {% if not ref.doi %}
-                                    {% set safe_url = ref.official_url|safe_url %}
-                                    {% if safe_url %}
-                                      <a
-                                        class="ds-chip miscite-mono"
-                                        href="{{ safe_url }}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                      >
-                                        URL: {{ safe_url }}
-                                      </a>
-                                    {% endif %}
-                                  {% endif %}
-                                  {% set safe_pdf = ref.oa_pdf_url|safe_url %}
-                                  {% if safe_pdf %}
-                                    <a class="ds-chip" href="{{ safe_pdf }}" target="_blank" rel="noopener noreferrer">
-                                      Open PDF
-                                    </a>
-                                  {% endif %}
-                                  {% if ref.in_paper %}
-                                    <span class="ds-chip ds-chip--success">Already cited</span>
-                                  {% endif %}
-                                </div>
-                              </li>
-                            {% endif %}
-                          {% endfor %}
-                        </ol>
-                      </div>
-                    </details>
-                  {% endfor %}
-                </div>
-              {% endif %}
-
-            {% elif report.deep_analysis.status == "skipped" %}
-              <p class="miscite-muted">{{ report.deep_analysis.reason|default("Recommendations were skipped.") }}</p>
-            {% else %}
-              <div class="ds-alert ds-alert--warning ds-mt-4">
+	            {% elif report.deep_analysis.status == "skipped" %}
+	              <p class="miscite-muted">{{ report.deep_analysis.reason|default("Recommendations were skipped.") }}</p>
+	            {% else %}
+	              <div class="ds-alert ds-alert--warning ds-mt-4">
                 Recommendations did not complete: {{ report.deep_analysis.reason|default("Unknown error") }}
               </div>
             {% endif %}
@@ -887,47 +703,163 @@
     {% endif %}
 
 
-    {% if report.deep_analysis and report.deep_analysis.status == "completed" and report.deep_analysis.references %}
-      {% set da = report.deep_analysis %}
-      <section class="ds-section">
-        <div class="ds-card">
-          <div class="card-content">
-            <h3>Complete reference list</h3>
-            <p class="miscite-muted">All deep-analysis references, alphabetized by author.</p>
-            {% set all_refs = da.references.values()|list|sort(attribute='apa_base') %}
-            <ol class="ds-list ds-mt-3">
-              {% for ref in all_refs %}
-                <li>
-                  <div>
-                    <span class="miscite-mono">[{{ ref.rid }}]</span>
-                    {{ ref.apa_base }}
-                  </div>
-                  {% if ref.in_paper %}
-                    <div class="ds-chip-row ds-mt-3" aria-label="Reference status">
-                      <span class="ds-chip ds-chip--success">Already cited</span>
-                    </div>
+	    {% if report.deep_analysis and report.deep_analysis.status == "completed" and report.deep_analysis.references %}
+	      {% set da = report.deep_analysis %}
+	      <section class="ds-section">
+	        <div class="ds-card">
+	          <div class="card-content">
+	            <h3>Complete reference list</h3>
+	            <p class="miscite-muted">
+	              All deep-analysis references, alphabetized by author. Use the filter to show only references from a given group.
+		            </p>
+		            {% set all_refs = da.references.values()|list|sort(attribute='apa_base') %}
+		            {% if da.citation_groups and all_refs|length > 0 %}
+		              <div class="ds-input-row ds-mt-4">
+		                <div class="form-field">
+		                  <label class="form-label" for="da-ref-group-filter">Group filter</label>
+		                  <select id="da-ref-group-filter" name="da_ref_group_filter">
+		                    <option value="">All groups</option>
+		                    {% for group in da.citation_groups %}
+		                      {% set group_rids = group.rids|default([]) %}
+		                      <option value="{{ loop.index0 }}" data-rids="{{ group_rids|join(',') }}">
+		                        {{ group.title }} ({{ group_rids|length }})
+		                      </option>
+		                    {% endfor %}
+		                  </select>
+		                  <p class="form-help">Groups are derived from the recommendation shortlists.</p>
+		                </div>
+		              </div>
+		              <p class="miscite-muted ds-mt-3" id="da-ref-count" aria-live="polite"></p>
+		            {% endif %}
+	            <ol class="ds-list ds-mt-3">
+	              {% for ref in all_refs %}
+	                <li id="da-ref-{{ ref.rid }}" data-da-rid="{{ ref.rid }}">
+	                  <div>
+	                    <span class="miscite-mono">[{{ ref.rid }}]</span>
+	                    {{ ref.apa_base }}
+	                  </div>
+	                  <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
+	                    {% if ref.doi %}
+	                      <a class="ds-chip miscite-mono" href="https://doi.org/{{ ref.doi }}" target="_blank" rel="noopener noreferrer">
+	                        DOI: {{ ref.doi }}
+	                      </a>
+	                    {% endif %}
+	                    {% if ref.openalex_id %}
+	                      {% set oa_url = ref.openalex_id %}
+	                      {% if oa_url.startswith("https://api.openalex.org/works/") %}
+	                        {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
+	                      {% elif oa_url.startswith("W") %}
+	                        {% set oa_url = "https://openalex.org/" ~ oa_url %}
+	                      {% endif %}
+	                      {% set safe_oa_url = oa_url|safe_url %}
+	                      {% if safe_oa_url %}
+	                        {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
+	                        <a class="ds-chip miscite-mono" href="{{ safe_oa_url }}" target="_blank" rel="noopener noreferrer">
+	                          OpenAlex: {{ oa_label or ref.openalex_id }}
+	                        </a>
+	                      {% endif %}
+	                    {% endif %}
+	                    {% if not ref.doi %}
+	                      {% set safe_url = ref.official_url|safe_url %}
+	                      {% if safe_url %}
+	                        <a class="ds-chip miscite-mono" href="{{ safe_url }}" target="_blank" rel="noopener noreferrer">
+	                          URL: {{ safe_url }}
+	                        </a>
+	                      {% endif %}
+	                    {% endif %}
+	                    {% set safe_pdf = ref.oa_pdf_url|safe_url %}
+	                    {% if safe_pdf %}
+	                      <a class="ds-chip" href="{{ safe_pdf }}" target="_blank" rel="noopener noreferrer">
+	                        Open PDF
+	                      </a>
+	                    {% endif %}
+	                  </div>
+	                  {% if ref.in_paper %}
+	                    <div class="ds-chip-row ds-mt-3" aria-label="Reference status">
+	                      <span class="ds-chip ds-chip--success">Already cited</span>
+	                    </div>
                   {% endif %}
                 </li>
               {% endfor %}
             </ol>
-          </div>
-        </div>
-      </section>
-    {% endif %}
+	          </div>
+	        </div>
+	      </section>
+	    {% endif %}
 
-  {% else %}
-    <section class="ds-section">
-      <div class="ds-empty">
-        <h4>Report not available yet</h4>
-        <p class="miscite-muted">Refresh in a moment to view the generated summary.</p>
-        {% if public_view %}
-          <a class="ds-button ds-button--secondary" href="{{ request.url.path }}">Refresh report</a>
-        {% else %}
-          <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}">Refresh report</a>
-        {% endif %}
-      </div>
-    </section>
-  {% endif %}
+	    {% if (data_sources and data_sources|length > 0) or (methodology_md and methodology_md|trim) %}
+	      <section class="ds-section">
+	        <div class="ds-card">
+	          <div class="card-content">
+	            <h3>Sources &amp; methodology</h3>
+	            <p class="miscite-muted">How this report was produced and what data it relied on.</p>
+	            <div class="ds-disclosure-list ds-mt-4">
+	              {% if data_sources and data_sources|length > 0 %}
+	                <details class="ds-disclosure ds-disclosure--low">
+	                  <summary class="ds-disclosure-summary">
+	                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">source</i>
+	                    <span class="ds-disclosure-type">Sources</span>
+	                    <span class="ds-disclosure-title">Data sources used</span>
+	                    <span class="ds-severity">{{ data_sources|length }} items</span>
+	                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+	                  </summary>
+	                  <div class="ds-disclosure-body">
+	                    <ul class="ds-list">
+	                      {% for src in data_sources %}
+	                        <li>
+	                          <div>
+	                            <span class="ds-source-name">{{ src.name|default("Source") }}</span>
+	                          </div>
+	                          {% if src.detail %}
+	                            <div class="miscite-muted ds-mt-3">{{ src.detail }}</div>
+	                          {% endif %}
+	                        </li>
+	                      {% endfor %}
+	                    </ul>
+	                  </div>
+	                </details>
+	              {% endif %}
+	              {% if methodology_md and methodology_md|trim %}
+	                <details class="ds-disclosure ds-disclosure--low">
+	                  <summary class="ds-disclosure-summary">
+	                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">description</i>
+	                    <span class="ds-disclosure-type">Method</span>
+	                    <span class="ds-disclosure-title">Methodology</span>
+	                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+	                  </summary>
+	                  <div class="ds-disclosure-body">
+	                    <pre class="pre-wrap ds-pre-scroll">{{ methodology_md }}</pre>
+	                  </div>
+	                </details>
+	              {% endif %}
+	            </div>
+	          </div>
+	        </div>
+	      </section>
+	    {% endif %}
+
+	  {% else %}
+	    {% if job.status == "COMPLETED" %}
+	      <section class="ds-section">
+	        <div class="ds-empty">
+	          <h4>Report not available yet</h4>
+	          <p class="miscite-muted">Refresh in a moment to view the generated summary.</p>
+	          {% if public_view %}
+	            <a class="ds-button ds-button--secondary" href="{{ request.url.path }}">Refresh report</a>
+	          {% else %}
+	            <a class="ds-button ds-button--secondary" href="/jobs/{{ job.id }}">Refresh report</a>
+	          {% endif %}
+	        </div>
+	      </section>
+	    {% elif job.status in ["FAILED", "CANCELED"] %}
+	      <section class="ds-section">
+	        <div class="ds-empty">
+	          <h4>Report unavailable</h4>
+	          <p class="miscite-muted">This analysis did not produce a report.</p>
+	        </div>
+	      </section>
+	    {% endif %}
+	  {% endif %}
   <script nonce="{{ csp_nonce }}">
     (function () {
       var section = document.getElementById("job-progress-section");
@@ -1282,6 +1214,56 @@
         }
         clearActive();
       });
+    })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var select = document.getElementById("da-ref-group-filter");
+      if (!select) {
+        return;
+      }
+      var items = Array.prototype.slice.call(document.querySelectorAll("li[data-da-rid]"));
+      if (!items.length) {
+        return;
+      }
+      var count = document.getElementById("da-ref-count");
+      var total = items.length;
+
+      var updateCount = function (shown) {
+        if (!count) {
+          return;
+        }
+        count.textContent = "Showing " + String(shown) + " of " + String(total) + " references.";
+      };
+
+      var apply = function () {
+        var option = select.options[select.selectedIndex];
+        var raw = option ? option.getAttribute("data-rids") : "";
+        var filter = null;
+        if (raw && raw.trim()) {
+          filter = new Set(
+            raw
+              .split(",")
+              .map(function (rid) {
+                return (rid || "").trim();
+              })
+              .filter(Boolean)
+          );
+        }
+        var shown = 0;
+        items.forEach(function (item) {
+          var rid = item.getAttribute("data-da-rid") || "";
+          var visible = !filter || filter.has(rid);
+          item.hidden = !visible;
+          if (visible) {
+            shown += 1;
+          }
+        });
+        updateCount(shown);
+      };
+
+      select.addEventListener("change", apply);
+      apply();
     })();
   </script>
   <script nonce="{{ csp_nonce }}">
