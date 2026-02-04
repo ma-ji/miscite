@@ -80,6 +80,21 @@ def _resolve_text_extract_context(raw: str) -> str:
     return value
 
 
+def _normalize_sample_report_url(raw: str) -> str:
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    if value.startswith(("http://", "https://")):
+        return value
+    if value.startswith("/"):
+        return value
+    if value.startswith("reports/"):
+        return f"/{value}"
+    if "/" not in value:
+        return f"/reports/{value}"
+    return ""
+
+
 @dataclass(frozen=True)
 class Settings:
     db_url: str
@@ -95,6 +110,7 @@ class Settings:
     mailgun_sender: str
     mailgun_base_url: str
     public_origin: str
+    sample_report_url: str
     turnstile_site_key: str
     turnstile_secret_key: str
     turnstile_verify_url: str
@@ -246,6 +262,7 @@ class Settings:
         public_origin = _env_str("MISCITE_PUBLIC_ORIGIN", "http://localhost:8000").rstrip("/")
         if public_origin and "://" not in public_origin:
             public_origin = f"https://{public_origin}"
+        sample_report_url = _normalize_sample_report_url(_env_str("MISCITE_SAMPLE_REPORT_URL", ""))
         turnstile_site_key = _env_str("MISCITE_TURNSTILE_SITE_KEY", "")
         turnstile_secret_key = _env_str("MISCITE_TURNSTILE_SECRET_KEY", "")
         turnstile_verify_url = _env_str(
@@ -458,6 +475,7 @@ class Settings:
             mailgun_sender=mailgun_sender,
             mailgun_base_url=mailgun_base_url,
             public_origin=public_origin,
+            sample_report_url=sample_report_url,
             turnstile_site_key=turnstile_site_key,
             turnstile_secret_key=turnstile_secret_key,
             turnstile_verify_url=turnstile_verify_url,

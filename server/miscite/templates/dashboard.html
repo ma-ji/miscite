@@ -31,8 +31,8 @@
                   <h3>Analyze a manuscript</h3>
                   <p class="miscite-muted">Upload a manuscript to generate a detailed citation report.</p>
                 </div>
-                {% if jobs|length == 0 %}
-                  <a class="ds-link" href="/reports/tIXNgi2BR-VthZ48ibiRvMvB2Fjqhn8K">Sample report</a>
+                {% if jobs|length == 0 and sample_report_url %}
+                  <a class="ds-link" href="{{ sample_report_url }}">Sample report</a>
                 {% endif %}
               </div>
               <form
@@ -144,8 +144,8 @@
                   >
                     Generate report
                   </button>
-                  {% if jobs|length == 0 %}
-                    <a class="ds-button ds-button--ghost" href="/reports/tIXNgi2BR-VthZ48ibiRvMvB2Fjqhn8K">Sample report</a>
+                  {% if jobs|length == 0 and sample_report_url %}
+                    <a class="ds-button ds-button--ghost" href="{{ sample_report_url }}">Sample report</a>
                   {% endif %}
                 </div>
               </form>

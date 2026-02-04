@@ -119,7 +119,7 @@ Settings live in `server/miscite/core/config.py` and `.env.example`. Critical en
 - LLM: model names and call limits (parse, match, inappropriate, deep analysis).
 - Matching/verification: `MISCITE_PREPRINT_YEAR_GAP_MAX` controls year-gap tolerance for preprint/working-paper → published matches.
 - Auth email: `MISCITE_MAILGUN_API_KEY`, `MISCITE_MAILGUN_DOMAIN`, `MISCITE_MAILGUN_SENDER`, `MISCITE_LOGIN_CODE_TTL_MINUTES`.
-- Public URLs: `MISCITE_PUBLIC_ORIGIN` for absolute links in emails.
+- Public URLs: `MISCITE_PUBLIC_ORIGIN` for absolute links in emails, `MISCITE_SAMPLE_REPORT_URL` for the sample report CTA.
 - Bot protection: `MISCITE_TURNSTILE_SITE_KEY`, `MISCITE_TURNSTILE_SECRET_KEY`.
 - Sources: Crossref mailto/user-agent, NCBI/PubMed tool/email/api key, retraction/predatory datasets/APIs.
 - Billing (optional): Stripe keys, pricing refresh, multipliers, auto-charge thresholds.

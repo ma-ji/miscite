@@ -125,6 +125,7 @@ def template_context(request: Request, **extra):
         "maintenance_mode": settings.maintenance_mode,
         "maintenance_message": settings.maintenance_message,
         "public_origin": origin,
+        "sample_report_url": settings.sample_report_url,
         "canonical_url": canonical_url,
         "meta_description": meta_description,
         "robots": robots,
