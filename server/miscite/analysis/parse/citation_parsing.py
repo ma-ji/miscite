@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import re
 from dataclasses import dataclass
 
@@ -117,6 +118,12 @@ _AY_LEADING_RE = re.compile(r"^(see|see also|cf\.|cf|e\.g\.|eg)\s+", re.IGNORECA
 _AY_SPLIT_RE = re.compile(r"\s*;\s*")
 
 
+def _html_unescape(text: str) -> str:
+    if not text or "&" not in text:
+        return text
+    return html.unescape(text)
+
+
 def split_multi_citations(citations: list[CitationInstance]) -> list[CitationInstance]:
     out: list[CitationInstance] = []
     for cit in citations:
@@ -173,7 +180,7 @@ def normalize_llm_citations(citations: list[CitationInstance]) -> list[CitationI
 
         if kind == "author_year":
             raw = raw_key
-            if ";" in raw_key and len(group) == 1:
+            if ";" in _html_unescape(raw_key) and len(group) == 1:
                 out.extend(_split_author_year_citation(cit))
             else:
                 out.extend(group)
@@ -204,7 +211,7 @@ def _split_numeric_citation(cit: CitationInstance) -> list[CitationInstance]:
 
 
 def _split_author_year_citation(cit: CitationInstance) -> list[CitationInstance]:
-    raw = (cit.raw or "").strip()
+    raw = _html_unescape((cit.raw or "").strip())
     if not raw:
         return [cit]
     year_hits = list(_AY_YEAR_RE.finditer(raw))
@@ -263,7 +270,7 @@ def _sentence_context(text: str, start: int, end: int) -> str:
 
 
 def extract_citation_instances(main_text: str) -> list[CitationInstance]:
-    text = main_text or ""
+    text = _html_unescape(main_text or "")
     instances: list[CitationInstance] = []
 
     for m in _NUMERIC_CIT_RE.finditer(text):

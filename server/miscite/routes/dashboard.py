@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
-from sqlalchemy import delete, desc, select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from server.miscite.billing.ledger import get_or_create_account
@@ -16,6 +16,7 @@ from server.miscite.billing.stripe import auto_charge_payment_method_available
 from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import db_session, get_sessionmaker
+from server.miscite.core.jobs import delete_job_and_document
 from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
 from server.miscite.core.rate_limit import acquire_stream_slot, enforce_rate_limit, release_stream_slot
 from server.miscite.core.security import access_token_hint, generate_access_token, hash_token, require_csrf, require_user
@@ -276,11 +277,24 @@ def root(request: Request, db: Session = Depends(db_session)):
     )
 
 
+def _report_access_error(message: str | None) -> str | None:
+    if not message:
+        return None
+    key = message.strip().lower()
+    if key == "invalid":
+        return "That report link is invalid or expired. Enter a valid access token to continue."
+    return None
+
+
 @router.get("/reports/access")
-def report_access_form(request: Request):
+def report_access_form(request: Request, error: str = ""):
     return templates.TemplateResponse(
         "report_access.html",
-        template_context(request, title="Get report"),
+        template_context(
+            request,
+            title="Get report",
+            access_error=_report_access_error(error),
+        ),
     )
 
 
@@ -531,7 +545,7 @@ def job_page(
         .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
     ).first()
     if not row:
-        raise HTTPException(status_code=404)
+        return RedirectResponse("/reports/access?error=invalid", status_code=303)
     job, doc = row
 
     report = _load_report(job)
@@ -739,15 +753,14 @@ def job_delete(
     job, doc = row
     storage_path = doc.storage_path
 
-    db.execute(delete(AnalysisJobEvent).where(AnalysisJobEvent.job_id == job.id))
-    db.delete(job)
-    db.delete(doc)
+    deleted_document = delete_job_and_document(db, job_id=job.id, document_id=doc.id)
     db.commit()
 
-    try:
-        Path(storage_path).unlink()
-    except OSError:
-        pass
+    if deleted_document:
+        try:
+            Path(storage_path).unlink()
+        except OSError:
+            pass
 
     return RedirectResponse("/dashboard", status_code=303)
 

@@ -8,7 +8,9 @@ from typing import Protocol
 class ResolvedWorkLike(Protocol):
     doi: str | None
     title: str | None
+    abstract: str | None
     year: int | None
+    journal: str | None
     openalex_id: str | None
     openalex_record: dict | None
     source: str | None

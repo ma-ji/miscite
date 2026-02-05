@@ -84,3 +84,21 @@ prompts:
       - groups_payload
       - section_order
     output_schema: schemas/deep_suggestions.schema.json
+  - id: deep_analysis.structure
+    stage: deep_analysis
+    purpose: Convert manuscript text into a standardized subsection structure for deep analysis.
+    system: deep_analysis/structure/system.txt
+    user: deep_analysis/structure/user.txt
+    inputs:
+      - candidates
+    output_schema: schemas/deep_structure.schema.json
+  - id: deep_analysis.subsection_plan
+    stage: deep_analysis
+    purpose: Provide subsection-specific revision plan and citation integration suggestions.
+    system: deep_analysis/subsection_plan/system.txt
+    user: deep_analysis/subsection_plan/user.txt
+    inputs:
+      - title
+      - text
+      - references_json
+    output_schema: schemas/deep_subsection_plan.schema.json

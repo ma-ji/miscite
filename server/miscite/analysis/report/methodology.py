@@ -45,6 +45,13 @@ def build_methodology_md(
         lines.append("   - For low-relevance cases, optionally ask a configured LLM to classify as appropriate/inappropriate/uncertain.")
     else:
         lines.append("   - No cases required LLM adjudication in this run; only heuristics (and optional local NLI) were applied.")
+    lines.append("7) **Optional deep analysis (when enabled)**:")
+    lines.append(
+        "   - Expand a citation neighborhood around key references via OpenAlex and generate literature-strengthening recommendations."
+    )
+    lines.append(
+        "   - If section recommendations are enabled, segment the manuscript into top-level sections (LLM-assisted with a fallback; nested subsections merged) and produce concrete revision plans per section using nearby references."
+    )
     lines.append("")
     lines.append("## Data sources used")
     for src in used_sources:

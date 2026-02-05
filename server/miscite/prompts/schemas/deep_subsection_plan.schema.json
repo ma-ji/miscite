@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "improvements", "reference_integrations", "questions"],
+  "properties": {
+    "summary": {"type": "string"},
+    "improvements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["priority", "action", "why", "how", "rids"],
+        "properties": {
+          "priority": {"type": "integer", "minimum": 1},
+          "action": {"type": "string"},
+          "why": {"type": "string"},
+          "how": {"type": "array", "items": {"type": "string"}},
+          "rids": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "reference_integrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rid", "priority", "why", "where", "example"],
+        "properties": {
+          "rid": {"type": "string"},
+          "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+          "why": {"type": "string"},
+          "where": {"type": "string"},
+          "example": {"type": "string"}
+        }
+      }
+    },
+    "questions": {"type": "array", "items": {"type": "string"}}
+  }
+}

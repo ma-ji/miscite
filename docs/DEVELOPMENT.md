@@ -60,6 +60,32 @@ make check
   - `MISCITE_NCBI_API_KEY` (optional)
   - References containing `PMID` / `PMCID` are treated as strong identifiers during the PubMed stage of resolution (without changing the overall lookup order).
 
+## Deep analysis (optional)
+
+Deep analysis is disabled by default (`MISCITE_ENABLE_DEEP_ANALYSIS=false`). When enabled, it expands a citation neighborhood around key references and produces:
+
+- A high-level recommendation section.
+- Section-by-section revision plans (top-level only; optional; can increase LLM usage).
+
+Key settings:
+
+- `MISCITE_ENABLE_DEEP_ANALYSIS`
+- `MISCITE_ENABLE_DEEP_ANALYSIS_LLM_KEY_SELECTION`
+- `MISCITE_ENABLE_DEEP_ANALYSIS_LLM_SUGGESTIONS`
+- `MISCITE_ENABLE_DEEP_ANALYSIS_LLM_STRUCTURE`
+- `MISCITE_DEEP_ANALYSIS_STRUCTURE_MAX_CANDIDATES`
+- `MISCITE_ENABLE_DEEP_ANALYSIS_LLM_SUBSECTION_RECOMMENDATIONS`
+- `MISCITE_DEEP_ANALYSIS_SUBSECTION_MAX_SUBSECTIONS`
+- `MISCITE_DEEP_ANALYSIS_SUBSECTION_GRAPH_MAX_NODES`
+- `MISCITE_DEEP_ANALYSIS_SUBSECTION_GRAPH_MAX_EDGES`
+- `MISCITE_DEEP_ANALYSIS_SUBSECTION_TEXT_MAX_CHARS`
+- `MISCITE_DEEP_ANALYSIS_SUBSECTION_PROMPT_MAX_REFS`
+- `MISCITE_DEEP_ANALYSIS_ABSTRACT_MAX_CHARS`
+
+Notes:
+
+- `MISCITE_DEEP_ANALYSIS_SUBSECTION_MAX_SUBSECTIONS=0` means “all top-level sections”.
+
 ## Billing (optional)
 
 Usage billing is disabled by default. To enable Stripe balance top-ups and auto-charge, set:

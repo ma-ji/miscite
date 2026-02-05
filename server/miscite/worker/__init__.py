@@ -8,7 +8,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from server.miscite.billing.costing import compute_cost
@@ -21,6 +21,7 @@ from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import get_sessionmaker, init_db
 from server.miscite.core.email import send_access_token_email
+from server.miscite.core.jobs import delete_job_and_document
 from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
 from server.miscite.core.security import access_token_hint, generate_access_token, hash_token
 from server.miscite.sources.predatory_sync import sync_predatory_datasets
@@ -474,10 +475,9 @@ def _reap_expired_jobs(settings: Settings) -> None:
         if not rows:
             return
         for job, doc in rows:
-            expired_paths.append(doc.storage_path)
-            db.execute(delete(AnalysisJobEvent).where(AnalysisJobEvent.job_id == job.id))
-            db.delete(job)
-            db.delete(doc)
+            deleted_document = delete_job_and_document(db, job_id=job.id, document_id=doc.id)
+            if deleted_document:
+                expired_paths.append(doc.storage_path)
         db.commit()
         committed = True
     except Exception:

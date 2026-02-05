@@ -339,7 +339,7 @@ Decision/rationale: Treat provider errors as retryable when possible, and skip L
 2026-02-02
 Goal: Make Stripe auto-charge workflow robust and idempotent.
 Prompt: Double check the auto-charge function and confirm the end-to-end workflow works correctly.
-Files touched: server/miscite/worker/__init__.py, server/miscite/billing/stripe.py, server/miscite/routes/billing.py, server/miscite/routes/dashboard.py, server/miscite/core/models.py, server/miscite/core/config.py, server/miscite/templates/billing.html, .env.example, docs/DEVELOPMENT.md, kb/promptbook.md
+Files touched: server/miscite/worker/**init**.py, server/miscite/billing/stripe.py, server/miscite/routes/billing.py, server/miscite/routes/dashboard.py, server/miscite/core/models.py, server/miscite/core/config.py, server/miscite/templates/billing.html, .env.example, docs/DEVELOPMENT.md, kb/promptbook.md
 Decision/rationale: Add an in-flight auto-charge lock (plus Stripe idempotency keys) to prevent duplicate charges under concurrency, require webhook configuration for top-ups/auto-charge, verify a saved payment method exists before treating auto-charge as “ready”, clear in-flight state on webhook success/failure, and enforce uniqueness for Stripe IDs on billing transactions to prevent double-credits.
 
 2026-02-02
@@ -405,25 +405,25 @@ Decision/rationale: Organize styles by the three core citation systems (author�
 2026-02-03
 Goal: Implement robust citation↔bibliography matching and type-aware year handling in reference resolution.
 Prompt: Update the citation check pipeline to follow kb/citation-styles-and-matching-plan.md (better in-text↔bibliography matching, ambiguity handling, and improved verification behavior for preprint→published year gaps).
-Files touched: AGENTS.md, docs/ARCHITECTURE.md, server/miscite/analysis/match/__init__.py, server/miscite/analysis/match/index.py, server/miscite/analysis/match/match.py, server/miscite/analysis/match/types.py, server/miscite/analysis/parse/citation_parsing.py, server/miscite/analysis/parse/llm_parsing.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/checks/inappropriate.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/templates/job.html, kb/promptbook.md
+Files touched: AGENTS.md, docs/ARCHITECTURE.md, server/miscite/analysis/match/**init**.py, server/miscite/analysis/match/index.py, server/miscite/analysis/match/match.py, server/miscite/analysis/match/types.py, server/miscite/analysis/parse/citation_parsing.py, server/miscite/analysis/parse/llm_parsing.py, server/miscite/analysis/pipeline/**init**.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/checks/inappropriate.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/templates/job.html, kb/promptbook.md
 Decision/rationale: Introduce a dedicated `analysis/match/` module to index references and link citations with confidence/ambiguity and candidate evidence; propagate match objects through checks and deep analysis for traceability; relax year usage in OpenAlex/Crossref search/scoring when a reference looks preprint/working-paper-like to avoid false mismatches due to multi-year publication gaps.
 
 2026-02-03
 Goal: Make preprint year-gap tolerance configurable and use LLM to disambiguate ambiguous citation↔bibliography matches.
 Prompt: Make the preprint year gap configurable (default 5 years max) and enable LLM disambiguation for ambiguous citation matches.
-Files touched: .env.example, AGENTS.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/prompts/matching/bibliography_candidate/system.txt, server/miscite/prompts/matching/bibliography_candidate/user.txt, server/miscite/prompts/registry.yaml, server/miscite/analysis/match/__init__.py, server/miscite/analysis/match/llm_disambiguate.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
+Files touched: .env.example, AGENTS.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/prompts/matching/bibliography_candidate/system.txt, server/miscite/prompts/matching/bibliography_candidate/user.txt, server/miscite/prompts/registry.yaml, server/miscite/analysis/match/**init**.py, server/miscite/analysis/match/llm_disambiguate.py, server/miscite/analysis/pipeline/**init**.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/deep_analysis/prep.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
 Decision/rationale: Add `MISCITE_PREPRINT_YEAR_GAP_MAX` to tune how metadata resolution scores year differences for preprint/working-paper-like references; add an LLM-only disambiguation step for ambiguous citation→bibliography links (with memoization and a shared per-job match-call budget) to improve matching accuracy while bounding cost.
 
 2026-02-03
 Goal: Add NCBI/PubMed as an additional metadata source in reference resolution.
 Prompt: Also add NCBI/PubMed to data sources (E-utilities guidance).
-Files touched: .env.example, AGENTS.md, docs/ARCHITECTURE.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/sources/pubmed.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/types.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
+Files touched: .env.example, AGENTS.md, docs/ARCHITECTURE.md, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/sources/pubmed.py, server/miscite/analysis/checks/reference_flags.py, server/miscite/analysis/pipeline/**init**.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/types.py, server/miscite/analysis/report/methodology.py, kb/promptbook.md
 Decision/rationale: Implement an NCBI E-utilities client (ESearch/ESummary) with caching and NCBI-recommended `tool`/`email` (plus optional `api_key`), extract PMID signals from references when present, and insert PubMed into the resolver chain (OpenAlex → Crossref → PubMed → arXiv) with deterministic scoring and optional LLM disambiguation for borderline candidates.
 
 2026-02-03
 Goal: Prefer PubMed first when PMID is present, fetch PubMed abstracts, and improve report link UX for verification.
 Prompt: If explicit PMID try PubMed first; fetch abstracts; show DOI and other IDs (PMID/arXiv/OpenAlex) as clickable links, with DOI first.
-Files touched: server/miscite/sources/pubmed.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/report/methodology.py, server/miscite/templates/job.html, kb/promptbook.md
+Files touched: server/miscite/sources/pubmed.py, server/miscite/analysis/pipeline/resolve.py, server/miscite/analysis/pipeline/**init**.py, server/miscite/analysis/report/methodology.py, server/miscite/templates/job.html, kb/promptbook.md
 Decision/rationale: Treat explicit PMIDs as strong identifiers (prefer PubMed before DOI/title search), fetch abstracts via EFetch to improve downstream relevance checks, and render DOI/PMID/arXiv/OpenAlex identifiers as outbound links to make manual verification fast and reliable.
 
 2026-02-03
@@ -455,3 +455,101 @@ Goal: Reduce report-page redundancy and make deep-analysis references usable at 
 Prompt: Optimize the report UI/UX for researcher integrity screening; user reported repeated sections and requested keeping the alphabetized deep-analysis list with a group filter.
 Files touched: server/miscite/templates/job.html, server/miscite/static/styles.css, kb/promptbook.md
 Decision/rationale: Remove deep-analysis reference duplication and consolidate `[R#]` jump targets into a single alphabetized “Complete reference list”; reuse recommendation groupings as a filter for the alphabetized list (with a live “showing X of Y” counter) and remove the Shortlists block; remove the Bibliography section to cut scroll weight; rewrite Recommendations to a narrative summary that only surfaces high-priority (not-already-in-manuscript) items; fix progress/report empty-state duplication (only show live progress for PENDING/RUNNING, and show report placeholders only when appropriate); add a Sources & Methodology disclosure section (using existing `data_sources` + `methodology_md`) to improve auditability; add a human label for `ambiguous_bibliography_ref` and a small design-system class to keep source names readable.
+
+2026-02-04
+Goal: Add deep-analysis subsection-by-subsection revision recommendations using citation-subnetwork neighborhoods.
+Prompt: For deep analysis, after constructing the citation network, produce recommendations subsection-by-subsection: build a subsection-specific citation graph (neighbors up to 3rd degree), pass subsection text + reference metadata/abstracts to the LLM for a prioritized revision plan, and parallelize where appropriate.
+Files touched: server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/deep_analysis/references.py, server/miscite/analysis/deep_analysis/subsections.py, server/miscite/analysis/deep_analysis/subsection_recommendations.py, server/miscite/analysis/deep_analysis/types.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/core/config.py, server/miscite/prompts/registry.yaml, server/miscite/prompts/deep_analysis/subsection_plan/system.txt, server/miscite/prompts/deep_analysis/subsection_plan/user.txt, server/miscite/prompts/schemas/deep_subsection_plan.schema.json, server/miscite/templates/job.html, .env.example, docs/DEVELOPMENT.md, kb/promptbook.md
+Decision/rationale: Split the manuscript into subsection-like chunks via heading heuristics, then map each subsection’s cited bibliography items to verified references and expand into a bounded 3-hop neighborhood within the deep-analysis graph. Convert node-IDs to stable `[R#]` ids, include clipped abstracts in the deep-analysis reference payload, and generate per-subsection plans via parallel LLM calls within a call budget; fall back to a heuristic plan when LLM is disabled or budget is exhausted. Surface results in the report UI as disclosure panels per subsection with concrete edit steps and suggested reference additions.
+
+2026-02-04
+Goal: Make subsection splitting robust and scope "uncited" to the subsection (not the whole manuscript).
+Prompt: Use LLM to convert the manuscript into a standardized structure without renaming sections; subsequent steps should use that structure. Also, treat "not cited" as not cited in that subsection.
+Files touched: server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/deep_analysis/structure.py, server/miscite/analysis/deep_analysis/subsection_recommendations.py, server/miscite/analysis/report/methodology.py, server/miscite/core/config.py, server/miscite/prompts/registry.yaml, server/miscite/prompts/deep_analysis/structure/system.txt, server/miscite/prompts/deep_analysis/structure/user.txt, server/miscite/prompts/deep_analysis/subsection_plan/user.txt, server/miscite/prompts/schemas/deep_structure.schema.json, .env.example, docs/DEVELOPMENT.md, AGENTS.md, kb/promptbook.md
+Decision/rationale: Add an LLM-assisted manuscript structuring step (via heading candidates + preserved titles) to build a consistent subsection list used by deep analysis; keep a heuristic fallback for safety. Update subsection recommendation prompting/validation to prioritize integrating references not cited in that subsection (distance>0), regardless of whether the reference is cited elsewhere in the manuscript. Document new env toggles/caps and update methodology for traceability.
+
+2026-02-04
+Goal: Run section-level revision plans at the top-level only and label pre-heading content as "opening".
+Prompt: Label the pre-heading chunk as "opening"; generate recommendations only for the highest level and combine all sublevels; keep subsection-seed citations restricted to verified references.
+Files touched: server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/deep_analysis/subsections.py, server/miscite/analysis/deep_analysis/structure.py, server/miscite/analysis/report/methodology.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Collapse the extracted manuscript structure to top-level sections (merging nested subsection text under the nearest top-level header) so recommendations map cleanly to major manuscript sections. Standardize the preamble as "opening" for consistent reporting and ensure subsection citation-graph seeds remain limited to verified references for reliability.
+
+2026-02-04
+Goal: Generate plans for every top-level section (including "opening").
+Prompt: Opening section gets a plan; run plans for all top-level sections (combining sublevels).
+Files touched: .env.example, docs/DEVELOPMENT.md, server/miscite/core/config.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/deep_analysis/subsection_recommendations.py, kb/promptbook.md
+Decision/rationale: Always emit a plan item per top-level section even if no section-specific citation graph exists (e.g., no verified citations in that section). Default to analyzing all top-level sections by setting `MISCITE_DEEP_ANALYSIS_SUBSECTION_MAX_SUBSECTIONS=0`, while retaining an optional cap for unusually long/fragmented documents.
+
+2026-02-04
+Goal: Fix author-year citation splitting when text contains HTML entities like `&amp;`.
+Prompt: THINK HARD: The in-text citations like this are not matched correctly: (Greenlee &amp; Trussel, 2000; Hodge &amp; Piccolo, 2005; Trussel, 2002)
+Files touched: server/miscite/analysis/parse/citation_parsing.py, server/miscite/analysis/parse/test_citation_parsing.py, kb/promptbook.md
+Decision/rationale: HTML entities like `&amp;` include semicolons that were incorrectly treated as citation separators, corrupting multi-citation splitting and downstream matching. Unescape HTML entities before detecting/splitting multi-citation markers and add regression tests for both single- and multi-citation cases.
+
+2026-02-04
+Goal: Prevent SQLite "database is locked" errors under concurrent web/worker access and fix subsection recommendation rendering.
+Prompt: THINK HARD and fix errors: SQLite database locked in job events; Jinja `subrec.items` not iterable.
+Files touched: server/miscite/core/db.py, server/miscite/templates/job.html, kb/promptbook.md
+Decision/rationale: Configure SQLite connections with WAL + busy timeout (and normal synchronous) to reduce lock contention while serving event polls/streams; update the report template to access subsection recommendation items via mapping-safe getters to avoid colliding with dict methods.
+
+2026-02-04
+Goal: Remove meaningless items from the deep-analysis reference list.
+Prompt: THINK HARD: In the deep analysis report's reference list, I see a lot of useless records like "[R230] Unknown author (n.d.). Untitled." Make sure to clean the list to only contain verified and meaningful records.
+Files touched: server/miscite/analysis/deep_analysis/references.py, kb/promptbook.md
+Decision/rationale: Add a metadata-quality filter during deep-analysis reference list construction so only references with real titles plus supporting metadata (author/year/venue/DOI) are included. Apply the filter to group assignment and RID mapping so unusable placeholders are removed across the report and downstream suggestions.
+
+========
+DATE: 2026-02-05
+GOAL: Exclude secondary references from deep analysis.
+PROMPT: THINK HARD: Exclude secondary references from deep analysis. For example, include primary sources of books, but not any reviews.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/secondary.py; server/miscite/analysis/deep_analysis/prep.py; server/miscite/analysis/deep_analysis/references.py; AGENTS.md.
+DECISION/RATIONALE: Added secondary-reference detection (OpenAlex type/type_crossref plus conservative review-title heuristics) to filter deep analysis seeds and reference outputs, keeping reviews and book reviews out of recommendations.
+
+========
+DATE: 2026-02-05
+GOAL: Allow literature reviews while still excluding book reviews in deep analysis.
+PROMPT: Literature review is fine, just don't mistreat book reviews as primary sources because they usually have the same title.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/secondary.py.
+DECISION/RATIONALE: Narrowed secondary-reference detection to focus on book-review signals (OpenAlex type/genre tokens and book-review title patterns) while allowing literature/systematic/scoping reviews and meta-analyses.
+
+========
+DATE: 2026-02-05
+GOAL: Improve book-review detection when titles lack "review".
+PROMPT: Many book reviews won't have "review" in title and may share the same title with books. Can these be identified?
+FILES TOUCHED: server/miscite/analysis/deep_analysis/secondary.py.
+DECISION/RATIONALE: Extended secondary-reference detection to scan OpenAlex keyword/concept/topic labels for book-review signals while keeping review-article allowlists intact.
+
+========
+DATE: 2026-02-05
+GOAL: Exclude specific source/venue names from analysis across the pipeline.
+PROMPT: Prepare a file of list of source names to be excluded from analysis.
+FILES TOUCHED: docs/excluded_sources.txt; server/miscite/analysis/shared/excluded_sources.py; server/miscite/analysis/pipeline/__init__.py; AGENTS.md; kb/promptbook.md.
+DECISION/RATIONALE: Added a docs-backed exclusion list and wired it into pipeline checks and deep analysis so references from excluded venues (e.g., Choice Reviews Online) are skipped across metadata-based analysis stages.
+
+========
+DATE: 2026-02-05
+GOAL: Fully drop excluded sources from deep-analysis reference lists.
+PROMPT: THINK HARD: The Choice Reviews Online references still appear in the reference list. Make sure items matching the excluded sources get completed dropped.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/references.py; kb/promptbook.md.
+DECISION/RATIONALE: Added excluded-source filtering (venue/publisher/source) to deep-analysis reference list construction so excluded venues are removed even when they appear via OpenAlex neighborhood expansion.
+
+========
+DATE: 2026-02-05
+GOAL: Drop excluded sources immediately from all analysis and deep-analysis networks.
+PROMPT: THINK HARD: Make sure these excluded items do not enter any analysis or networks. Drop them immediately.
+FILES TOUCHED: server/miscite/analysis/pipeline/__init__.py; server/miscite/analysis/shared/excluded_sources.py; server/miscite/analysis/deep_analysis/deep_analysis.py; kb/promptbook.md.
+DECISION/RATIONALE: Added early exclusion based on bibliography metadata/raw text to remove excluded references and their citations before matching/resolution, and filtered deep-analysis citation networks to remove excluded works when OpenAlex metadata indicates an excluded venue.
+
+========
+DATE: 2026-02-05
+GOAL: Ensure excluded venues never enter the deep-analysis citation network.
+PROMPT: THINK HARD: Don't included the excluded items in the networks at all. Drop them before constructing networks and any analysis.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/deep_analysis.py; kb/promptbook.md.
+DECISION/RATIONALE: Filter excluded venues at the point of adding OpenAlex citing-works nodes (using list results when available, with a fallback metadata fetch) so excluded works are never added as nodes/edges in the deep-analysis graph.
+
+========
+DATE: 2026-02-05
+GOAL: Ensure excluded-sources list is available in Docker builds so exclusions apply in production-ish Compose runs.
+PROMPT: THINK HARD: Trace the pipeline, double check if and how excluded references are actually excluded every step immediately.
+FILES TOUCHED: Dockerfile; kb/promptbook.md.
+DECISION/RATIONALE: Dockerfile previously copied only `server/` (not `docs/`), so `docs/excluded_sources.txt` was missing in the container and exclusions silently did nothing. Updated Dockerfile to copy `docs/` into the image so `load_excluded_sources()` works in web + worker containers.

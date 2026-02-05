@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 
 from fastapi import Request
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -21,8 +21,10 @@ def _engine_for(db_url: str):
     connect_args = {}
     _ensure_db_parent_dir(db_url)
     if db_url.startswith("sqlite:"):
-        connect_args = {"check_same_thread": False}
-    return create_engine(db_url, connect_args=connect_args, pool_pre_ping=True)
+        connect_args = {"check_same_thread": False, "timeout": 30}
+    engine = create_engine(db_url, connect_args=connect_args, pool_pre_ping=True)
+    _configure_sqlite(engine, db_url)
+    return engine
 
 
 def get_engine(settings: Settings):
@@ -62,6 +64,29 @@ def _ensure_db_parent_dir(db_url: str) -> None:
     parent = os.path.dirname(database)
     if parent:
         os.makedirs(parent, exist_ok=True)
+
+
+def _configure_sqlite(engine, db_url: str) -> None:
+    if not db_url.startswith("sqlite:"):
+        return
+    file_based = False
+    try:
+        url = make_url(db_url)
+        file_based = bool(url.database) and url.database != ":memory:"
+    except Exception:
+        file_based = False
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            if file_based:
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+        finally:
+            cursor.close()
 
 
 @contextmanager

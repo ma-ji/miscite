@@ -1,0 +1,22 @@
+You will receive heading candidates from a manuscript as numbered lines in the form:
+LINE_NUMBER | indent=INTEGER | HEADING_TEXT
+
+Task:
+- Select the real section/subsection headings (ignore false positives like figure/table captions).
+- Assign a hierarchy level (1 = top-level section, 2 = subsection, etc.).
+
+Return JSON with keys:
+- headings: array of objects {line, title, level}
+  - line: integer line number from the candidates (1-based, from the original manuscript text)
+  - title: EXACT heading text as it appears in HEADING_TEXT (trim whitespace only)
+  - level: integer 1..6
+- notes: array of short strings (may be empty)
+
+Rules:
+- Do NOT invent headings not present in the candidates.
+- Preserve the heading text; do not normalize or rewrite it.
+- headings must be in strictly increasing line order and must not repeat the same line.
+- Exclude references/bibliography headings (the deep analysis input should already exclude the reference list).
+
+HEADING CANDIDATES:
+$candidates

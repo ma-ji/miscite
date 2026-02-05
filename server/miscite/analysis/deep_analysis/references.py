@@ -4,6 +4,8 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from server.miscite.analysis.deep_analysis.secondary import is_secondary_reference
+from server.miscite.analysis.shared.excluded_sources import load_excluded_sources, matches_excluded_source
 from server.miscite.analysis.deep_analysis.types import ResolvedWorkLike
 from server.miscite.analysis.parse.citation_parsing import ReferenceEntry
 from server.miscite.analysis.shared.normalize import normalize_doi
@@ -29,6 +31,46 @@ def _nested_str(obj: dict | None, *keys: str) -> str | None:
     if isinstance(cur, str) and cur.strip():
         return cur.strip()
     return None
+
+
+def _collapse_ws(text: str) -> str:
+    return " ".join((text or "").replace("\u00a0", " ").split()).strip()
+
+
+def _clip_text(text: str | None, *, max_chars: int) -> str | None:
+    if text is None:
+        return None
+    cleaned = _collapse_ws(text)
+    if not cleaned:
+        return None
+    if max_chars <= 0:
+        return None
+    if len(cleaned) > max_chars:
+        return cleaned[:max_chars] + "\u2026"
+    return cleaned
+
+
+def _extract_openalex_abstract(record: dict | None) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    inv = record.get("abstract_inverted_index")
+    if not isinstance(inv, dict) or not inv:
+        return None
+    pos_to_word: dict[int, str] = {}
+    max_pos = -1
+    for word, positions in inv.items():
+        if not isinstance(positions, list):
+            continue
+        for p in positions:
+            if not isinstance(p, int):
+                continue
+            pos_to_word[p] = str(word)
+            max_pos = max(max_pos, p)
+    if max_pos < 0:
+        return None
+    words = [pos_to_word.get(i, "") for i in range(max_pos + 1)]
+    abstract = " ".join(w for w in words if w)
+    return abstract.strip() or None
 
 
 def _extract_openalex_authors(record: dict | None, *, max_authors: int = 25) -> list[str]:
@@ -63,6 +105,31 @@ def _extract_openalex_venue(record: dict | None) -> str | None:
     hv = record.get("host_venue") if isinstance(record, dict) else None
     if isinstance(hv, dict):
         dn = hv.get("display_name")
+        if isinstance(dn, str) and dn.strip():
+            return dn.strip()
+    return None
+
+
+def _extract_openalex_publisher(record: dict | None) -> str | None:
+    hv = record.get("host_venue") if isinstance(record, dict) else None
+    if isinstance(hv, dict):
+        pub = hv.get("publisher")
+        if isinstance(pub, str) and pub.strip():
+            return pub.strip()
+    return None
+
+
+def _extract_openalex_source_name(record: dict | None) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    for key in ("primary_location", "best_oa_location"):
+        loc = record.get(key)
+        if not isinstance(loc, dict):
+            continue
+        src = loc.get("source")
+        if not isinstance(src, dict):
+            continue
+        dn = src.get("display_name")
         if isinstance(dn, str) and dn.strip():
             return dn.strip()
     return None
@@ -164,6 +231,23 @@ def _format_apa_base(meta: dict[str, Any]) -> str:
     return " ".join(parts).replace("..", ".").strip()
 
 
+def _is_meaningful_meta(meta: dict[str, Any]) -> bool:
+    title = _collapse_ws(str(meta.get("title") or ""))
+    if not title:
+        return False
+    if title.lower() in {"untitled", "unknown title", "title unknown", "n/a", "na"}:
+        return False
+    authors = meta.get("authors") if isinstance(meta.get("authors"), list) else []
+    has_authors = any(_collapse_ws(str(a)) for a in authors if isinstance(a, str))
+    year = meta.get("year")
+    has_year = isinstance(year, int) and year > 0
+    venue = _collapse_ws(str(meta.get("venue") or ""))
+    has_venue = bool(venue)
+    doi = _collapse_ws(str(meta.get("doi") or ""))
+    has_doi = bool(doi)
+    return has_authors or has_year or has_venue or has_doi
+
+
 def build_reference_master_list(
     *,
     settings: Settings,
@@ -173,7 +257,8 @@ def build_reference_master_list(
     verified_original_refs: list[ReferenceEntry],
     resolved_by_ref_id: dict[str, ResolvedWorkLike],
     node_id_for_original_ref: Callable[[str], str],
-) -> tuple[dict[str, dict], list[dict], list[dict], dict[str, Any]]:
+    extra_node_ids: list[str] | None = None,
+) -> tuple[dict[str, dict], list[dict], list[dict], dict[str, Any], dict[str, str]]:
     trunc: dict[str, Any] = {
         "skipped_openalex_meta_fetches": 0,
         "key_refs_total": len(key_ref_ids),
@@ -213,9 +298,13 @@ def build_reference_master_list(
     trunc["key_refs_shown"] = len(key_nodes)
 
     selected_node_ids: list[str] = []
+    # Always include the paper's verified references so subsection graphs can refer to them.
+    selected_node_ids.extend([node_id_for_original_ref(ref.ref_id) for ref in verified_original_refs])
     selected_node_ids.extend(key_nodes)
     for group_ids in cat_nodes.values():
         selected_node_ids.extend(group_ids)
+    if extra_node_ids:
+        selected_node_ids.extend([nid for nid in extra_node_ids if isinstance(nid, str) and nid.strip()])
 
     # Unique while preserving order.
     seen_nodes: set[str] = set()
@@ -232,6 +321,7 @@ def build_reference_master_list(
         openalex_ids=needed_openalex_ids,
         max_workers=settings.deep_analysis_max_workers,
         max_items=settings.deep_analysis_display_max_openalex_fetches,
+        abstract_max_chars=settings.deep_analysis_abstract_max_chars,
     )
     if len(openalex_summaries) < len(needed_openalex_ids):
         trunc["skipped_openalex_meta_fetches"] = len(needed_openalex_ids) - len(openalex_summaries)
@@ -249,7 +339,23 @@ def build_reference_master_list(
         return f"node:{node_id}"
 
     def _merge_meta(dst: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
-        for field in ["doi", "title", "venue", "official_url", "oa_pdf_url", "openalex_id", "volume", "issue", "pages"]:
+        for field in [
+            "doi",
+            "title",
+            "venue",
+            "publisher",
+            "source",
+            "official_url",
+            "oa_pdf_url",
+            "openalex_id",
+            "volume",
+            "issue",
+            "pages",
+            "abstract",
+            "type",
+            "type_crossref",
+            "genre",
+        ]:
             if not dst.get(field) and src.get(field):
                 dst[field] = src.get(field)
         # Prefer a concrete year if missing.
@@ -275,12 +381,18 @@ def build_reference_master_list(
             "title": None,
             "year": None,
             "venue": None,
+            "publisher": None,
+            "source": None,
             "authors": [],
             "volume": None,
             "issue": None,
             "pages": None,
+            "abstract": None,
             "official_url": None,
             "oa_pdf_url": None,
+            "type": None,
+            "type_crossref": None,
+            "genre": None,
             "in_paper": bool(ref_id),
             "is_key": bool(ref_id) and (ref_id in set(key_ref_ids)),
             "ref_id": ref_id,
@@ -293,6 +405,7 @@ def build_reference_master_list(
                 meta["doi"] = normalize_doi(w.doi or "") or meta["doi"]
                 meta["title"] = (w.title or "").strip() or meta["title"]
                 meta["year"] = w.year or meta["year"]
+                meta["abstract"] = _clip_text(getattr(w, "abstract", None), max_chars=settings.deep_analysis_abstract_max_chars) or meta["abstract"]
                 journal = getattr(w, "journal", None)
                 if isinstance(journal, str) and journal.strip():
                     meta["venue"] = journal.strip()
@@ -303,7 +416,14 @@ def build_reference_master_list(
                 meta["title"] = str(record.get("title") or record.get("display_name") or meta["title"] or "").strip() or meta["title"]
                 meta["year"] = record.get("publication_year") if isinstance(record.get("publication_year"), int) else meta["year"]
                 meta["venue"] = _extract_openalex_venue(record) or meta["venue"]
+                meta["publisher"] = _extract_openalex_publisher(record) or meta["publisher"]
+                meta["source"] = _extract_openalex_source_name(record) or meta["source"]
                 meta["authors"] = _extract_openalex_authors(record) or meta["authors"]
+                meta["type"] = record.get("type") or meta["type"]
+                meta["type_crossref"] = record.get("type_crossref") or meta["type_crossref"]
+                meta["genre"] = record.get("genre") or meta["genre"]
+                if not meta.get("abstract"):
+                    meta["abstract"] = _clip_text(_extract_openalex_abstract(record), max_chars=settings.deep_analysis_abstract_max_chars)
                 b = _extract_openalex_biblio(record)
                 meta["volume"] = b.get("volume") or meta["volume"]
                 meta["issue"] = b.get("issue") or meta["issue"]
@@ -326,13 +446,19 @@ def build_reference_master_list(
                 meta["title"] = str(summ.get("title") or "").strip() or meta["title"]
                 meta["year"] = summ.get("year") if isinstance(summ.get("year"), int) else meta["year"]
                 meta["venue"] = str(summ.get("venue") or "").strip() or meta["venue"]
+                meta["publisher"] = str(summ.get("publisher") or "").strip() or meta["publisher"]
+                meta["source"] = str(summ.get("source") or "").strip() or meta["source"]
                 if isinstance(summ.get("authors"), list):
                     meta["authors"] = [str(a).strip() for a in summ.get("authors") if isinstance(a, str) and a.strip()]
                 meta["volume"] = str(summ.get("volume") or "").strip() or meta["volume"]
                 meta["issue"] = str(summ.get("issue") or "").strip() or meta["issue"]
                 meta["pages"] = str(summ.get("pages") or "").strip() or meta["pages"]
+                meta["abstract"] = str(summ.get("abstract") or "").strip() or meta["abstract"]
                 meta["official_url"] = str(summ.get("official_url") or "").strip() or meta["official_url"]
                 meta["oa_pdf_url"] = str(summ.get("oa_pdf_url") or "").strip() or meta["oa_pdf_url"]
+                meta["type"] = summ.get("type") or meta["type"]
+                meta["type_crossref"] = summ.get("type_crossref") or meta["type_crossref"]
+                meta["genre"] = summ.get("genre") or meta["genre"]
 
         key = _canonical_key(doi=meta.get("doi"), openalex_id=meta.get("openalex_id"), node_id=node_id)
         node_id_to_key[node_id] = key
@@ -348,9 +474,40 @@ def build_reference_master_list(
             key = node_id_to_key.get(nid)
             if not key or key in seen:
                 continue
+            if key not in allowed_keys:
+                continue
             seen.add(key)
             out.append(key)
         return out
+
+    def _is_secondary_meta(meta: dict[str, Any]) -> bool:
+        return is_secondary_reference(
+            title=meta.get("title"),
+            work_type=meta.get("type"),
+            type_crossref=meta.get("type_crossref"),
+            genre=meta.get("genre"),
+        )
+
+    excluded_sources = load_excluded_sources()
+
+    def _is_excluded_meta(meta: dict[str, Any]) -> bool:
+        if not excluded_sources:
+            return False
+        candidates = [
+            meta.get("venue"),
+            meta.get("publisher"),
+            meta.get("source"),
+        ]
+        for val in candidates:
+            if isinstance(val, str) and matches_excluded_source(val, excluded_sources):
+                return True
+        return False
+
+    allowed_keys = {
+        k
+        for k, meta in meta_by_key.items()
+        if _is_meaningful_meta(meta) and not _is_secondary_meta(meta) and not _is_excluded_meta(meta)
+    }
 
     key_keys = _keys_for_node_list(key_nodes)
     tangential_keys = _keys_for_node_list(cat_nodes.get("tangential_citations") or [])
@@ -420,7 +577,7 @@ def build_reference_master_list(
         }
     )
 
-    leftovers = [k for k in meta_by_key.keys() if k not in assigned]
+    leftovers = [k for k in meta_by_key.keys() if k not in assigned and k in allowed_keys]
     if leftovers:
         master_group_defs.append({"key": "other", "title": "Other relevant works", "keys": _assign_group(leftovers)})
 
@@ -436,6 +593,8 @@ def build_reference_master_list(
 
     references_by_rid: dict[str, dict] = {}
     for key, meta in meta_by_key.items():
+        if key not in allowed_keys:
+            continue
         rid = rid_by_key.get(key)
         if not rid:
             continue
@@ -454,6 +613,7 @@ def build_reference_master_list(
             "volume": meta.get("volume"),
             "issue": meta.get("issue"),
             "pages": meta.get("pages"),
+            "abstract": meta.get("abstract"),
             "doi": meta.get("doi"),
             "official_url": official_url,
             "oa_pdf_url": meta.get("oa_pdf_url"),
@@ -534,7 +694,13 @@ def build_reference_master_list(
         if isinstance(group.get("rids"), list):
             group["rids"] = _sort_rids([rid for rid in group["rids"] if isinstance(rid, str)])
 
-    return references_by_rid, reference_groups, citation_groups, trunc
+    rid_by_node_id: dict[str, str] = {}
+    for node_id, key in node_id_to_key.items():
+        rid = rid_by_key.get(key)
+        if rid:
+            rid_by_node_id[node_id] = rid
+
+    return references_by_rid, reference_groups, citation_groups, trunc, rid_by_node_id
 
 
 def _fetch_openalex_summaries(
@@ -543,6 +709,7 @@ def _fetch_openalex_summaries(
     openalex_ids: list[str],
     max_workers: int,
     max_items: int,
+    abstract_max_chars: int,
 ) -> dict[str, dict]:
     if not openalex_ids:
         return {}
@@ -561,7 +728,10 @@ def _fetch_openalex_summaries(
         doi = normalize_doi(str(work.get("doi") or ""))
         year = work.get("publication_year") if isinstance(work.get("publication_year"), int) else None
         venue = _extract_openalex_venue(work)
+        publisher = _extract_openalex_publisher(work)
+        source = _extract_openalex_source_name(work)
         authors = _extract_openalex_authors(work)
+        abstract = _clip_text(_extract_openalex_abstract(work), max_chars=int(abstract_max_chars))
         b = _extract_openalex_biblio(work)
         official_url = _pick_official_url(doi=doi, record=work)
         oa_pdf_url = _pick_open_access_pdf(record=work)
@@ -571,12 +741,18 @@ def _fetch_openalex_summaries(
             "doi": doi,
             "year": year,
             "venue": venue,
+            "publisher": publisher,
+            "source": source,
             "authors": authors,
             "volume": b.get("volume"),
             "issue": b.get("issue"),
             "pages": b.get("pages"),
+            "abstract": abstract,
             "official_url": official_url,
             "oa_pdf_url": oa_pdf_url,
+            "type": work.get("type"),
+            "type_crossref": work.get("type_crossref"),
+            "genre": work.get("genre"),
         }
 
     out: dict[str, dict] = {}
@@ -589,4 +765,3 @@ def _fetch_openalex_summaries(
                 continue
             out[oid] = _summarize(work)
     return out
-

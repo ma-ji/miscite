@@ -186,6 +186,7 @@ class Settings:
     enable_deep_analysis: bool
     enable_deep_analysis_llm_key_selection: bool
     enable_deep_analysis_llm_suggestions: bool
+    enable_deep_analysis_llm_structure: bool
     deep_analysis_min_confidence: float
     deep_analysis_max_original_refs: int
     deep_analysis_paper_excerpt_max_chars: int
@@ -199,6 +200,14 @@ class Settings:
     deep_analysis_display_max_key_refs: int
     deep_analysis_display_max_per_category: int
     deep_analysis_display_max_openalex_fetches: int
+    deep_analysis_structure_max_candidates: int
+    enable_deep_analysis_llm_subsection_recommendations: bool
+    deep_analysis_subsection_max_subsections: int
+    deep_analysis_subsection_graph_max_nodes: int
+    deep_analysis_subsection_graph_max_edges: int
+    deep_analysis_subsection_text_max_chars: int
+    deep_analysis_subsection_prompt_max_refs: int
+    deep_analysis_abstract_max_chars: int
 
     billing_enabled: bool
     billing_cost_multiplier: float
@@ -375,6 +384,7 @@ class Settings:
         enable_deep_analysis = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS", False)
         enable_deep_analysis_llm_key_selection = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS_LLM_KEY_SELECTION", True)
         enable_deep_analysis_llm_suggestions = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS_LLM_SUGGESTIONS", True)
+        enable_deep_analysis_llm_structure = _env_bool("MISCITE_ENABLE_DEEP_ANALYSIS_LLM_STRUCTURE", True)
         deep_analysis_min_confidence = _env_float("MISCITE_DEEP_ANALYSIS_MIN_CONFIDENCE", 0.55, min_value=0.0, max_value=1.0)
         deep_analysis_max_original_refs = _env_int("MISCITE_DEEP_ANALYSIS_MAX_ORIGINAL_REFS", 400, min_value=10, max_value=5000)
         deep_analysis_paper_excerpt_max_chars = _env_int("MISCITE_DEEP_ANALYSIS_PAPER_EXCERPT_MAX_CHARS", 6000, min_value=500, max_value=50_000)
@@ -391,6 +401,30 @@ class Settings:
         deep_analysis_display_max_per_category = _env_int("MISCITE_DEEP_ANALYSIS_DISPLAY_MAX_PER_CATEGORY", 20, min_value=1, max_value=200)
         deep_analysis_display_max_openalex_fetches = _env_int(
             "MISCITE_DEEP_ANALYSIS_DISPLAY_MAX_OPENALEX_FETCHES", 140, min_value=0, max_value=2000
+        )
+        deep_analysis_structure_max_candidates = _env_int(
+            "MISCITE_DEEP_ANALYSIS_STRUCTURE_MAX_CANDIDATES", 250, min_value=20, max_value=5000
+        )
+        enable_deep_analysis_llm_subsection_recommendations = _env_bool(
+            "MISCITE_ENABLE_DEEP_ANALYSIS_LLM_SUBSECTION_RECOMMENDATIONS", True
+        )
+        deep_analysis_subsection_max_subsections = _env_int(
+            "MISCITE_DEEP_ANALYSIS_SUBSECTION_MAX_SUBSECTIONS", 0, min_value=0, max_value=200
+        )
+        deep_analysis_subsection_graph_max_nodes = _env_int(
+            "MISCITE_DEEP_ANALYSIS_SUBSECTION_GRAPH_MAX_NODES", 700, min_value=50, max_value=50_000
+        )
+        deep_analysis_subsection_graph_max_edges = _env_int(
+            "MISCITE_DEEP_ANALYSIS_SUBSECTION_GRAPH_MAX_EDGES", 6000, min_value=100, max_value=1_000_000
+        )
+        deep_analysis_subsection_text_max_chars = _env_int(
+            "MISCITE_DEEP_ANALYSIS_SUBSECTION_TEXT_MAX_CHARS", 4000, min_value=300, max_value=50_000
+        )
+        deep_analysis_subsection_prompt_max_refs = _env_int(
+            "MISCITE_DEEP_ANALYSIS_SUBSECTION_PROMPT_MAX_REFS", 70, min_value=10, max_value=500
+        )
+        deep_analysis_abstract_max_chars = _env_int(
+            "MISCITE_DEEP_ANALYSIS_ABSTRACT_MAX_CHARS", 1200, min_value=0, max_value=50_000
         )
 
         billing_enabled = _env_bool("MISCITE_BILLING_ENABLED", False)
@@ -456,6 +490,8 @@ class Settings:
             enable_deep_analysis = False
             enable_deep_analysis_llm_key_selection = False
             enable_deep_analysis_llm_suggestions = False
+            enable_deep_analysis_llm_structure = False
+            enable_deep_analysis_llm_subsection_recommendations = False
             llm_max_calls = min(llm_max_calls, 5)
             llm_match_max_calls = min(llm_match_max_calls, 10)
             resolve_max_workers = min(resolve_max_workers, 2)
@@ -537,6 +573,7 @@ class Settings:
             enable_deep_analysis=enable_deep_analysis,
             enable_deep_analysis_llm_key_selection=enable_deep_analysis_llm_key_selection,
             enable_deep_analysis_llm_suggestions=enable_deep_analysis_llm_suggestions,
+            enable_deep_analysis_llm_structure=enable_deep_analysis_llm_structure,
             deep_analysis_min_confidence=deep_analysis_min_confidence,
             deep_analysis_max_original_refs=deep_analysis_max_original_refs,
             deep_analysis_paper_excerpt_max_chars=deep_analysis_paper_excerpt_max_chars,
@@ -550,6 +587,14 @@ class Settings:
             deep_analysis_display_max_key_refs=deep_analysis_display_max_key_refs,
             deep_analysis_display_max_per_category=deep_analysis_display_max_per_category,
             deep_analysis_display_max_openalex_fetches=deep_analysis_display_max_openalex_fetches,
+            deep_analysis_structure_max_candidates=deep_analysis_structure_max_candidates,
+            enable_deep_analysis_llm_subsection_recommendations=enable_deep_analysis_llm_subsection_recommendations,
+            deep_analysis_subsection_max_subsections=deep_analysis_subsection_max_subsections,
+            deep_analysis_subsection_graph_max_nodes=deep_analysis_subsection_graph_max_nodes,
+            deep_analysis_subsection_graph_max_edges=deep_analysis_subsection_graph_max_edges,
+            deep_analysis_subsection_text_max_chars=deep_analysis_subsection_text_max_chars,
+            deep_analysis_subsection_prompt_max_refs=deep_analysis_subsection_prompt_max_refs,
+            deep_analysis_abstract_max_chars=deep_analysis_abstract_max_chars,
             billing_enabled=billing_enabled,
             billing_cost_multiplier=billing_cost_multiplier,
             billing_currency=billing_currency,

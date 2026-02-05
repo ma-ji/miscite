@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["headings", "notes"],
+  "properties": {
+    "headings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["line", "title", "level"],
+        "properties": {
+          "line": {"type": "integer", "minimum": 1},
+          "title": {"type": "string"},
+          "level": {"type": "integer", "minimum": 1, "maximum": 6}
+        }
+      }
+    },
+    "notes": {"type": "array", "items": {"type": "string"}}
+  }
+}

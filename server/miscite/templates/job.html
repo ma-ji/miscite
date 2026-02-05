@@ -588,7 +588,119 @@
 
             {% if report.deep_analysis.status == "completed" %}
               {% set da = report.deep_analysis %}
+              {% set subrec = da.subsection_recommendations %}
 	              {% set sug = da.suggestions %}
+                {% set subrec_items = subrec.get("items", []) if subrec is mapping else [] %}
+                {% set subrec_status = subrec.get("status") if subrec is mapping else None %}
+                {% set subrec_note = subrec.get("note") if subrec is mapping else None %}
+                {% set subrec_reason = subrec.get("reason") if subrec is mapping else None %}
+
+                {% if subrec_status == "completed" and subrec_items %}
+                  <h4 class="ds-mt-4">Section revision plans</h4>
+                  <p class="miscite-muted">
+                    Suggestions below are organized by top-level section (all nested subsections are merged) and focus on concrete edits plus integrating nearby references.
+                  </p>
+                  {% if subrec_note %}
+                    <p class="miscite-muted">{{ subrec_note }}</p>
+                  {% endif %}
+                  <div class="ds-disclosure-list ds-mt-4">
+                    {% for item in subrec_items %}
+                      {% set plan = item.plan or {} %}
+                      {% set improvements = plan.improvements|default([]) %}
+                      {% set integrations = plan.reference_integrations|default([]) %}
+                      {% set questions = plan.questions|default([]) %}
+                      {% set graph = item.graph or {} %}
+                      {% set graph_nodes = graph.nodes|default([]) %}
+                      {% set graph_edges = graph.edges|default([]) %}
+                      <details class="ds-disclosure ds-disclosure--low">
+                        <summary class="ds-disclosure-summary">
+                          <i class="material-icons ds-disclosure-icon" aria-hidden="true">edit</i>
+                          <span class="ds-disclosure-type">Section</span>
+                          <span class="ds-disclosure-title">{{ item.title }}</span>
+                          <span class="ds-severity">{{ integrations|length }} adds</span>
+                          <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
+                        </summary>
+                        <div class="ds-disclosure-body">
+                          {% if plan.summary %}
+                            <p class="miscite-muted">{{ plan.summary }}</p>
+                          {% endif %}
+                          <p class="miscite-muted ds-mt-3">
+                            Graph: {{ graph_nodes|length }} refs, {{ graph_edges|length }} links.
+                            Seeds: {{ item.seed_rids|default([])|length }}.
+                          </p>
+
+                          {% if improvements and improvements|length > 0 %}
+                            <h5 class="ds-mt-4">Improvements</h5>
+                            <ul class="ds-list ds-mt-3">
+                              {% for imp in improvements %}
+                                <li>
+                                  <div>
+                                    <span class="ds-source-name">Priority {{ imp.priority|default(loop.index) }}</span>
+                                    {{ imp.action|default("") }}
+                                  </div>
+                                  {% if imp.why %}
+                                    <div class="miscite-muted ds-mt-3">{{ imp.why }}</div>
+                                  {% endif %}
+                                  {% if imp.how %}
+                                    <ul class="ds-list ds-mt-3">
+                                      {% for step in imp.how %}
+                                        <li>{{ step }}</li>
+                                      {% endfor %}
+                                    </ul>
+                                  {% endif %}
+                                  {% if imp.rids %}
+                                    <div class="ds-mt-3">
+                                      <span class="miscite-muted">Supporting refs:</span>
+                                      {% for raw_rid in imp.rids %}
+                                        {% set rid = raw_rid|replace("[", "")|replace("]", "")|trim %}
+                                        <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+                                      {% endfor %}
+                                    </div>
+                                  {% endif %}
+                                </li>
+                              {% endfor %}
+                            </ul>
+                          {% endif %}
+
+                          {% if integrations and integrations|length > 0 %}
+                            <h5 class="ds-mt-4">References to integrate</h5>
+                            <ul class="ds-list ds-mt-3">
+                              {% for add in integrations %}
+                                {% set rid = add.rid|default("")|replace("[", "")|replace("]", "")|trim %}
+                                <li>
+                                  <div>
+                                    <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>
+                                    <span class="miscite-muted">({{ add.priority|default("medium") }})</span>
+                                  </div>
+                                  {% if add.why %}
+                                    <div class="miscite-muted ds-mt-3">{{ add.why }}</div>
+                                  {% endif %}
+                                  {% if add.where %}
+                                    <div class="ds-mt-3"><span class="ds-source-name">Where:</span> {{ add.where }}</div>
+                                  {% endif %}
+                                  {% if add.example %}
+                                    <div class="ds-mt-3"><span class="ds-source-name">Draft:</span> {{ add.example|da_cite }}</div>
+                                  {% endif %}
+                                </li>
+                              {% endfor %}
+                            </ul>
+                          {% endif %}
+
+                          {% if questions and questions|length > 0 %}
+                            <h5 class="ds-mt-4">Questions</h5>
+                            <ul class="ds-list ds-mt-3">
+                              {% for q in questions %}
+                                <li>{{ q }}</li>
+                              {% endfor %}
+                            </ul>
+                          {% endif %}
+                        </div>
+                      </details>
+                    {% endfor %}
+                  </div>
+                {% elif subrec_status == "skipped" %}
+                  <p class="miscite-muted">{{ subrec_reason|default("Section recommendations were skipped.") }}</p>
+                {% endif %}
 	
 	              {% if sug and sug.status == "completed" %}
 	                <p class="miscite-muted">

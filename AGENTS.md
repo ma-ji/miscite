@@ -43,6 +43,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `docker-compose.dev.yml`: dev override (bind mount code + reload/log level).
 - `docker-compose.caddy.yml`: optional Caddy reverse proxy (automatic TLS).
 - `docs/`: centralized documentation (start at `docs/README.md`).
+- `docs/excluded_sources.txt`: source/venue names excluded from analysis (one per line).
 - `deploy/`: deployment assets (`Caddyfile`, `miscite.service` with `COMPOSE_FILES` for compose overrides, `monitoring.md`).
 - `server/main.py`: FastAPI entrypoint.
 - `server/worker.py`: worker process launcher.
@@ -78,7 +79,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
    - Match in-text citations to bibliography entries (`analysis/match/`).
    - Resolve references in order: OpenAlex -> Crossref -> PubMed -> arXiv (LLM assists ambiguous matches).
    - Flag issues: missing bibliography, unresolved refs, retractions, predatory venues, inappropriate citations (LLM + optional local NLI).
-   - Optional deep analysis: expands citation neighborhood via OpenAlex and suggests additions/removals (`analysis/deep_analysis/deep_analysis.py`).
+   - Optional deep analysis: expands citation neighborhood via OpenAlex and suggests additions/removals plus subsection-by-subsection revision plans (`analysis/deep_analysis/deep_analysis.py`).
    - Report assembled + methodology markdown.
    - On completion, the worker issues the access token, deducts LLM usage cost from balance, and emails the access token.
 4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can manage access tokens + delete reports here).
@@ -94,6 +95,8 @@ Recent additions to the report shape:
 - `report.citations[]` includes per-citation match status/confidence + top candidates (for traceability).
 - New issue type: `ambiguous_bibliography_ref` (separate from `missing_bibliography_ref`).
 - New summary fields: `total_intext_citations`, `ambiguous_bibliography_refs`.
+- `report.deep_analysis.subsection_recommendations` adds subsection-specific citation subnetworks + prioritized revision plans.
+- `report.deep_analysis.manuscript_structure` records the (LLM or heuristic) subsection structure used for deep-analysis recommendations.
 
 ## Data model (SQLAlchemy)
 
@@ -182,6 +185,7 @@ If you add new env vars:
 - New issue types: add to pipeline and update report template/summary counts.
 - Parsing changes: update `analysis/parse/llm_parsing.py` or `analysis/parse/citation_parsing.py`.
 - Deep analysis tweaks: `analysis/deep_analysis/deep_analysis.py` (watch LLM budget and OpenAlex usage limits).
+- Deep analysis excludes secondary references (reviews/book reviews) using OpenAlex type metadata plus title heuristics in `analysis/deep_analysis/secondary.py`.
 
 ## Security notes
 

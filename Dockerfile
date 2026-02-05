@@ -22,6 +22,7 @@ COPY requirements.txt requirements-optional.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server ./server
+COPY docs ./docs
 
 RUN useradd -m -u 1000 app \
   && chown -R app:app /app

@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 
 from server.miscite.analysis.match.types import CitationMatch
 from server.miscite.analysis.parse.citation_parsing import ReferenceEntry
+from server.miscite.analysis.deep_analysis.secondary import is_secondary_reference
 from server.miscite.analysis.deep_analysis.types import ResolvedWorkLike
 from server.miscite.core.config import Settings
 
@@ -36,6 +37,8 @@ def filter_verified_original_refs(
         if not work.source:
             continue
         if work.confidence < settings.deep_analysis_min_confidence:
+            continue
+        if is_secondary_reference(title=work.title, openalex_record=work.openalex_record):
             continue
         verified.append(ref)
     return verified

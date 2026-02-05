@@ -23,6 +23,7 @@ from server.miscite.analysis.match import (
     disambiguate_citation_matches_with_llm,
     match_citations_to_references,
 )
+from server.miscite.analysis.match.index import build_reference_index
 from server.miscite.analysis.checks.local_nli import get_local_nli
 from server.miscite.analysis.checks.reference_flags import (
     check_missing_bibliography_refs,
@@ -32,6 +33,8 @@ from server.miscite.analysis.checks.inappropriate import check_inappropriate_cit
 from server.miscite.analysis.pipeline.resolve import resolve_references
 from server.miscite.analysis.report.methodology import build_methodology_md
 from server.miscite.analysis.extract.text_extract import extract_text
+from server.miscite.analysis.shared.excluded_sources import load_excluded_sources, matches_excluded_source, reference_is_excluded
+from server.miscite.analysis.shared.normalize import normalize_author_year_locator
 from server.miscite.core.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.sources.arxiv import ArxivClient
@@ -47,6 +50,30 @@ from server.miscite.sources.retraction.match import RetractionMatcher
 
 
 ProgressCallback = Callable[[str, str | None, float | None], None]
+
+
+def _citation_matches_excluded(
+    citation: CitationInstance,
+    *,
+    excluded_index,
+) -> bool:
+    if citation.kind == "numeric":
+        locator = (citation.locator or "").strip()
+        return bool(locator) and locator in excluded_index.by_number
+    if citation.kind != "author_year":
+        return False
+    norm = normalize_author_year_locator(citation.locator)
+    if not norm:
+        return False
+    if norm in excluded_index.by_author_year:
+        return True
+    if "-" in norm:
+        author, year = norm.rsplit("-", 1)
+        if len(year) >= 5 and year[:4].isdigit():
+            unsuffixed = f"{author}-{year[:4]}"
+            if unsuffixed in excluded_index.by_author_year:
+                return True
+    return False
 
 def _text_extract_cache_parts(
     settings: Settings,
@@ -231,6 +258,25 @@ def analyze_document(
     citations = normalize_llm_citations(citations)
     _progress("parse", f"Parsed {len(citations)} in-text citations", 0.38)
 
+    excluded_sources = load_excluded_sources()
+    excluded_ref_ids: set[str] = set()
+    if excluded_sources:
+        excluded_refs = [
+            ref
+            for ref in references
+            if reference_is_excluded(ref, reference_records.get(ref.ref_id), excluded_sources)
+        ]
+        if excluded_refs:
+            excluded_ref_ids = {ref.ref_id for ref in excluded_refs}
+            excluded_index = build_reference_index(excluded_refs, reference_records=reference_records)
+            citations = [c for c in citations if not _citation_matches_excluded(c, excluded_index=excluded_index)]
+            references = [ref for ref in references if ref.ref_id not in excluded_ref_ids]
+            reference_records = {rid: rec for rid, rec in reference_records.items() if rid not in excluded_ref_ids}
+            limitations.append(
+                f"Excluded {len(excluded_ref_ids)} references from analysis based on the excluded-sources list."
+            )
+            _progress("parse", f"Excluded {len(excluded_ref_ids)} references by source", 0.40)
+
     citation_matches = match_citations_to_references(
         citations,
         references,
@@ -408,7 +454,63 @@ def analyze_document(
         progress=(lambda msg, frac: _progress("resolve", msg, 0.42 + 0.28 * frac)),
     )
     match_llm_calls_resolve = int(_match_llm_calls_used)
-    resolved_count = sum(1 for w in resolved_by_ref_id.values() if w.source)
+
+    excluded_ref_ids_meta: set[str] = set()
+    if excluded_sources:
+        for ref_id, work in resolved_by_ref_id.items():
+            if not work:
+                continue
+            candidates: list[str] = []
+            if isinstance(work.journal, str) and work.journal.strip():
+                candidates.append(work.journal.strip())
+            if isinstance(work.publisher, str) and work.publisher.strip():
+                candidates.append(work.publisher.strip())
+            if isinstance(work.openalex_record, dict):
+                host = work.openalex_record.get("host_venue")
+                if isinstance(host, dict):
+                    for key in ("display_name", "publisher"):
+                        val = host.get(key)
+                        if isinstance(val, str) and val.strip():
+                            candidates.append(val.strip())
+                for loc_key in ("primary_location", "best_oa_location"):
+                    loc = work.openalex_record.get(loc_key)
+                    if isinstance(loc, dict):
+                        src = loc.get("source")
+                        if isinstance(src, dict):
+                            val = src.get("display_name")
+                            if isinstance(val, str) and val.strip():
+                                candidates.append(val.strip())
+            if any(matches_excluded_source(name, excluded_sources) for name in candidates):
+                excluded_ref_ids_meta.add(ref_id)
+
+    excluded_ref_ids_all = excluded_ref_ids | excluded_ref_ids_meta
+
+    resolved_for_analysis = (
+        {rid: w for rid, w in resolved_by_ref_id.items() if rid not in excluded_ref_ids_all}
+        if excluded_ref_ids_all
+        else resolved_by_ref_id
+    )
+    extra_excluded = excluded_ref_ids_all - excluded_ref_ids
+    if extra_excluded:
+        limitations.append(
+            f"Excluded {len(extra_excluded)} additional references from analysis based on resolved metadata."
+        )
+
+    if excluded_ref_ids_all:
+        drop_citation_ids = {
+            id(match.citation)
+            for match in citation_matches
+            if match.ref and match.ref.ref_id in excluded_ref_ids_all
+        }
+        if drop_citation_ids:
+            citation_matches = [m for m in citation_matches if id(m.citation) not in drop_citation_ids]
+            citations = [c for c in citations if id(c) not in drop_citation_ids]
+
+    if excluded_ref_ids_all:
+        references = [ref for ref in references if ref.ref_id not in excluded_ref_ids_all]
+        reference_records = {rid: rec for rid, rec in reference_records.items() if rid not in excluded_ref_ids_all}
+
+    resolved_count = sum(1 for w in resolved_for_analysis.values() if w.source)
     if resolved_count < len(references):
         limitations.append(
             f"Metadata resolution succeeded for {resolved_count}/{len(references)} references; "
@@ -426,7 +528,7 @@ def analyze_document(
     new_issues, _unresolved_refs, _retracted_refs, _predatory_matches = check_retractions_and_predatory_venues(
         settings=settings,
         references=references,
-        resolved_by_ref_id=resolved_by_ref_id,
+        resolved_by_ref_id=resolved_for_analysis,
         retraction_matcher=retraction_matcher,
         predatory_matcher=predatory_matcher,
         retraction_api=retraction_api,
@@ -441,7 +543,7 @@ def analyze_document(
         llm_client=llm_client,
         local_nli=local_nli,
         citation_matches=citation_matches,
-        resolved_by_ref_id=resolved_by_ref_id,
+        resolved_by_ref_id=resolved_for_analysis,
         progress=(lambda msg, frac: _progress("nli", msg, 0.86 + 0.10 * frac)),
     )
     if used_llm:
@@ -490,7 +592,8 @@ def analyze_document(
             llm_client=llm_deep_client,
             openalex=openalex,
             references=references,
-            resolved_by_ref_id=resolved_by_ref_id,
+            reference_records=reference_records,
+            resolved_by_ref_id=resolved_for_analysis,
             citation_matches=citation_matches,
             paper_excerpt=main_text,
             progress=(lambda msg, frac: _progress("deep", msg, 0.96 + 0.015 * frac)),
