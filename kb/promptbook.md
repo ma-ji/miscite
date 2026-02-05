@@ -630,3 +630,87 @@ GOAL: Split cache-hit diagnostics by storage type (JSON vs file) in worker summa
 PROMPT: “Why separate JSON hits and file hits? ... Yes, differ the two types of hits.”
 FILES TOUCHED: server/miscite/worker/__init__.py; server/miscite/worker/test_cache_debug_summary.py; docs/DEVELOPMENT.md; kb/promptbook.md.
 DECISION/RATIONALE: Worker cache summaries now expose `json_hits` and `file_hits` explicitly (while keeping total `hits`), and `top` namespaces now show `jh`/`fh` instead of a single aggregated `h`. This removes ambiguity for namespaces like `openrouter.chat_json` that can miss JSON cache but still hit file cache.
+
+========
+DATE: 2026-02-05
+GOAL: Improve potential-reviewer selection to prioritize recency.
+PROMPT: THINK HARD: improve Potential Reviewers selection logic by selecting authors of the most recent 10 "works that cite many of your references."
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/test_reviewers.py; server/miscite/templates/job.html; kb/promptbook.md.
+DECISION/RATIONALE: Potential reviewers were previously aggregated from all bibliographic-coupling works, which could bias toward older or overly broad pools. Added a deterministic recency-first cutoff (10 newest coupling works, tie-broken by coupling order) before author aggregation, added unit tests for the cutoff behavior, and updated report copy to reflect the new selection rule.
+
+========
+DATE: 2026-02-05
+GOAL: Redo potential-reviewer selection with coupling-order, recency, and cited-source overlap.
+PROMPT: THINK HARD: Redo/improve the selection logic: top 50 coupling order, past 10 years, authors of those, keep authors with at least one publication in sources cited by the manuscript.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/test_reviewers.py; server/miscite/templates/job.html; kb/promptbook.md.
+DECISION/RATIONALE: Reviewer selection now follows a strict pipeline: take the top 50 coupling works in original order, filter to the past 10 years, collect authors from those works, and keep only authors whose recent coupling publications appear in the same sources (venue/source labels) as the manuscript’s cited references. This narrows reviewers to recent, source-aligned candidates while remaining deterministic.
+
+========
+DATE: 2026-02-05
+GOAL: Make reviewer recency window configurable.
+PROMPT: Make the 10-year window to be configurable, set 10 year as default.
+FILES TOUCHED: server/miscite/core/config.py; server/miscite/analysis/deep_analysis/deep_analysis.py; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added `MISCITE_DEEP_ANALYSIS_REVIEWER_RECENT_YEARS` (default 10) to Settings and wired it into the reviewer selection so recency can be tuned without code changes.
+
+========
+DATE: 2026-02-05
+GOAL: Disable potential reviewers.
+PROMPT: Return 0 reviewers. Double check.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/test_reviewers.py; .env; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Interpreted a 0-year reviewer window as “disable reviewer suggestions,” returning an empty reviewer list; updated the env and docs accordingly and added a test to enforce the behavior.
+
+========
+DATE: 2026-02-05
+GOAL: Fix reviewer window behavior after misunderstanding.
+PROMPT: “You misunderstood me, I mean I ran a test and got 0 reviewer, which is incorrect.”
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/test_reviewers.py; .env; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Restored `recent_years=0` to mean “no recency filter” (include all years) and reset the local env to 10 so reviewer suggestions populate again.
+
+========
+DATE: 2026-02-05
+GOAL: Add reviewer-debug stats to terminal logs.
+PROMPT: Report related stats in terminal for debugging.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; kb/promptbook.md.
+DECISION/RATIONALE: Added reviewer-debug counters during deep analysis and surfaced a concise summary in worker logs so terminal output shows where reviewer filtering is dropping candidates.
+
+========
+DATE: 2026-02-05
+GOAL: Check author publication lists for source overlap and cache author retrieval.
+PROMPT: THINK HARD: For inspecting source overlap: get detailed publication list of each candidate author; keep authors with at least one publication from sources cited by the manuscript; cache author retrieval calls and report it in cache summary stats.
+FILES TOUCHED: server/miscite/sources/openalex.py; server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/test_reviewers.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; kb/promptbook.md.
+DECISION/RATIONALE: Reviewer filtering now consults OpenAlex author works (cached via `openalex.list_author_works`) to verify source overlap with the manuscript’s cited venues; added reviewer-debug counters for author work lookups and surfaced them in terminal logs.
+
+========
+DATE: 2026-02-05
+GOAL: Make author-works fetch size configurable for reviewer screening.
+PROMPT: Fetch an author's most recent N works; make N configurable (default 100).
+FILES TOUCHED: server/miscite/core/config.py; server/miscite/analysis/deep_analysis/deep_analysis.py; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added `MISCITE_DEEP_ANALYSIS_REVIEWER_AUTHOR_WORKS_MAX` so reviewer screening can tune how many recent works per author are fetched without code changes, defaulting to 100.
+
+========
+DATE: 2026-02-05
+GOAL: Use uncapped coupling list for reviewer suggestions and fill missing coupling metadata.
+PROMPT: For reviewer suggestion, use the uncapped coupling list.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; kb/promptbook.md.
+DECISION/RATIONALE: Reviewer selection now pulls coupling nodes directly from network metrics (uncapped by display limits) and resolves missing coupling metadata via OpenAlex work lookups when needed; added debug counters for coupling work fetches in terminal logs.
+
+========
+DATE: 2026-02-05
+GOAL: Print cited source names in reviewer debug logs.
+PROMPT: Print out the names of these cited_sources in terminal for debugging.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; kb/promptbook.md.
+DECISION/RATIONALE: Added a small deterministic sample of normalized cited-source names to the reviewer debug payload and surfaced it in worker logs for quick inspection.
+
+========
+DATE: 2026-02-05
+GOAL: Use all cited references (not filtered deep-analysis refs) to derive cited_sources.
+PROMPT: Significant sources cited are missed from the cited source sample. Double check the pipeline.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; kb/promptbook.md.
+DECISION/RATIONALE: Build cited-source labels from the full set of verified original references (using resolved metadata + OpenAlex records) and pass them into reviewer screening, so missing sources aren’t dropped by deep-analysis reference filtering. Added counts of cited refs with source metadata to the terminal debug summary.
+
+========
+DATE: 2026-02-05
+GOAL: Order reviewer suggestions by author centrality with configurable metric.
+PROMPT: Improve the order of authors: build coauthor network from coupling_top articles; compute degree/closeness/betweenness; order by degree by default; make order configurable.
+FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/test_reviewers.py; server/miscite/core/config.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added coauthor-network centrality scoring from coupling-top works and ordered reviewers by the configured centrality metric (default degree). Exposed `MISCITE_DEEP_ANALYSIS_REVIEWER_ORDER` and logged the active order rule in terminal debug output.

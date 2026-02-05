@@ -202,6 +202,9 @@ class Settings:
     deep_analysis_display_max_per_category: int
     deep_analysis_display_max_openalex_fetches: int
     deep_analysis_structure_max_candidates: int
+    deep_analysis_reviewer_recent_years: int
+    deep_analysis_reviewer_author_works_max: int
+    deep_analysis_reviewer_order: str
     enable_deep_analysis_llm_subsection_recommendations: bool
     deep_analysis_subsection_max_subsections: int
     deep_analysis_subsection_graph_max_nodes: int
@@ -407,6 +410,17 @@ class Settings:
         deep_analysis_structure_max_candidates = _env_int(
             "MISCITE_DEEP_ANALYSIS_STRUCTURE_MAX_CANDIDATES", 250, min_value=20, max_value=5000
         )
+        deep_analysis_reviewer_recent_years = _env_int(
+            "MISCITE_DEEP_ANALYSIS_REVIEWER_RECENT_YEARS", 10, min_value=0, max_value=100
+        )
+        deep_analysis_reviewer_author_works_max = _env_int(
+            "MISCITE_DEEP_ANALYSIS_REVIEWER_AUTHOR_WORKS_MAX", 100, min_value=1, max_value=5000
+        )
+        deep_analysis_reviewer_order = _env_str("MISCITE_DEEP_ANALYSIS_REVIEWER_ORDER", "degree").strip().lower()
+        if deep_analysis_reviewer_order not in {"degree", "closeness", "betweenness"}:
+            raise ValueError(
+                "MISCITE_DEEP_ANALYSIS_REVIEWER_ORDER must be one of: degree, closeness, betweenness."
+            )
         enable_deep_analysis_llm_subsection_recommendations = _env_bool(
             "MISCITE_ENABLE_DEEP_ANALYSIS_LLM_SUBSECTION_RECOMMENDATIONS", True
         )
@@ -591,6 +605,9 @@ class Settings:
             deep_analysis_display_max_per_category=deep_analysis_display_max_per_category,
             deep_analysis_display_max_openalex_fetches=deep_analysis_display_max_openalex_fetches,
             deep_analysis_structure_max_candidates=deep_analysis_structure_max_candidates,
+            deep_analysis_reviewer_recent_years=deep_analysis_reviewer_recent_years,
+            deep_analysis_reviewer_author_works_max=deep_analysis_reviewer_author_works_max,
+            deep_analysis_reviewer_order=deep_analysis_reviewer_order,
             enable_deep_analysis_llm_subsection_recommendations=enable_deep_analysis_llm_subsection_recommendations,
             deep_analysis_subsection_max_subsections=deep_analysis_subsection_max_subsections,
             deep_analysis_subsection_graph_max_nodes=deep_analysis_subsection_graph_max_nodes,

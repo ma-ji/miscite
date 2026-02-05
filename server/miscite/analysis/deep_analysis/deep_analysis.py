@@ -643,16 +643,75 @@ def run_deep_analysis(
     )
     trunc.update(ref_truncation)
 
+    def _normalize_source_label(value: str | None) -> str:
+        if not isinstance(value, str):
+            return ""
+        return " ".join(value.replace("\u00a0", " ").split()).strip().lower()
+
+    def _extract_sources_from_openalex(record: dict | None) -> set[str]:
+        out: set[str] = set()
+        if not isinstance(record, dict):
+            return out
+        hv = record.get("host_venue")
+        if isinstance(hv, dict):
+            for key in ("display_name", "publisher"):
+                norm = _normalize_source_label(hv.get(key))
+                if norm:
+                    out.add(norm)
+        for key in ("primary_location", "best_oa_location"):
+            loc = record.get(key)
+            if not isinstance(loc, dict):
+                continue
+            src = loc.get("source")
+            if not isinstance(src, dict):
+                continue
+            norm = _normalize_source_label(src.get("display_name"))
+            if norm:
+                out.add(norm)
+        return out
+
+    cited_sources_override: set[str] = set()
+    cited_sources_refs_total = 0
+    cited_sources_refs_with_source = 0
+    for ref in verified_original_refs:
+        cited_sources_refs_total += 1
+        resolved = resolved_by_ref_id.get(ref.ref_id)
+        if not resolved:
+            continue
+        labels: set[str] = set()
+        if isinstance(resolved.journal, str):
+            norm = _normalize_source_label(resolved.journal)
+            if norm:
+                labels.add(norm)
+        if isinstance(resolved.source, str):
+            norm = _normalize_source_label(resolved.source)
+            if norm:
+                labels.add(norm)
+        if isinstance(resolved.openalex_record, dict):
+            labels.update(_extract_sources_from_openalex(resolved.openalex_record))
+        if labels:
+            cited_sources_refs_with_source += 1
+            cited_sources_override.update(labels)
+
     coupling_rids: list[str] = []
-    for group in citation_groups:
-        if not isinstance(group, dict):
-            continue
-        if str(group.get("key") or "") != "bibliographic_coupling":
-            continue
-        rids = group.get("rids")
-        if isinstance(rids, list):
-            coupling_rids = [rid for rid in rids if isinstance(rid, str) and rid.strip()]
-        break
+    categories = metrics.get("categories") if isinstance(metrics.get("categories"), dict) else {}
+    raw_coupling = categories.get("bibliographic_coupling")
+    if isinstance(raw_coupling, list):
+        for node_id in raw_coupling:
+            if not isinstance(node_id, str) or not node_id.strip():
+                continue
+            rid = rid_by_node_id.get(node_id)
+            coupling_rids.append(rid or node_id.strip())
+    if not coupling_rids:
+        for group in citation_groups:
+            if not isinstance(group, dict):
+                continue
+            if str(group.get("key") or "") != "bibliographic_coupling":
+                continue
+            rids = group.get("rids")
+            if isinstance(rids, list):
+                coupling_rids = [rid for rid in rids if isinstance(rid, str) and rid.strip()]
+            break
     if not coupling_rids:
         for group in reference_groups:
             if not isinstance(group, dict):
@@ -667,9 +726,18 @@ def run_deep_analysis(
     if coupling_rids:
         coupling_rids = list(dict.fromkeys(coupling_rids))
 
+    reviewer_debug: dict[str, Any] = {}
+    reviewer_debug["cited_sources_override_refs_total"] = cited_sources_refs_total
+    reviewer_debug["cited_sources_override_refs_with_source"] = cited_sources_refs_with_source
     potential_reviewers = build_potential_reviewers_from_coupling(
         coupling_rids=coupling_rids,
         references_by_rid=references_by_rid,
+        recent_years=settings.deep_analysis_reviewer_recent_years,
+        openalex=openalex,
+        author_works_max=settings.deep_analysis_reviewer_author_works_max,
+        order_rule=settings.deep_analysis_reviewer_order,
+        cited_sources_override=cited_sources_override or None,
+        debug=reviewer_debug,
     )
     for ref in references_by_rid.values():
         if isinstance(ref, dict):
@@ -720,6 +788,7 @@ def run_deep_analysis(
         "citation_groups": citation_groups,
         "references": references_by_rid,
         "potential_reviewers": potential_reviewers,
+        "reviewer_debug": reviewer_debug,
         "manuscript_structure": structure_report,
         "suggestions": suggestion_payload,
         "subsection_recommendations": subrec_payload,

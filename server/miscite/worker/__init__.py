@@ -117,6 +117,86 @@ def _cache_debug_summary(cache_debug: object, *, max_namespaces: int = 5) -> str
     return "; ".join(parts)
 
 
+def _reviewer_debug_summary(deep_analysis: object) -> str | None:
+    if not isinstance(deep_analysis, dict):
+        return None
+    if deep_analysis.get("status") != "completed":
+        return None
+    debug = deep_analysis.get("reviewer_debug")
+    if not isinstance(debug, dict):
+        return None
+
+    def _int(key: str) -> int | None:
+        val = debug.get(key)
+        return int(val) if isinstance(val, int) else None
+
+    parts: list[str] = []
+    reviewers = _int("reviewers")
+    if reviewers is not None:
+        parts.append(f"reviewers={reviewers}")
+    order_rule = debug.get("order_rule")
+    if isinstance(order_rule, str) and order_rule:
+        parts.append(f"order_rule={order_rule}")
+    coupling_total = _int("coupling_rids_total")
+    if coupling_total is not None:
+        parts.append(f"coupling_total={coupling_total}")
+    coupling_top = _int("coupling_rids_top")
+    if coupling_top is not None:
+        parts.append(f"coupling_top={coupling_top}")
+    recent_years = _int("recent_years")
+    if recent_years is not None:
+        parts.append(f"recent_years={recent_years}")
+    cutoff_year = _int("cutoff_year")
+    if cutoff_year is not None and cutoff_year > 0:
+        parts.append(f"cutoff_year={cutoff_year}")
+    recent_rids = _int("recent_rids")
+    if recent_rids is not None:
+        parts.append(f"recent_works={recent_rids}")
+    cited_sources = _int("cited_sources_count")
+    if cited_sources is not None:
+        parts.append(f"cited_sources={cited_sources}")
+    override_total = _int("cited_sources_override_refs_total")
+    if override_total is not None:
+        parts.append(f"cited_refs_total={override_total}")
+    override_with = _int("cited_sources_override_refs_with_source")
+    if override_with is not None:
+        parts.append(f"cited_refs_with_source={override_with}")
+    sample = debug.get("cited_sources_sample")
+    if isinstance(sample, list) and sample:
+        safe = [str(s) for s in sample if isinstance(s, str)]
+        if safe:
+            parts.append("cited_sources_sample=" + "|".join(safe))
+    works_missing_authors = _int("works_missing_authors")
+    if works_missing_authors is not None:
+        parts.append(f"missing_authors={works_missing_authors}")
+    authors_seen = _int("authors_seen")
+    if authors_seen is not None:
+        parts.append(f"authors_seen={authors_seen}")
+    authors_with_cited = _int("authors_with_cited_source")
+    if authors_with_cited is not None:
+        parts.append(f"authors_in_cited_sources={authors_with_cited}")
+    coupling_work_lookups = _int("coupling_work_lookups")
+    if coupling_work_lookups is not None:
+        parts.append(f"coupling_work_lookups={coupling_work_lookups}")
+    coupling_work_results = _int("coupling_work_results")
+    if coupling_work_results is not None:
+        parts.append(f"coupling_work_results={coupling_work_results}")
+    author_work_lookups = _int("author_work_lookups")
+    if author_work_lookups is not None:
+        parts.append(f"author_work_lookups={author_work_lookups}")
+    author_work_results = _int("author_work_results")
+    if author_work_results is not None:
+        parts.append(f"author_work_results={author_work_results}")
+    author_work_total = _int("author_work_total")
+    if author_work_total is not None:
+        parts.append(f"author_work_total={author_work_total}")
+    authors_missing_id = _int("authors_missing_id")
+    if authors_missing_id is not None:
+        parts.append(f"authors_missing_id={authors_missing_id}")
+
+    return ", ".join(parts) if parts else None
+
+
 def _as_utc(ts: dt.datetime | None) -> dt.datetime | None:
     if ts is None:
         return None
@@ -252,6 +332,9 @@ def _process_job(settings: Settings, job_id: str, *, log: logging.Logger | None 
             summary = _cache_debug_summary(report.get("cache_debug"))
             if summary:
                 log.info("Job %s cache debug: %s", job_id, summary)
+            reviewer_summary = _reviewer_debug_summary(report.get("deep_analysis"))
+            if reviewer_summary:
+                log.info("Job %s reviewer debug: %s", job_id, reviewer_summary)
 
         if _is_job_canceled(db, job_id):
             raise JobCanceled("Canceled by user.")

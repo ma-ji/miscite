@@ -25,6 +25,21 @@ def _openalex_work_id_suffix(openalex_id: str) -> str | None:
     return None
 
 
+def _openalex_author_id_suffix(author_id: str) -> str | None:
+    if not author_id:
+        return None
+    author_id = author_id.strip()
+    if not author_id:
+        return None
+    if author_id.startswith("https://openalex.org/"):
+        return author_id.rstrip("/").split("/")[-1] or None
+    if author_id.startswith("https://api.openalex.org/authors/"):
+        return author_id.rstrip("/").split("/")[-1] or None
+    if author_id.startswith("A"):
+        return author_id
+    return None
+
+
 @dataclass
 class OpenAlexClient:
     timeout_seconds: float = 20.0
@@ -170,6 +185,45 @@ class OpenAlexClient:
                         [suffix, str(rows)],
                         results,
                         ttl_seconds=self._ttl_seconds(3),
+                    )
+                return results
+            except requests.RequestException:
+                backoff_sleep(attempt)
+        return []
+
+    def list_author_works(self, author_id: str, *, rows: int = 100) -> list[dict]:
+        """
+        Returns a list of OpenAlex works authored by the given author.
+
+        Note: This method returns at most `rows` results (single page).
+        """
+        suffix = _openalex_author_id_suffix(author_id)
+        if not suffix:
+            return []
+        rows = max(1, min(int(rows), 200))
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            hit, cached = cache.get_json("openalex.list_author_works", [suffix, str(rows)])
+            if hit and isinstance(cached, list):
+                return cached
+        url = "https://api.openalex.org/works"
+        params = {
+            "filter": f"authorships.author.id:{suffix}",
+            "sort": "publication_date:desc",
+            "per-page": rows,
+        }
+        for attempt in range(3):
+            try:
+                self._debug_increment("openalex.list_author_works", "http_request")
+                resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
+                resp.raise_for_status()
+                results = (resp.json() or {}).get("results") or []
+                if cache and cache.settings.cache_enabled and isinstance(results, list):
+                    cache.set_json(
+                        "openalex.list_author_works",
+                        [suffix, str(rows)],
+                        results,
+                        ttl_seconds=self._ttl_seconds(7),
                     )
                 return results
             except requests.RequestException:
