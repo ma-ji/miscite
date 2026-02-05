@@ -10,7 +10,7 @@ import requests
 
 from server.miscite.billing.usage import UsageTracker
 from server.miscite.core.cache import Cache
-from server.miscite.sources.http import backoff_sleep
+from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
 @dataclass
@@ -72,6 +72,7 @@ class OpenRouterClient:
         last_err: Exception | None = None
         for attempt in range(3):
             try:
+                record_http_request(cache, "openrouter.chat_json")
                 resp = self._client().post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json() or {}

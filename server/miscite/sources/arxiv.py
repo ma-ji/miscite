@@ -8,7 +8,7 @@ import requests
 
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.shared.normalize import normalize_doi
-from server.miscite.sources.http import backoff_sleep
+from server.miscite.sources.http import backoff_sleep, record_http_request
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
 _ATOM_NS = "http://www.w3.org/2005/Atom"
@@ -119,6 +119,7 @@ class ArxivClient:
                 return cached
         for attempt in range(3):
             try:
+                record_http_request(cache, "arxiv.query")
                 resp = self._client().get(_ARXIV_API, params=params, headers=self._headers(), timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 entries = _parse_feed(resp.text)

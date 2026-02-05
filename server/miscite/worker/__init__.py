@@ -47,10 +47,11 @@ def _cache_debug_summary(cache_debug: object, *, max_namespaces: int = 5) -> str
 
     totals_raw = cache_debug.get("totals")
     totals = totals_raw if isinstance(totals_raw, dict) else {}
-    hits = 0
+    json_hits = 0
+    file_hits = 0
     misses = 0
     errors = 0
-    sets = 0
+    cache_writes = 0
     http_calls = 0
     for key, val in totals.items():
         try:
@@ -58,32 +59,37 @@ def _cache_debug_summary(cache_debug: object, *, max_namespaces: int = 5) -> str
         except Exception:
             continue
         metric = str(key or "")
-        if metric.endswith("_get_hit"):
-            hits += count
+        if metric == "json_get_hit":
+            json_hits += count
+        elif metric == "file_get_hit":
+            file_hits += count
         elif metric.endswith("_get_miss") or metric.endswith("_get_expired"):
             misses += count
         elif metric.endswith("_get_error") or metric.endswith("_set_error"):
             errors += count
         elif metric.endswith("_set_ok"):
-            sets += count
+            cache_writes += count
         elif metric == "http_request":
             http_calls += count
 
     parts = [
-        f"hits={hits}",
+        f"hits={json_hits + file_hits}",
+        f"json_hits={json_hits}",
+        f"file_hits={file_hits}",
         f"misses={misses}",
         f"http_calls={http_calls}",
         f"errors={errors}",
-        f"sets={sets}",
+        f"cache_writes={cache_writes}",
     ]
 
     namespaces_raw = cache_debug.get("namespaces")
     namespaces = namespaces_raw if isinstance(namespaces_raw, dict) else {}
-    ranked: list[tuple[str, int, int, int]] = []
+    ranked: list[tuple[str, int, int, int, int]] = []
     for namespace, metrics_raw in namespaces.items():
         if not isinstance(metrics_raw, dict):
             continue
-        ns_hits = 0
+        ns_json_hits = 0
+        ns_file_hits = 0
         ns_misses = 0
         ns_http = 0
         for key, val in metrics_raw.items():
@@ -92,19 +98,21 @@ def _cache_debug_summary(cache_debug: object, *, max_namespaces: int = 5) -> str
             except Exception:
                 continue
             metric = str(key or "")
-            if metric.endswith("_get_hit"):
-                ns_hits += count
+            if metric == "json_get_hit":
+                ns_json_hits += count
+            elif metric == "file_get_hit":
+                ns_file_hits += count
             elif metric.endswith("_get_miss") or metric.endswith("_get_expired"):
                 ns_misses += count
             elif metric == "http_request":
                 ns_http += count
-        if ns_hits or ns_misses:
-            ranked.append((str(namespace), ns_http, ns_hits, ns_misses))
+        if ns_json_hits or ns_file_hits or ns_misses:
+            ranked.append((str(namespace), ns_http, ns_json_hits, ns_file_hits, ns_misses))
 
-    ranked.sort(key=lambda item: (item[1], item[3], item[2], item[0]), reverse=True)
+    ranked.sort(key=lambda item: (item[1], item[4], item[2] + item[3], item[0]), reverse=True)
     if ranked:
         top = ranked[: max(1, int(max_namespaces))]
-        ns_parts = [f"{name}(h={h},m={m},http={http})" for name, http, h, m in top]
+        ns_parts = [f"{name}(jh={jh},fh={fh},m={m},http={http})" for name, http, jh, fh, m in top]
         parts.append("top=" + ", ".join(ns_parts))
     return "; ".join(parts)
 

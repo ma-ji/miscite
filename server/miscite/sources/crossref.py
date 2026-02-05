@@ -7,7 +7,7 @@ import requests
 
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.shared.normalize import normalize_doi
-from server.miscite.sources.http import backoff_sleep
+from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
 @dataclass
@@ -47,6 +47,7 @@ class CrossrefClient:
         url = f"https://api.crossref.org/works/{doi_norm}"
         for attempt in range(3):
             try:
+                record_http_request(cache, "crossref.work_by_doi")
                 resp = self._client().get(url, headers=self._headers(), timeout=self.timeout_seconds)
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled:
@@ -73,6 +74,7 @@ class CrossrefClient:
                 return cached
         for attempt in range(3):
             try:
+                record_http_request(cache, "crossref.search")
                 resp = self._client().get(url, headers=self._headers(), params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 msg = (resp.json() or {}).get("message") or {}

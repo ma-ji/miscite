@@ -122,9 +122,9 @@ Key settings:
 Debugging:
 
 - Completed analysis reports now include `report.cache_debug` with per-namespace cache hit/miss/error counters for the current run.
-- Worker logs now print a one-line cache summary per completed job (`hits`/`misses`/`http_calls`/`errors`/`sets` + top namespaces), visible in terminal output.
-- `misses` are cache misses (not raw HTTP requests); use `http_calls` for outbound OpenAlex request count.
-- Top namespaces in the terminal summary include per-namespace `http` counts (so you can see which request types caused outbound calls).
+- Worker logs now print a one-line cache summary per completed job (`hits` + split `json_hits`/`file_hits`, `misses`, `http_calls`, `errors`, `cache_writes` + top namespaces), visible in terminal output.
+- `misses` are cache misses (not raw HTTP requests); `http_calls` counts outbound analysis HTTP requests (OpenRouter/OpenAlex/Crossref/PubMed/arXiv/custom APIs).
+- Top namespaces in the terminal summary include per-namespace `jh`/`fh`/`m`/`http` counts (JSON hits, file hits, misses, outbound calls).
 - To log cache HIT/MISS per cache lookup, set `MISCITE_LOG_LEVEL=DEBUG` and `MISCITE_CACHE_DEBUG_LOG_EACH=true` (very verbose).
 
 Intentionally **not** cached: side-effectful or per-request auth flows (Mailgun email sends, Cloudflare Turnstile verification, Stripe).

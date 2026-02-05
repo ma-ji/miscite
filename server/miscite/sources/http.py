@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import requests
 
+from server.miscite.core.cache import Cache
+
 
 @dataclass
 class HttpClient:
@@ -25,3 +27,7 @@ def backoff_sleep(attempt: int) -> None:
     # basic exponential backoff with cap
     time.sleep(min(8.0, 0.5 * (2**attempt)))
 
+
+def record_http_request(cache: Cache | None, namespace: str) -> None:
+    if cache and cache.settings.cache_enabled:
+        cache.debug_stats.increment(namespace, "http_request")

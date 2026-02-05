@@ -9,7 +9,7 @@ import requests
 
 from server.miscite.analysis.shared.normalize import normalize_doi
 from server.miscite.core.cache import Cache
-from server.miscite.sources.http import backoff_sleep
+from server.miscite.sources.http import backoff_sleep, record_http_request
 
 _EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 _ESEARCH_URL = f"{_EUTILS_BASE}/esearch.fcgi"
@@ -200,9 +200,10 @@ class PubMedClient:
             params["api_key"] = api_key
         return params
 
-    def _get_json(self, url: str, *, params: dict[str, str]) -> dict | None:
+    def _get_json(self, url: str, *, params: dict[str, str], namespace: str) -> dict | None:
         for attempt in range(3):
             try:
+                record_http_request(self.cache, namespace)
                 resp = self._client().get(url, headers=self._headers(), params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json()
@@ -223,7 +224,7 @@ class PubMedClient:
 
         params = self._base_params()
         params["id"] = pmid
-        data = self._get_json(_ESUMMARY_URL, params=params)
+        data = self._get_json(_ESUMMARY_URL, params=params, namespace="pubmed.summary_by_pmid")
         result = data.get("result") if isinstance(data, dict) else None
         rec = result.get(pmid) if isinstance(result, dict) else None
         if not isinstance(rec, dict):
@@ -253,6 +254,7 @@ class PubMedClient:
 
         for attempt in range(3):
             try:
+                record_http_request(cache, "pubmed.abstract_by_pmid")
                 resp = self._client().get(_EFETCH_URL, headers=self._headers(), params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 abstract = _extract_abstract_from_pubmed_xml(resp.text or "")
@@ -290,7 +292,7 @@ class PubMedClient:
         if wanted:
             params = self._base_params()
             params["id"] = ",".join(wanted)
-            data = self._get_json(_ESUMMARY_URL, params=params)
+            data = self._get_json(_ESUMMARY_URL, params=params, namespace="pubmed.summary_by_pmid")
             result = data.get("result") if isinstance(data, dict) else None
             if isinstance(result, dict):
                 for pmid in wanted:
@@ -325,7 +327,7 @@ class PubMedClient:
         params["term"] = q
         params["retmax"] = str(rows)
         params["sort"] = "relevance"
-        data = self._get_json(_ESEARCH_URL, params=params)
+        data = self._get_json(_ESEARCH_URL, params=params, namespace="pubmed.search")
         esearch = data.get("esearchresult") if isinstance(data, dict) else None
         idlist = esearch.get("idlist") if isinstance(esearch, dict) else None
         pmids = [str(x).strip() for x in idlist if str(x).strip()] if isinstance(idlist, list) else []

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import requests
 
 from server.miscite.core.cache import Cache
-from server.miscite.sources.http import backoff_sleep
+from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
 def _norm_text(s: str) -> str:
@@ -112,6 +112,7 @@ class PredatoryApiClient:
         }
         for attempt in range(3):
             try:
+                record_http_request(cache, "predatory_api.lookup")
                 resp = self._client().get(self.url, params=params, headers=self._headers(), timeout=self.timeout_seconds)
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled:
@@ -167,6 +168,7 @@ class PredatoryApiClient:
 
         for attempt in range(3):
             try:
+                record_http_request(cache, "predatory_api.list")
                 resp = self._client().get(self.url, headers=self._headers(), timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json()

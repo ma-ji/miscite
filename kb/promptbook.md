@@ -609,3 +609,24 @@ GOAL: Report cache HIT/MISS for every cache lookup.
 PROMPT: I mean report cache status for every request.
 FILES TOUCHED: server/miscite/core/cache.py; server/miscite/core/config.py; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
 DECISION/RATIONALE: Added an opt-in debug flag (`MISCITE_CACHE_DEBUG_LOG_EACH`) that emits per-lookup cache HIT/MISS/EXPIRED lines (with safe OpenAlex hints) so request-by-request cache behavior can be audited without conflating misses with raw HTTP calls.
+
+========
+DATE: 2026-02-05
+GOAL: Reduce repeat OpenAlex API calls on reruns by making deep-analysis expansion deterministic.
+PROMPT: “Why still so many OpenAlex requests? … same manuscript … second time. Shouldn't have so many API calls.”
+FILES TOUCHED: server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/network.py; server/miscite/analysis/deep_analysis/test_network_determinism.py; kb/promptbook.md.
+DECISION/RATIONALE: OpenAlex calls were dominated by deep-analysis neighborhood expansion, which previously used set→list conversions and `as_completed` ordering under node/edge budgets. That made the explored seed subset vary between runs/processes (hash randomization + completion timing), so reruns still discovered uncached work IDs and triggered fresh HTTP. Deep analysis now preserves key-ref order, uses ordered seed lists, and processes fetched works in input order; network-metric tie-breaking is also made stable. Added a regression test that runs the metric computation under different `PYTHONHASHSEED` values and asserts identical output.
+
+========
+DATE: 2026-02-05
+GOAL: Make `http_calls` include all outbound analysis HTTP calls (not only OpenAlex).
+PROMPT: “I want http_calls to count all outgoing calls.”
+FILES TOUCHED: server/miscite/sources/http.py; server/miscite/llm/openrouter.py; server/miscite/sources/crossref.py; server/miscite/sources/pubmed.py; server/miscite/sources/arxiv.py; server/miscite/sources/predatory_api.py; server/miscite/sources/retraction_api.py; server/miscite/llm/test_openrouter_cache_debug.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added a shared `record_http_request()` helper and invoked it in every analysis-time outbound request path (OpenRouter, Crossref, PubMed, arXiv, predatory API, retraction API), counting each real HTTP attempt (including retries) under the same request namespace used for cache keys. This makes worker `http_calls` and per-namespace `http=` values reflect total outbound call volume across the full analysis pipeline.
+
+========
+DATE: 2026-02-05
+GOAL: Split cache-hit diagnostics by storage type (JSON vs file) in worker summaries.
+PROMPT: “Why separate JSON hits and file hits? ... Yes, differ the two types of hits.”
+FILES TOUCHED: server/miscite/worker/__init__.py; server/miscite/worker/test_cache_debug_summary.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Worker cache summaries now expose `json_hits` and `file_hits` explicitly (while keeping total `hits`), and `top` namespaces now show `jh`/`fh` instead of a single aggregated `h`. This removes ambiguity for namespaces like `openrouter.chat_json` that can miss JSON cache but still hit file cache.

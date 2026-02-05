@@ -15,7 +15,7 @@ def compute_network_metrics(
     original_ref_id_by_node: dict[str, str],
     cite_counts_by_ref_id: dict[str, int],
 ) -> dict[str, Any]:
-    node_list = list(nodes)
+    node_list = sorted(nodes)
     out_adj: dict[str, set[str]] = {n: set() for n in node_list}
     in_adj: dict[str, set[str]] = {n: set() for n in node_list}
 
@@ -78,7 +78,12 @@ def compute_network_metrics(
     top_n = max(1, int(math.ceil(len(node_list) * 0.10)))
 
     def _top(items: Iterable[tuple[str, float | int]], *, reverse: bool = True) -> list[str]:
-        return [k for k, _ in sorted(items, key=lambda kv: kv[1], reverse=reverse)[:top_n]]
+        if reverse:
+            return [
+                k
+                for k, _ in sorted(items, key=lambda kv: (-float(kv[1]), kv[0]))[:top_n]
+            ]
+        return [k for k, _ in sorted(items, key=lambda kv: (float(kv[1]), kv[0]))[:top_n]]
 
     coupling_counts: dict[str, int] = {}
     for n in node_list:
@@ -94,7 +99,7 @@ def compute_network_metrics(
     max_in_deg = max(in_degree.values(), default=0) or 1
     max_cites = max(cite_counts_by_ref_id.values(), default=0) or 1
     tangential_scores: dict[str, float] = {}
-    for node_id in original_nodes:
+    for node_id in sorted(original_nodes):
         ref_id = original_ref_id_by_node.get(node_id)
         cite_ct = cite_counts_by_ref_id.get(ref_id or "", 0)
         comp_size = component_sizes.get(component_id.get(node_id, -1), 1)
@@ -113,7 +118,7 @@ def compute_network_metrics(
         tangential_scores[node_id] = score
 
     # pick top 10% "most tangential" among original refs with score
-    tangential_sorted = sorted(tangential_scores.items(), key=lambda kv: kv[1], reverse=True)
+    tangential_sorted = sorted(tangential_scores.items(), key=lambda kv: (-float(kv[1]), kv[0]))
     tangential_top = [
         nid
         for nid, _ in tangential_sorted[: max(1, int(math.ceil(len(tangential_sorted) * 0.10)))]
@@ -140,7 +145,7 @@ def _multi_source_bfs(adj: dict[str, set[str]], sources: set[str]) -> dict[str, 
     if not sources:
         return dist
     dq: deque[str] = deque()
-    for s in sources:
+    for s in sorted(sources):
         if s not in adj:
             continue
         dist[s] = 0

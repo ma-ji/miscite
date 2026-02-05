@@ -4,7 +4,7 @@ import math
 import time
 import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from server.miscite.analysis.deep_analysis.network import compute_network_metrics
@@ -131,6 +131,13 @@ def run_deep_analysis(
     _p("Selecting key references", 0.08)
     key_ref_target = max(1, int(math.ceil(len(verified_original_refs) / 2)))
 
+    def _key_ref_rank(ref: ReferenceEntry) -> tuple[int, int, str]:
+        work = resolved_by_ref_id.get(ref.ref_id)
+        year = work.year if work else None
+        return (int(cite_counts.get(ref.ref_id, 0)), int(year or 0), ref.ref_id)
+
+    ranked_verified_refs = sorted(verified_original_refs, key=_key_ref_rank, reverse=True)
+
     key_ref_ids: list[str] = []
     llm_calls_used = 0
 
@@ -144,7 +151,7 @@ def run_deep_analysis(
         )
 
         items: list[str] = []
-        for ref in verified_original_refs:
+        for ref in ranked_verified_refs:
             work = resolved_by_ref_id.get(ref.ref_id)
             title = (work.title or "").strip() if work else ""
             year = work.year if work else None
@@ -196,15 +203,7 @@ def run_deep_analysis(
 
     if not key_ref_ids:
         # Heuristic fallback: most-cited in the manuscript text, then newest.
-        scored = []
-        for ref in verified_original_refs:
-            work = resolved_by_ref_id.get(ref.ref_id)
-            year = work.year if work else None
-            scored.append((cite_counts.get(ref.ref_id, 0), year or 0, ref.ref_id))
-        scored.sort(reverse=True)
-        key_ref_ids = [rid for _, _, rid in scored[:key_ref_target]]
-
-    key_ref_set = set(key_ref_ids)
+        key_ref_ids = [ref.ref_id for ref in ranked_verified_refs[:key_ref_target]]
 
     # -------------------------
     # Step 2–6: Lit pool build
@@ -228,11 +227,37 @@ def run_deep_analysis(
             return f"doi:{doi}"
         return f"ref:{ref_id}"
 
-    original_nodes: set[str] = {_node_id_for_original(ref.ref_id) for ref in verified_original_refs}
-    key_nodes: set[str] = {_node_id_for_original(ref_id) for ref_id in key_ref_ids}
+    def _is_openalex_node_id(node_id: str) -> bool:
+        if not node_id:
+            return False
+        node_id = node_id.strip()
+        return bool(node_id) and (
+            node_id.startswith("https://openalex.org/")
+            or node_id.startswith("https://api.openalex.org/works/")
+            or node_id.startswith("W")
+        )
 
-    # OpenAlex-only seeds for expansion.
-    key_openalex_ids: list[str] = [nid for nid in key_nodes if nid.startswith("https://openalex.org/") or nid.startswith("W")]
+    original_nodes: set[str] = {_node_id_for_original(ref.ref_id) for ref in verified_original_refs}
+    key_node_ids: list[str] = []
+    seen_key_nodes: set[str] = set()
+    for ref_id in key_ref_ids:
+        nid = _node_id_for_original(ref_id)
+        if nid in seen_key_nodes:
+            continue
+        seen_key_nodes.add(nid)
+        key_node_ids.append(nid)
+    key_nodes: set[str] = set(key_node_ids)
+
+    # OpenAlex-only seeds for expansion (stable order).
+    key_openalex_ids: list[str] = []
+    seen_openalex_ids: set[str] = set()
+    for nid in key_node_ids:
+        if not _is_openalex_node_id(nid):
+            continue
+        if nid in seen_openalex_ids:
+            continue
+        seen_openalex_ids.add(nid)
+        key_openalex_ids.append(nid)
 
     max_nodes = settings.deep_analysis_max_nodes
     max_edges = settings.deep_analysis_max_edges
@@ -246,16 +271,6 @@ def run_deep_analysis(
         "skipped_key_refs_no_openalex": 0,
         "skipped_openalex_fetches": 0,
     }
-
-    def _is_openalex_node_id(node_id: str) -> bool:
-        if not node_id:
-            return False
-        node_id = node_id.strip()
-        return bool(node_id) and (
-            node_id.startswith("https://openalex.org/")
-            or node_id.startswith("https://api.openalex.org/works/")
-            or node_id.startswith("W")
-        )
 
     def _try_add_node(node_id: str) -> bool:
         if node_id in lit_nodes:
@@ -318,20 +333,17 @@ def run_deep_analysis(
         return out
 
     # Step 2: works cited by key refs (Cited Refs)
-    key_to_refs: dict[str, list[str]] = {}
+    cited_refs: set[str] = set()
+    cited_refs_ordered: list[str] = []
     if not key_openalex_ids:
         trunc["skipped_key_refs_no_openalex"] = len(key_ref_ids)
     else:
         with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
-            futures = {ex.submit(_safe_get_work, kid): kid for kid in key_openalex_ids}
-            for fut in as_completed(futures):
-                kid = futures[fut]
-                work = fut.result()
+            for kid, work in zip(key_openalex_ids, ex.map(_safe_get_work, key_openalex_ids)):
                 if not work:
                     trunc["skipped_openalex_fetches"] += 1
                     continue
                 refs = _extract_referenced_works(work)
-                key_to_refs[kid] = refs
                 for rid in refs:
                     if rid in excluded_nodes:
                         continue
@@ -339,19 +351,19 @@ def run_deep_analysis(
                         if trunc["hit_max_nodes"]:
                             break
                         continue
+                    if rid not in cited_refs:
+                        cited_refs.add(rid)
+                        cited_refs_ordered.append(rid)
                     _try_add_edge(kid, rid)
                 if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
                     break
-
-    cited_refs: set[str] = set()
-    for refs in key_to_refs.values():
-        cited_refs.update(refs)
 
     cited2_refs: set[str] = set()
 
     # Step 3: works citing key refs (Citing Refs), capped at 100 per key ref.
     _p("Collecting recent papers that cite your key references", 0.34)
     citing_refs: set[str] = set()
+    citing_refs_ordered: list[str] = []
     if key_openalex_ids and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
         total_budget = max(0, settings.deep_analysis_max_total_citing_refs)
         for kid in key_openalex_ids:
@@ -396,6 +408,7 @@ def run_deep_analysis(
                     continue
                 if wid not in citing_refs:
                     citing_refs.add(wid)
+                    citing_refs_ordered.append(wid)
                     total_budget -= 1
                 _try_add_edge(wid, kid)
                 if total_budget <= 0 or trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
@@ -405,17 +418,14 @@ def run_deep_analysis(
     _p("Collecting references from those recent papers", 0.50)
     citing2_refs: set[str] = set()
     if citing_refs and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
-        seeds = list(citing_refs)
+        seeds = citing_refs_ordered
         if len(seeds) > settings.deep_analysis_max_citing_refs_for_second_hop:
             seeds = seeds[: settings.deep_analysis_max_citing_refs_for_second_hop]
             limitations.append(
                 "Deep analysis: expansion from citing papers was limited to keep the run fast and memory-safe."
             )
         with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
-            futures = {ex.submit(_safe_get_work, sid): sid for sid in seeds}
-            for fut in as_completed(futures):
-                sid = futures[fut]
-                work = fut.result()
+            for sid, work in zip(seeds, ex.map(_safe_get_work, seeds)):
                 if not work:
                     trunc["skipped_openalex_fetches"] += 1
                     continue
@@ -436,7 +446,7 @@ def run_deep_analysis(
 
     # Step 5: works cited by cited refs (Cited Refs2)
     if cited_refs and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
-        seeds = list(cited_refs)
+        seeds = cited_refs_ordered
         if len(seeds) > settings.deep_analysis_max_second_hop_seeds:
             seeds = seeds[: settings.deep_analysis_max_second_hop_seeds]
             limitations.append(
@@ -444,10 +454,7 @@ def run_deep_analysis(
             )
 
         with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
-            futures = {ex.submit(_safe_get_work, sid): sid for sid in seeds}
-            for fut in as_completed(futures):
-                sid = futures[fut]
-                work = fut.result()
+            for sid, work in zip(seeds, ex.map(_safe_get_work, seeds)):
                 if not work:
                     trunc["skipped_openalex_fetches"] += 1
                     continue

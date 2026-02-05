@@ -7,7 +7,7 @@ import requests
 
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.shared.normalize import normalize_doi
-from server.miscite.sources.http import backoff_sleep
+from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
 @dataclass
@@ -69,6 +69,7 @@ class RetractionApiClient:
         cache = self.cache
         for attempt in range(3):
             try:
+                record_http_request(cache, "retraction_api.lookup_by_doi")
                 resp = self._client().get(
                     self.url,
                     params={"doi": doi_norm},
@@ -125,6 +126,7 @@ class RetractionApiClient:
 
         for attempt in range(3):
             try:
+                record_http_request(cache, "retraction_api.list")
                 resp = self._client().get(self.url, headers=self._headers(), timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json()
