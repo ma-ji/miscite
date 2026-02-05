@@ -102,6 +102,29 @@ Usage billing is disabled by default. To enable Stripe balance top-ups and auto-
 
 - Local NLI checks: `pip install -r requirements-optional.txt`
 
+## Caching
+
+miscite caches expensive LLM + metadata lookups by default (can be disabled).
+
+Cache layers:
+
+- **SQLite cache table** (`CacheEntry`): structured JSON results (most metadata + small payloads).
+- **File cache dir** (`MISCITE_CACHE_DIR`, default `./data/cache`): large text payloads (text extraction, some list-mode APIs).
+
+Key settings:
+
+- `MISCITE_CACHE_ENABLED`
+- `MISCITE_CACHE_DIR`
+- `MISCITE_CACHE_LLM_TTL_DAYS` (OpenRouter `chat_json`)
+- `MISCITE_CACHE_HTTP_TTL_DAYS` (OpenAlex/Crossref/PubMed/arXiv + custom APIs)
+- `MISCITE_CACHE_TEXT_TTL_DAYS` (text extraction outputs)
+
+Debugging:
+
+- Completed analysis reports now include `report.cache_debug` with per-namespace cache hit/miss/error counters for the current run.
+
+Intentionally **not** cached: side-effectful or per-request auth flows (Mailgun email sends, Cloudflare Turnstile verification, Stripe).
+
 ## Datasets
 
 Sample CSV schemas live in `server/miscite/datasets/`.

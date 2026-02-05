@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 import requests
@@ -151,18 +152,44 @@ class PredatoryApiClient:
         return None
 
     def _fetch_list(self) -> list[dict] | None:
+        cache = self.cache
+        cache_parts = [self.mode, self.url, self.token or ""]
+        if cache and cache.settings.cache_enabled:
+            ttl_days = min(1, int(cache.settings.cache_http_ttl_days))
+            hit, cached_text = cache.get_text_file("predatory_api.list", cache_parts, ttl_days=ttl_days)
+            if hit:
+                try:
+                    cached = json.loads(cached_text)
+                except Exception:
+                    cached = None
+                if isinstance(cached, list):
+                    return [d for d in cached if isinstance(d, dict)]
+
         for attempt in range(3):
             try:
                 resp = self._client().get(self.url, headers=self._headers(), timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 data = resp.json()
+                records: list[dict] | None = None
                 if isinstance(data, list):
-                    return [d for d in data if isinstance(d, dict)]
-                if isinstance(data, dict):
-                    records = data.get("records") or data.get("items") or data.get("data")
-                    if isinstance(records, list):
-                        return [d for d in records if isinstance(d, dict)]
-                return None
+                    records = [d for d in data if isinstance(d, dict)]
+                elif isinstance(data, dict):
+                    raw_records = data.get("records") or data.get("items") or data.get("data")
+                    if isinstance(raw_records, list):
+                        records = [d for d in raw_records if isinstance(d, dict)]
+
+                if records is None:
+                    return None
+                if cache and cache.settings.cache_enabled:
+                    try:
+                        cache.set_text_file(
+                            "predatory_api.list",
+                            cache_parts,
+                            json.dumps(records, ensure_ascii=False),
+                        )
+                    except Exception:
+                        pass
+                return records
             except requests.RequestException:
                 backoff_sleep(attempt)
             except Exception:

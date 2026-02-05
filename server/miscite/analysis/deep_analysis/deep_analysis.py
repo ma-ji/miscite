@@ -13,6 +13,7 @@ from server.miscite.analysis.deep_analysis.prep import (
     filter_verified_original_refs,
 )
 from server.miscite.analysis.deep_analysis.references import build_reference_master_list
+from server.miscite.analysis.deep_analysis.reviewers import build_potential_reviewers_from_coupling
 from server.miscite.analysis.deep_analysis.subsections import (
     build_weak_adjacency,
     collapse_to_top_level_sections,
@@ -346,41 +347,10 @@ def run_deep_analysis(
     for refs in key_to_refs.values():
         cited_refs.update(refs)
 
-    _p("Collecting second-hop citations", 0.34)
-
-    # Step 3: works cited by cited refs (Cited Refs2)
     cited2_refs: set[str] = set()
-    if cited_refs and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
-        seeds = list(cited_refs)
-        if len(seeds) > settings.deep_analysis_max_second_hop_seeds:
-            seeds = seeds[: settings.deep_analysis_max_second_hop_seeds]
-            limitations.append(
-                "Deep analysis: second-hop expansion was limited to keep the run fast and memory-safe."
-            )
 
-        with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
-            futures = {ex.submit(_safe_get_work, sid): sid for sid in seeds}
-            for fut in as_completed(futures):
-                sid = futures[fut]
-                work = fut.result()
-                if not work:
-                    trunc["skipped_openalex_fetches"] += 1
-                    continue
-                refs2 = _extract_referenced_works(work)
-                for rid in refs2:
-                    if rid in excluded_nodes:
-                        continue
-                    if not _try_add_node(rid):
-                        if trunc["hit_max_nodes"]:
-                            break
-                        continue
-                    cited2_refs.add(rid)
-                    _try_add_edge(sid, rid)
-                if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
-                    break
-
-    # Step 4: works citing key refs (Citing Refs), capped at 100 per key ref.
-    _p("Collecting recent papers that cite your key references", 0.50)
+    # Step 3: works citing key refs (Citing Refs), capped at 100 per key ref.
+    _p("Collecting recent papers that cite your key references", 0.34)
     citing_refs: set[str] = set()
     if key_openalex_ids and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
         total_budget = max(0, settings.deep_analysis_max_total_citing_refs)
@@ -431,8 +401,8 @@ def run_deep_analysis(
                 if total_budget <= 0 or trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
                     break
 
-    # Step 5: works cited by citing refs (Citing Refs2).
-    _p("Collecting references from those recent papers", 0.62)
+    # Step 4: works cited by citing refs (Citing Refs2).
+    _p("Collecting references from those recent papers", 0.50)
     citing2_refs: set[str] = set()
     if citing_refs and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
         seeds = list(citing_refs)
@@ -458,6 +428,38 @@ def run_deep_analysis(
                             break
                         continue
                     citing2_refs.add(rid)
+                    _try_add_edge(sid, rid)
+                if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
+                    break
+
+    _p("Collecting second-hop citations", 0.62)
+
+    # Step 5: works cited by cited refs (Cited Refs2)
+    if cited_refs and not (trunc["hit_max_nodes"] or trunc["hit_max_edges"]):
+        seeds = list(cited_refs)
+        if len(seeds) > settings.deep_analysis_max_second_hop_seeds:
+            seeds = seeds[: settings.deep_analysis_max_second_hop_seeds]
+            limitations.append(
+                "Deep analysis: second-hop expansion was limited to keep the run fast and memory-safe."
+            )
+
+        with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
+            futures = {ex.submit(_safe_get_work, sid): sid for sid in seeds}
+            for fut in as_completed(futures):
+                sid = futures[fut]
+                work = fut.result()
+                if not work:
+                    trunc["skipped_openalex_fetches"] += 1
+                    continue
+                refs2 = _extract_referenced_works(work)
+                for rid in refs2:
+                    if rid in excluded_nodes:
+                        continue
+                    if not _try_add_node(rid):
+                        if trunc["hit_max_nodes"]:
+                            break
+                        continue
+                    cited2_refs.add(rid)
                     _try_add_edge(sid, rid)
                 if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
                     break
@@ -634,6 +636,38 @@ def run_deep_analysis(
     )
     trunc.update(ref_truncation)
 
+    coupling_rids: list[str] = []
+    for group in citation_groups:
+        if not isinstance(group, dict):
+            continue
+        if str(group.get("key") or "") != "bibliographic_coupling":
+            continue
+        rids = group.get("rids")
+        if isinstance(rids, list):
+            coupling_rids = [rid for rid in rids if isinstance(rid, str) and rid.strip()]
+        break
+    if not coupling_rids:
+        for group in reference_groups:
+            if not isinstance(group, dict):
+                continue
+            if str(group.get("key") or "") != "bibliographic_coupling":
+                continue
+            rids = group.get("rids")
+            if isinstance(rids, list):
+                coupling_rids = [rid for rid in rids if isinstance(rid, str) and rid.strip()]
+            break
+
+    if coupling_rids:
+        coupling_rids = list(dict.fromkeys(coupling_rids))
+
+    potential_reviewers = build_potential_reviewers_from_coupling(
+        coupling_rids=coupling_rids,
+        references_by_rid=references_by_rid,
+    )
+    for ref in references_by_rid.values():
+        if isinstance(ref, dict):
+            ref.pop("authors_detailed", None)
+
     _p("Drafting improvement suggestions", 0.90)
     section_order = extract_section_order(paper_excerpt)
     suggestion_payload, suggestion_calls = build_suggestions(
@@ -678,6 +712,7 @@ def run_deep_analysis(
         "reference_groups": reference_groups,
         "citation_groups": citation_groups,
         "references": references_by_rid,
+        "potential_reviewers": potential_reviewers,
         "manuscript_structure": structure_report,
         "suggestions": suggestion_payload,
         "subsection_recommendations": subrec_payload,

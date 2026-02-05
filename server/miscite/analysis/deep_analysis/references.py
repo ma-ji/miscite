@@ -101,6 +101,81 @@ def _extract_openalex_authors(record: dict | None, *, max_authors: int = 25) -> 
     return out
 
 
+def _extract_openalex_authors_detailed(
+    record: dict | None,
+    *,
+    max_authors: int = 25,
+    max_institutions: int = 2,
+    max_affiliation_chars: int = 120,
+) -> list[dict[str, str | None]]:
+    if not isinstance(record, dict):
+        return []
+    raw = record.get("authorships")
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, str | None]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("display_name") if isinstance(item.get("display_name"), str) else None
+        if not name:
+            author = item.get("author")
+            if isinstance(author, dict):
+                name = author.get("display_name") if isinstance(author.get("display_name"), str) else None
+        if not name and isinstance(item.get("raw_author_name"), str):
+            name = item.get("raw_author_name")
+        name = _collapse_ws(str(name or ""))
+        if not name:
+            continue
+
+        author_id = None
+        if isinstance(item.get("author"), dict):
+            author_id = _collapse_ws(str(item["author"].get("id") or ""))
+        if not author_id:
+            author_id = None
+
+        affiliation = None
+        institutions = item.get("institutions")
+        inst_names: list[str] = []
+        if isinstance(institutions, list):
+            for inst in institutions:
+                if not isinstance(inst, dict):
+                    continue
+                dn = inst.get("display_name")
+                if isinstance(dn, str) and dn.strip():
+                    inst_names.append(_collapse_ws(dn))
+                if len(inst_names) >= max_institutions:
+                    break
+        if inst_names:
+            uniq: list[str] = []
+            seen: set[str] = set()
+            for n in inst_names:
+                key = n.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                uniq.append(n)
+            affiliation = "; ".join(uniq)
+        else:
+            raw_affs = item.get("raw_affiliation_strings")
+            if isinstance(raw_affs, list):
+                for raw_aff in raw_affs:
+                    if isinstance(raw_aff, str) and raw_aff.strip():
+                        affiliation = _collapse_ws(raw_aff)
+                        break
+
+        if affiliation:
+            if max_affiliation_chars > 0 and len(affiliation) > max_affiliation_chars:
+                affiliation = affiliation[:max_affiliation_chars].rstrip() + "\u2026"
+        else:
+            affiliation = None
+
+        out.append({"name": name, "affiliation": affiliation, "author_id": author_id})
+        if len(out) >= max_authors:
+            break
+    return out
+
+
 def _extract_openalex_venue(record: dict | None) -> str | None:
     hv = record.get("host_venue") if isinstance(record, dict) else None
     if isinstance(hv, dict):
@@ -315,7 +390,22 @@ def build_reference_master_list(
         seen_nodes.add(nid)
         ordered_nodes.append(nid)
 
-    needed_openalex_ids = sorted({nid for nid in ordered_nodes if _is_openalex_id(nid) and nid not in original_ref_id_by_node})
+    needed_openalex_ids: list[str] = []
+    seen_openalex_ids: set[str] = set()
+    for nid in ordered_nodes:
+        if not isinstance(nid, str):
+            continue
+        nid = nid.strip()
+        if not nid:
+            continue
+        if nid in original_ref_id_by_node:
+            continue
+        if not _is_openalex_id(nid):
+            continue
+        if nid in seen_openalex_ids:
+            continue
+        seen_openalex_ids.add(nid)
+        needed_openalex_ids.append(nid)
     openalex_summaries = _fetch_openalex_summaries(
         openalex=openalex,
         openalex_ids=needed_openalex_ids,
@@ -366,6 +456,10 @@ def build_reference_master_list(
         src_auth = src.get("authors") if isinstance(src.get("authors"), list) else []
         if (not dst_auth) and src_auth:
             dst["authors"] = src_auth
+        dst_auth_d = dst.get("authors_detailed") if isinstance(dst.get("authors_detailed"), list) else []
+        src_auth_d = src.get("authors_detailed") if isinstance(src.get("authors_detailed"), list) else []
+        if (not dst_auth_d) and src_auth_d:
+            dst["authors_detailed"] = src_auth_d
         dst["in_paper"] = bool(dst.get("in_paper")) or bool(src.get("in_paper"))
         dst["is_key"] = bool(dst.get("is_key")) or bool(src.get("is_key"))
         if src.get("ref_id") and not dst.get("ref_id"):
@@ -384,6 +478,7 @@ def build_reference_master_list(
             "publisher": None,
             "source": None,
             "authors": [],
+            "authors_detailed": [],
             "volume": None,
             "issue": None,
             "pages": None,
@@ -419,6 +514,7 @@ def build_reference_master_list(
                 meta["publisher"] = _extract_openalex_publisher(record) or meta["publisher"]
                 meta["source"] = _extract_openalex_source_name(record) or meta["source"]
                 meta["authors"] = _extract_openalex_authors(record) or meta["authors"]
+                meta["authors_detailed"] = _extract_openalex_authors_detailed(record) or meta["authors_detailed"]
                 meta["type"] = record.get("type") or meta["type"]
                 meta["type_crossref"] = record.get("type_crossref") or meta["type_crossref"]
                 meta["genre"] = record.get("genre") or meta["genre"]
@@ -450,6 +546,10 @@ def build_reference_master_list(
                 meta["source"] = str(summ.get("source") or "").strip() or meta["source"]
                 if isinstance(summ.get("authors"), list):
                     meta["authors"] = [str(a).strip() for a in summ.get("authors") if isinstance(a, str) and a.strip()]
+                if isinstance(summ.get("authors_detailed"), list):
+                    meta["authors_detailed"] = [
+                        a for a in summ.get("authors_detailed") if isinstance(a, dict) and isinstance(a.get("name"), str)
+                    ]
                 meta["volume"] = str(summ.get("volume") or "").strip() or meta["volume"]
                 meta["issue"] = str(summ.get("issue") or "").strip() or meta["issue"]
                 meta["pages"] = str(summ.get("pages") or "").strip() or meta["pages"]
@@ -610,6 +710,7 @@ def build_reference_master_list(
             "year": meta.get("year"),
             "venue": meta.get("venue"),
             "authors": meta.get("authors"),
+            "authors_detailed": meta.get("authors_detailed"),
             "volume": meta.get("volume"),
             "issue": meta.get("issue"),
             "pages": meta.get("pages"),
@@ -731,6 +832,7 @@ def _fetch_openalex_summaries(
         publisher = _extract_openalex_publisher(work)
         source = _extract_openalex_source_name(work)
         authors = _extract_openalex_authors(work)
+        authors_detailed = _extract_openalex_authors_detailed(work)
         abstract = _clip_text(_extract_openalex_abstract(work), max_chars=int(abstract_max_chars))
         b = _extract_openalex_biblio(work)
         official_url = _pick_official_url(doi=doi, record=work)
@@ -744,6 +846,7 @@ def _fetch_openalex_summaries(
             "publisher": publisher,
             "source": source,
             "authors": authors,
+            "authors_detailed": authors_detailed,
             "volume": b.get("volume"),
             "issue": b.get("issue"),
             "pages": b.get("pages"),

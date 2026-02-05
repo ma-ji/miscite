@@ -652,6 +652,7 @@ def analyze_document(
             "notes": parse_notes,
         },
         "timing": {"seconds": round(time.time() - started, 3)},
+        "cache_debug": cache.debug_snapshot(),
     }
 
     methodology_md = build_methodology_md(

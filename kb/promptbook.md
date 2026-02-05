@@ -553,3 +553,31 @@ GOAL: Ensure excluded-sources list is available in Docker builds so exclusions a
 PROMPT: THINK HARD: Trace the pipeline, double check if and how excluded references are actually excluded every step immediately.
 FILES TOUCHED: Dockerfile; kb/promptbook.md.
 DECISION/RATIONALE: Dockerfile previously copied only `server/` (not `docs/`), so `docs/excluded_sources.txt` was missing in the container and exclusions silently did nothing. Updated Dockerfile to copy `docs/` into the image so `load_excluded_sources()` works in web + worker containers.
+
+========
+DATE: 2026-02-05
+GOAL: Add report-page navigation sidebar + potential reviewer suggestions.
+PROMPT: Add a floating navigation sidebar for long reports; add “Potential Reviewers” under the report title sourced from bibliographic coupling (“works that cite many of your references”).
+FILES TOUCHED: server/miscite/analysis/deep_analysis/references.py; server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/templates/job.html; server/miscite/static/styles.css; AGENTS.md; kb/promptbook.md.
+DECISION/RATIONALE: Derived reviewer candidates from OpenAlex authorships (name + institution) on bibliographic-coupling works and exposed them as `report.deep_analysis.potential_reviewers` for rendering; added a sticky sidebar TOC to keep long reports scannable while remaining responsive on small screens.
+
+========
+DATE: 2026-02-05
+GOAL: Ensure all LLM and metadata API calls in the analysis pipeline are cached.
+PROMPT: THINK HARD: Trace the whole pipleline, make sure all LLM and API calls are cached.
+FILES TOUCHED: server/miscite/sources/predatory_api.py; server/miscite/sources/retraction_api.py; server/miscite/sources/test_list_api_cache.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: The only uncached runtime API path was “list-mode” custom predatory/retraction APIs, which previously fetched the full list over HTTP on every process/job. Added file-backed caching for these list fetches (via `Cache.get_text_file`/`set_text_file`) and unit tests to prevent regressions; documented cache layers and env vars in the dev docs.
+
+========
+DATE: 2026-02-05
+GOAL: Report cache hits/misses in analysis outputs for debugging.
+PROMPT: Report cache hitting for debugging purposes.
+FILES TOUCHED: server/miscite/core/cache.py; server/miscite/analysis/pipeline/__init__.py; server/miscite/core/test_cache_debug.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added thread-safe cache debug counters (hit/miss/error/set) shared across cache scopes and surfaced a per-run snapshot as `report.cache_debug` so pipeline/debug reviews can see which namespaces hit cache without parsing logs.
+
+========
+DATE: 2026-02-05
+GOAL: Make “Potential Reviewers” reliably populate from bibliographic coupling.
+PROMPT: “Still shows ‘No reviewer candidates were found for this run.’”
+FILES TOUCHED: server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/references.py; server/miscite/templates/job.html; kb/promptbook.md.
+DECISION/RATIONALE: Deep analysis could hit the node limit during second-hop expansion before collecting citing works, leaving the bibliographic-coupling bucket empty. Reordered expansion to collect citing papers first and changed OpenAlex summary fetching to preserve priority order (so coupling works get author/affiliation metadata within fetch limits). Updated the report template to distinguish “unavailable” (older reports without precomputed reviewers) from true empty results and to surface a hint when no citing works were collected.

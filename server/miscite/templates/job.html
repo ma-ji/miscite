@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
   {% set has_error = job.error_message or job.has_error %}
-  <section class="ds-section">
+  {% set da = report.deep_analysis if report and report.deep_analysis is mapping else None %}
+  {% set da_status = da.status|default("") if da else "" %}
+  {% set potential_reviewers = da.potential_reviewers|default([], true) if da else [] %}
+  {% set reviewers_defined = (da.potential_reviewers is defined) if da else false %}
+  <section class="ds-section" id="report-top">
     <div class="ds-grid">
       <div class="span-7">
         <p class="eyebrow">Report</p>
@@ -21,6 +25,77 @@
           {% if has_error %}
             <span class="ds-pill">Needs attention</span>
           {% endif %}
+        </div>
+        <div class="ds-card ds-card--subtle ds-mt-4" id="report-reviewers">
+          <div class="card-content">
+            <div class="ds-card-header--split">
+              <h4>Potential Reviewers</h4>
+              {% if not report %}
+                <span class="ds-pill">pending</span>
+              {% elif not da %}
+                <span class="ds-pill">unavailable</span>
+              {% elif da_status == "completed" and reviewers_defined %}
+                <span class="ds-pill">{{ potential_reviewers|length }} suggested</span>
+              {% elif da_status == "completed" %}
+                <span class="ds-pill">unavailable</span>
+              {% else %}
+                <span class="ds-pill">{{ da_status or "pending" }}</span>
+              {% endif %}
+            </div>
+
+            {% if not report %}
+              <p class="miscite-muted">
+                Reviewer suggestions become available once the report is ready.
+              </p>
+            {% elif not da %}
+              <p class="miscite-muted">
+                This report does not include deep-analysis metadata. Generate a new report to compute potential reviewers.
+              </p>
+            {% elif da_status != "completed" %}
+              <p class="miscite-muted">
+                This section is generated from citation-coupled works (articles that cite many of your references).
+              </p>
+              {% if da_status == "skipped" %}
+                <p class="miscite-muted">{{ da.reason|default("Deep analysis was skipped.") }}</p>
+              {% elif da_status == "failed" %}
+                <p class="miscite-muted">Deep analysis failed: {{ da.reason|default("Unknown error") }}</p>
+              {% else %}
+                <p class="miscite-muted">Reviewer suggestions will appear when deep analysis completes.</p>
+              {% endif %}
+            {% elif not reviewers_defined %}
+              <p class="miscite-muted">
+                This report was generated before reviewer suggestions were computed. Generate a new report to include potential reviewers.
+              </p>
+            {% else %}
+              <p class="miscite-muted">
+                Based on works that cite many of your references (citation coupling). Click a name to search.
+              </p>
+              {% if potential_reviewers and potential_reviewers|length > 0 %}
+                <div class="report-reviewers-scroll">
+                  <ul class="ds-list">
+                    {% for reviewer in potential_reviewers %}
+                      {% set safe_search_url = reviewer.google_search_url|safe_url %}
+                      <li>
+                        {% if safe_search_url %}
+                          <a class="ds-link" href="{{ safe_search_url }}" target="_blank" rel="noopener noreferrer">{{ reviewer.name }}</a>
+                        {% else %}
+                          <span class="ds-source-name">{{ reviewer.name }}</span>
+                        {% endif %}
+                        <span class="miscite-muted">— {{ reviewer.affiliation or "Affiliation unavailable" }}</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% else %}
+                <p class="miscite-muted">No reviewer candidates were found for this run.</p>
+                {% if da.lit_pool is mapping and da.lit_pool.citing_refs|default(0) == 0 %}
+                  <p class="miscite-muted">
+                    Deep analysis did not collect any recent papers citing your key references (often due to strict node/edge limits). Try rerunning with a higher node budget.
+                  </p>
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          </div>
         </div>
       </div>
       <div class="span-5">
@@ -271,10 +346,35 @@
 	      {% endif %}
 	    {% endfor %}
 	    {% set summary = report.summary or {} %}
+      {% set has_methodology = (data_sources|default([])|length > 0) or (methodology_md|default('')|trim) %}
+      <div class="report-shell">
+        <aside class="report-nav" aria-label="Report navigation">
+          <div class="ds-card ds-card--subtle report-nav-card">
+            <div class="card-content">
+              <p class="eyebrow">Jump to</p>
+              <nav class="report-nav-links">
+                <a class="report-nav-link" href="#report-top">Top</a>
+                <a class="report-nav-link" href="#report-reviewers">Potential reviewers</a>
+                <a class="report-nav-link" href="#report-summary">Summary</a>
+                <a class="report-nav-link" href="#report-flags">Flags</a>
+                {% if report.deep_analysis %}
+                  <a class="report-nav-link" href="#report-recommendations">Recommendations</a>
+                {% endif %}
+                {% if report.deep_analysis and report.deep_analysis.status == "completed" and report.deep_analysis.references %}
+                  <a class="report-nav-link" href="#report-reference-list">Reference list</a>
+                {% endif %}
+                {% if has_methodology %}
+                  <a class="report-nav-link" href="#report-methodology">Sources &amp; methodology</a>
+                {% endif %}
+              </nav>
+            </div>
+          </div>
+        </aside>
+        <div class="report-body">
 	    <section class="ds-section">
 	      <div class="ds-grid">
 	        <div class="span-12">
-	          <div class="ds-card">
+	          <div class="ds-card" id="report-summary">
 	            <div class="card-content">
 	              <h3>Summary</h3>
 				              <div class="ds-stat-grid ds-stat-grid--cols">
@@ -315,7 +415,7 @@
           </div>
 	        </div>
 	        <div class="span-12">
-	          <div class="ds-card">
+	          <div class="ds-card" id="report-flags">
 		            <div class="card-content">
 		              <h3>Flags</h3>
 		              <p class="miscite-muted">Review issues by severity, with context and suggested next steps.</p>
@@ -577,7 +677,7 @@
 	    </section>
 
 		    {% if report.deep_analysis %}
-		      <section class="ds-section">
+		      <section class="ds-section" id="report-recommendations">
 		        <div class="ds-card">
 		          <div class="card-content">
 		            <h3>Recommendations</h3>
@@ -817,7 +917,7 @@
 
 	    {% if report.deep_analysis and report.deep_analysis.status == "completed" and report.deep_analysis.references %}
 	      {% set da = report.deep_analysis %}
-	      <section class="ds-section">
+	      <section class="ds-section" id="report-reference-list">
 	        <div class="ds-card">
 	          <div class="card-content">
 	            <h3>Complete reference list</h3>
@@ -900,7 +1000,7 @@
 	    {% endif %}
 
 	    {% if (data_sources and data_sources|length > 0) or (methodology_md and methodology_md|trim) %}
-	      <section class="ds-section">
+	      <section class="ds-section" id="report-methodology">
 	        <div class="ds-card">
 	          <div class="card-content">
 	            <h3>Sources &amp; methodology</h3>
@@ -950,6 +1050,8 @@
 	      </section>
 	    {% endif %}
 
+        </div>
+      </div>
 	  {% else %}
 	    {% if job.status == "COMPLETED" %}
 	      <section class="ds-section">
