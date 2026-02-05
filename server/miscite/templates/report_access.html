@@ -4,20 +4,20 @@
     <div class="ds-grid">
       <div class="span-6">
         <p class="eyebrow">Get report</p>
-        <h1>Retrieve a report or check progress with an access token.</h1>
+        <h1>Open a shared report with an access token.</h1>
         <p class="lead">
-          Enter the token emailed to you to view read-only results. Live progress updates are available if the owner shares early.
+          Enter the token emailed to you to view read-only results and live progress (when available).
         </p>
         <ul class="ds-list">
-          <li>Evidence summaries and severity flags.</li>
-          <li>Proprietary relevance suggestions to improve coverage.</li>
-          <li>Estimated {{ record_estimate }} scholarly records indexed.</li>
+          <li>Evidence summaries and severity flags</li>
+          <li>Recommendation and coverage guidance</li>
+          <li>{{ record_estimate }} scholarly records indexed</li>
         </ul>
       </div>
       <div class="span-6">
         <div class="ds-card">
           <div class="card-content">
-            <h3>Access token</h3>
+            <h3>Enter token</h3>
             <form method="post" action="/reports/access" class="ds-stack">
               <div class="form-field">
                 <label class="form-label" for="token">Access token</label>
@@ -29,6 +29,7 @@
                   autocomplete="off"
                   autocapitalize="none"
                   spellcheck="false"
+                  autofocus
                 />
                 <p class="form-help">Tokens are case-sensitive. Expiration is set by the report owner.</p>
               </div>

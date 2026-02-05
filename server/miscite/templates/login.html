@@ -5,16 +5,14 @@
     <div class="ds-grid">
       <div class="span-6">
         <p class="eyebrow">Welcome</p>
-        <h1>Sign in with a secure email code.</h1>
+        <h1>Sign in with an email code.</h1>
         <p class="lead">
-          Enter your email, get a short code, and jump back into your citation workspace.
+          Enter your email, verify a short code, and continue where you left off.
         </p>
         <ul class="ds-list">
-          <li>Resume recent jobs instantly</li>
-          <li>Share exportable JSON reports</li>
-          <li>Track integrity and venue checks</li>
-          <li>Recommendations for relevant references</li>
-          <li>Estimated {{ record_estimate }} scholarly records indexed</li>
+          <li>Resume recent jobs quickly</li>
+          <li>Share read-only report links</li>
+          <li>{{ record_estimate }} scholarly records indexed</li>
         </ul>
       </div>
       <div class="span-6">
@@ -22,7 +20,7 @@
           <div class="card-content">
             <h2>Get access</h2>
             <p class="form-help">
-              No password required. We’ll email a short code to confirm it’s you.
+              No password needed. We’ll send a short code to confirm it’s you.
             </p>
           </div>
           <div class="card-content">
@@ -72,7 +70,7 @@
                         <option value="30" {{ "selected" if session_choice == "30" else "" }}>30 days</option>
                       </select>
                       <p class="form-help" id="login-request-help">
-                        We will email a {{ login_code_length }}-digit code. It expires in {{ login_code_ttl_minutes }} minutes.
+                        We’ll email a {{ login_code_length }}-digit code. It expires in {{ login_code_ttl_minutes }} minutes.
                       </p>
                     </div>
                     {% if turnstile_site_key %}
@@ -142,7 +140,7 @@
                         {% if active_step == "verify" %}autofocus{% endif %}
                       />
                       <p class="form-help" id="login-verify-help">
-                        Enter the {{ login_code_length }} digits from your email. If you didn’t get one, reopen Step 1 to resend.
+                        Enter the {{ login_code_length }} digits from your email. If needed, reopen Step 1 to resend.
                       </p>
                     </div>
                     <button class="ds-button ds-button--secondary" type="submit">Sign in</button>
@@ -152,8 +150,8 @@
             </div>
           </div>
           <div class="card-action">
-            <span class="miscite-muted">Secure, passwordless access.</span>
-            <span class="miscite-muted">We only email sign-in codes.</span>
+            <span class="miscite-muted">Secure, passwordless access with short-lived codes.</span>
+            <span class="miscite-muted">We only email sign-in tokens.</span>
           </div>
         </div>
       </div>

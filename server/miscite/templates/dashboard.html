@@ -17,19 +17,18 @@
           <div class="ds-stack ds-stack--lg">
           <div>
             <p class="eyebrow">Workspace</p>
-            <h1>Analyze citations</h1>
+            <h1>Run citation checks</h1>
             <p class="lead">
-              Run checks against vetted metadata registries and integrity watchlists. Our proprietary
-              relevance engine suggests additional references and improvements.
+              Upload a manuscript, review citation risks, and export a traceable report.
             </p>
-            <p class="miscite-muted">Files are processed securely; reports are workspace-scoped.</p>
+            <p class="miscite-muted">Reports are workspace-scoped and built for editorial review.</p>
           </div>
           <div class="ds-card ds-card--hero" id="upload-module">
             <div class="card-content">
               <div class="ds-card-header ds-card-header--split">
                 <div>
-                  <h3>Analyze a manuscript</h3>
-                  <p class="miscite-muted">Upload a manuscript to generate a detailed citation report.</p>
+                  <h3>Upload manuscript</h3>
+                  <p class="miscite-muted">PDF and DOCX are supported.</p>
                 </div>
                 {% if jobs|length == 0 and sample_report_url %}
                   <a class="ds-link" href="{{ sample_report_url }}">Sample report</a>
@@ -67,7 +66,7 @@
                         Drop a PDF/DOCX here, or <span class="ds-dropzone-browse">Browse</span>
                       </span>
                       <span class="ds-dropzone-meta" id="upload-constraints">
-                        PDF, DOCX · Max {{ max_upload_mb }} MB · Optional page limit
+                        PDF or DOCX · Max {{ max_upload_mb }} MB · Optional page limit
                       </span>
                     </div>
                     <div class="ds-dropzone-file" id="upload-selected" data-dropzone-file>
@@ -78,11 +77,11 @@
                 <div class="ds-upload-state" data-upload-state="{{ upload_state }}" aria-live="polite">
                   <div class="ds-upload-state-item" data-state="idle">
                     <i class="material-icons" aria-hidden="true">upload_file</i>
-                    <span>Choose a file to start your analysis.</span>
+                    <span>Select a file to begin.</span>
                   </div>
                   <div class="ds-upload-state-item" data-state="selected">
                     <i class="material-icons" aria-hidden="true">task_alt</i>
-                    <span>Ready to analyze. Review file details and start the report.</span>
+                    <span>Ready to run. Confirm the file and start.</span>
                   </div>
                   <div class="ds-upload-state-item" data-state="uploading">
                     <div class="ds-upload-progress">
@@ -142,7 +141,7 @@
                     disabled
                     {{ "disabled" if (billing_required and not billing_ready) or maintenance_mode else "" }}
                   >
-                    Generate report
+                    Run check
                   </button>
                   {% if jobs|length == 0 and sample_report_url %}
                     <a class="ds-button ds-button--ghost" href="{{ sample_report_url }}">Sample report</a>
@@ -151,21 +150,6 @@
               </form>
             </div>
           </div>
-          {% if jobs|length == 0 %}
-            <details class="ds-sample" id="sample-report">
-              <summary>Sample report preview</summary>
-              <div class="ds-sample-body">
-                <p class="miscite-muted">
-                  See how a report surfaces missing metadata, integrity signals, and citation context.
-                </p>
-                <ul class="ds-list">
-                  <li>Highlights missing DOIs and ambiguous references.</li>
-                  <li>Flags retraction and venue-risk signals.</li>
-                  <li>Summarizes actionable next steps and recommendations.</li>
-                </ul>
-              </div>
-            </details>
-          {% endif %}
         </div>
       </div>
       <div class="span-4">
@@ -225,7 +209,7 @@
     <div class="section-header">
       <p class="eyebrow">Workspace</p>
       <h2>Recent analyses</h2>
-      <p class="lead">Search, filter, and revisit your last 25 jobs.</p>
+      <p class="lead">Search, filter, and revisit your latest jobs.</p>
     </div>
     <form class="ds-table-controls" method="get" action="/dashboard" data-auto-submit>
       <div class="ds-input-with-icon">
@@ -293,7 +277,7 @@
         <div class="ds-card ds-card--plain">
           <div class="card-content">
             <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
-              <table class="ds-table ds-table--wide">
+              <table class="ds-table ds-table--wide ds-table--mobile">
                 <thead>
                   <tr>
                     <th scope="col">Created</th>
@@ -305,18 +289,18 @@
                 <tbody>
                   {% for job in jobs %}
                     <tr>
-                      <td>
+                      <td data-label="Created">
                         <div class="ds-job-date">
                           <time datetime="{{ job.created_at }}" title="{{ job.created_at }}">{{ job.created_at_human }}</time>
                           <span class="miscite-muted">{{ job.created_at_relative }}</span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="File">
                         <div class="ds-job-file">
                           <span title="{{ job.filename }}">{{ job.filename }}</span>
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Status">
                         {% if job.status == "COMPLETED" %}
                           <span class="ds-status ds-status--success">
                             <i class="material-icons" aria-hidden="true">check_circle</i>
@@ -343,7 +327,7 @@
                           <div class="ds-progress-inline" aria-hidden="true"></div>
                         {% endif %}
                       </td>
-                      <td>
+                      <td data-label="Actions">
                         <div class="ds-table-actions">
                           {% if job.status == "COMPLETED" %}
                             <a class="ds-button ds-button--secondary ds-button--sm" href="/jobs/{{ job.id }}">

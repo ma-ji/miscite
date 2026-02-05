@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-US">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -11,17 +11,30 @@
     {% endif %}
     <title>{{ full_title }}</title>
     <meta name="description" content="{{ meta_description }}" />
+    <meta name="keywords" content="{{ meta_keywords }}" />
+    <meta name="author" content="miscite" />
     <meta name="robots" content="{{ robots }}" />
+    <meta name="googlebot" content="{{ robots }}" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="canonical" href="{{ canonical_url }}" />
+    <link rel="alternate" hreflang="en-US" href="{{ canonical_url }}" />
     <meta property="og:site_name" content="miscite" />
     <meta property="og:type" content="{{ og_type|default('website') }}" />
     <meta property="og:url" content="{{ canonical_url }}" />
     <meta property="og:title" content="{{ full_title }}" />
     <meta property="og:description" content="{{ meta_description }}" />
+    <meta property="og:image" content="{{ og_image_url }}" />
+    <meta property="og:image:alt" content="{{ og_image_alt }}" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="{{ twitter_card|default('summary') }}" />
+    <meta name="twitter:url" content="{{ canonical_url }}" />
     <meta name="twitter:title" content="{{ full_title }}" />
     <meta name="twitter:description" content="{{ meta_description }}" />
+    <meta name="twitter:image" content="{{ og_image_url }}" />
+    <meta name="twitter:image:alt" content="{{ og_image_alt }}" />
     <meta name="application-name" content="miscite" />
     <meta name="theme-color" content="#990000" />
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
@@ -41,6 +54,7 @@
     <header class="app-header">
       <div class="ds-container app-header-inner">
         {% set path = request.url.path %}
+        {% set on_reports_access = path.startswith("/reports") %}
         <div class="app-brand">
           <a href="/" class="app-logo miscite-wordmark" aria-label="miscite home">miscite</a>
           <span class="app-tag">Real & Relevant Citations</span>
@@ -63,7 +77,13 @@
         </nav>
         <div class="app-actions">
           {% if not hide_report_access %}
-            <a class="ds-button ds-button--ghost ds-button--sm app-report-button" href="/reports/access">Get report</a>
+            <a
+              class="ds-button ds-button--ghost ds-button--sm app-report-button"
+              href="/reports/access"
+              {{ "aria-current=page" if on_reports_access else "" }}
+            >
+              Open report
+            </a>
           {% endif %}
           {% if current_user %}
             <form method="post" action="/logout">
@@ -105,9 +125,17 @@
         <span class="ds-footer-brand miscite-wordmark">miscite</span>
         <span class="ds-footer-meta">Transparent citation checks for modern research teams.</span>
         <div class="ds-footer-links">
-          <a href="/#features">Features</a>
-          <a href="/#workflow">Workflow</a>
-          <a href="/#trust">Trust</a>
+          {% if current_user %}
+            <a href="/dashboard">Dashboard</a>
+            <a href="/billing">Billing</a>
+            {% if not hide_report_access %}
+              <a href="/reports/access">Open report</a>
+            {% endif %}
+          {% else %}
+            <a href="/#features">Features</a>
+            <a href="/#trust">Trust</a>
+            <a href="/login">Get access</a>
+          {% endif %}
         </div>
       </div>
     </footer>

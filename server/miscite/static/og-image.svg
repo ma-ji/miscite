@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">miscite citation checks</title>
+  <desc id="desc">Audit-ready citation checks for academic manuscripts.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#072332" />
+      <stop offset="100%" stop-color="#990000" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#990000" />
+      <stop offset="100%" stop-color="#F41C40" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <circle cx="1040" cy="120" r="180" fill="#FFFFFF" opacity="0.08" />
+  <circle cx="180" cy="560" r="220" fill="#F8EFE2" opacity="0.09" />
+
+  <g transform="translate(88,112)">
+    <rect x="0" y="0" width="180" height="34" rx="17" fill="#F8EFE2" opacity="0.18" />
+    <text x="90" y="23" fill="#FFFFFF" text-anchor="middle" font-family="Sora, Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" letter-spacing="1.2">MISCITE</text>
+
+    <text x="0" y="132" fill="#FFFFFF" font-family="Sora, Segoe UI, Arial, sans-serif" font-size="68" font-weight="700">Citation Checks</text>
+    <text x="0" y="202" fill="#FFFFFF" font-family="Sora, Segoe UI, Arial, sans-serif" font-size="68" font-weight="700">For Manuscripts</text>
+
+    <rect x="0" y="232" width="520" height="8" rx="4" fill="url(#accent)" />
+
+    <text x="0" y="306" fill="#F8EFE2" font-family="Sora, Segoe UI, Arial, sans-serif" font-size="30" font-weight="500">Resolve references, flag retractions, and surface risk signals.</text>
+
+    <g transform="translate(0,362)">
+      <rect x="0" y="0" width="202" height="56" rx="12" fill="#FFFFFF" opacity="0.12" />
+      <text x="101" y="36" fill="#FFFFFF" text-anchor="middle" font-family="Sora, Segoe UI, Arial, sans-serif" font-size="24" font-weight="600">PDF + DOCX</text>
+
+      <rect x="224" y="0" width="332" height="56" rx="12" fill="#FFFFFF" opacity="0.12" />
+      <text x="390" y="36" fill="#FFFFFF" text-anchor="middle" font-family="Sora, Segoe UI, Arial, sans-serif" font-size="24" font-weight="600">Evidence-first reports</text>
+    </g>
+  </g>
+</svg>

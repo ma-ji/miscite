@@ -1,15 +1,61 @@
 {% extends "base.html" %}
 {% block head %}
   <script type="application/ld+json" nonce="{{ csp_nonce }}">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "miscite",
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web",
-      "url": "{{ canonical_url }}",
-      "description": "{{ meta_description }}"
-    }
+    [
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "miscite",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Research Citation Analysis",
+        "operatingSystem": "Web",
+        "url": "{{ canonical_url }}",
+        "description": "{{ meta_description }}"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "miscite",
+        "url": "{{ canonical_url }}"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "miscite",
+        "url": "{{ canonical_url }}",
+        "description": "{{ meta_description }}"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What files can I check?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Upload standard PDF or DOCX manuscripts. miscite extracts citations, bibliography entries, and inline references without requiring reformatting."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How are citations verified?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "References are matched against multiple scholarly registries and integrity watchlists. Each match is recorded with evidence context and review notes."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Who makes the final decision?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "miscite provides evidence and severity scoring, but final decisions stay with your editorial team."
+            }
+          }
+        ]
+      }
+    ]
   </script>
 {% endblock %}
 {% block content %}
@@ -18,11 +64,10 @@
       <div class="span-7 ds-stack ds-stack--lg landing-hero-copy">
         <div class="landing-reveal" data-delay="1">
           <p class="eyebrow">Domain-informed citation intelligence</p>
-          <h1>Audit-ready citation checks for journals, labs, and research teams.</h1>
+          <h1>Citation checks that stay focused, traceable, and fast.</h1>
           <p class="lead">
-            miscite scans PDF and DOCX manuscripts, resolves every reference against vetted metadata
-            registries, and flags missing, retracted, or risky citations with a traceable report.
-            A proprietary relevance engine suggests additional references and improvements.
+            miscite scans PDF and DOCX manuscripts, resolves references against trusted registries,
+            and highlights missing, retracted, or risky citations with clear evidence.
           </p>
         </div>
         <div class="landing-reveal" data-delay="2">
@@ -35,8 +80,8 @@
           <div class="hero-meta">
             <span class="ds-badge">PDF + DOCX</span>
             <span class="ds-pill">Verified scholarly registries</span>
-            <span class="ds-pill">Retraction & integrity watchlists</span>
-            <span class="ds-pill">Est. {{ record_estimate }} scholarly records</span>
+            <span class="ds-pill">Retraction + integrity watchlists</span>
+            <span class="ds-pill">{{ record_estimate }} records indexed</span>
           </div>
         </div>
         <div class="landing-proof landing-reveal" data-delay="3">
@@ -45,21 +90,21 @@
               <i class="material-icons" aria-hidden="true">fact_check</i>
               Evidence-first
             </span>
-            <p>Every issue includes evidence context and a rationale you can audit.</p>
+            <p>Every issue includes context and rationale you can verify.</p>
           </div>
           <div class="landing-proof-item">
             <span class="ds-status ds-status--processing">
               <i class="material-icons" aria-hidden="true">autorenew</i>
               Decision-ready
             </span>
-            <p>Severity buckets plus relevance recommendations highlight how to improve coverage.</p>
+            <p>Severity and relevance signals show what to fix first.</p>
           </div>
           <div class="landing-proof-item">
             <span class="ds-status">
               <i class="material-icons" aria-hidden="true">group</i>
               Team-ready
             </span>
-            <p>Share results with editors, authors, and compliance teams in minutes.</p>
+            <p>Share findings with editors, authors, and compliance partners.</p>
           </div>
         </div>
       </div>
@@ -68,8 +113,8 @@
           <div class="card-content">
             <div class="ds-card-header">
               <p class="eyebrow">Report preview</p>
-              <h3>Evidence you can audit.</h3>
-              <p class="miscite-muted">Sample output from a manuscript check.</p>
+              <h3>Clear output, quick decisions.</h3>
+              <p class="miscite-muted">Example summary from a completed manuscript check.</p>
             </div>
             <div class="ds-severity-grid">
               <div class="ds-severity-card ds-severity-card--high">
@@ -86,12 +131,12 @@
               </div>
             </div>
             <dl class="ds-meta">
-              <dt style="text-align: right;">Record Coverage</dt>
+              <dt>Record coverage</dt>
               <dd>Estimated {{ record_estimate }} scholarly records indexed.</dd>
-              <dt style="text-align: right;">Risk Check</dt>
-              <dd>Missing refs, citing retractions and predatory journals, venue risk signals, context review.</dd>
-              <dt style="text-align: right;">Constructive Report</dt>
-              <dd>Summary counts, evidence links, and recommendations.</dd>
+              <dt>Risk checks</dt>
+              <dd>Missing refs, retractions, venue risk signals, and context review.</dd>
+              <dt>Actionable report</dt>
+              <dd>Summary counts, evidence links, and prioritized recommendations.</dd>
             </dl>
           </div>
         </div>
@@ -102,10 +147,10 @@
   <section id="features" class="ds-section">
     <div class="section-header landing-reveal">
       <p class="eyebrow">Capabilities</p>
-      <h2>Domain-informed coverage for every citation.</h2>
+      <h2>Coverage that stays practical and reviewable.</h2>
       <p class="lead">
-        miscite combines metadata resolution, risk flags, and context-aware checks so your team can
-        approve submissions with confidence.
+        A single workflow combines metadata resolution, risk signals, and context checks so teams can
+        review faster with fewer blind spots.
       </p>
     </div>
     <div class="ds-grid landing-feature-grid">
@@ -117,7 +162,7 @@
             </div>
             <h3>Reference resolution</h3>
             <p class="miscite-muted">
-              Match DOI, title, and author metadata across trusted scholarly registries.
+              Match DOI, title, and author metadata across trusted registries.
             </p>
             <ul class="ds-list">
               <li>Multi-source matching</li>
@@ -135,7 +180,7 @@
             </div>
             <h3>Risk flags</h3>
             <p class="miscite-muted">
-              Surface missing bibliography items, retractions, and venue-risk signals instantly.
+              Surface missing bibliography items, retractions, and venue risk signals quickly.
             </p>
             <ul class="ds-list">
               <li>Retraction registry signals</li>
@@ -153,7 +198,7 @@
             </div>
             <h3>Recommend what matters</h3>
             <p class="miscite-muted">
-              Suggest relevant references and improvements with a proprietary relevance model.
+              Suggest high-value references and focused improvements.
             </p>
             <ul class="ds-list">
               <li>Suggested additions</li>
@@ -171,7 +216,7 @@
             </div>
             <h3>Audit-ready reporting</h3>
             <p class="miscite-muted">
-              Every report includes a concise review summary your team can cite.
+              Every report includes a concise summary your team can act on.
             </p>
             <ul class="ds-list">
               <li>Exportable JSON</li>
@@ -191,17 +236,16 @@
           <div class="span-6 ds-stack landing-reveal">
             <div>
               <p class="eyebrow">Workflow</p>
-              <h2>From upload to decision-ready report.</h2>
+              <h2>From upload to focused report.</h2>
               <p class="lead">
-                Keep your editorial review tight with a repeatable pipeline that turns manuscripts
-                into actionable citation intelligence.
+                Keep review cycles tight with a repeatable pipeline built for editorial and research teams.
               </p>
             </div>
             <ul class="ds-list">
               <li>Upload PDF or DOCX files in seconds.</li>
               <li>Parse citations and bibliography entries automatically.</li>
               <li>Resolve metadata and flag issues by severity.</li>
-              <li>Review recommendations and export findings.</li>
+              <li>Review recommendations and share findings.</li>
             </ul>
             <div class="hero-actions">
               <a class="ds-button ds-button--primary" href="/login">Run a check</a>
@@ -213,8 +257,8 @@
               <div class="ds-panel-header">
                 <div>
                   <p class="eyebrow">Signal pipeline</p>
-                  <h3>Every step writes to the report.</h3>
-                  <p class="miscite-muted">Track progress and document each decision.</p>
+                  <h3>Each step is visible.</h3>
+                  <p class="miscite-muted">Track progress and see how each signal is produced.</p>
                 </div>
                 <span class="ds-status ds-status--processing">
                   <i class="material-icons" aria-hidden="true">autorenew</i>
@@ -254,10 +298,10 @@
   <section id="trust" class="ds-section">
     <div class="section-header landing-reveal">
       <p class="eyebrow">Trust</p>
-      <h2>Transparent signals you can share with stakeholders.</h2>
+      <h2>Transparent signals you can share.</h2>
       <p class="lead">
-        miscite keeps the evidence trail visible so editors, authors, and compliance teams know why
-        each issue was flagged.
+        Keep the evidence trail visible so editors, authors, and compliance teams know why each issue
+        was flagged.
       </p>
     </div>
     <div class="ds-grid landing-trust-grid">
@@ -266,7 +310,7 @@
           <div class="card-content">
             <h3>Verified evidence sources</h3>
             <p class="miscite-muted">
-              Resolve references across multiple registries and record where each signal originated.
+              Resolve references across multiple registries and keep source-level traceability.
             </p>
             <div class="ds-chip-row">
               <span class="ds-chip">Metadata registries</span>
@@ -288,7 +332,7 @@
           <div class="card-content">
             <h3>Governed review process</h3>
             <p class="miscite-muted">
-              Flagging is only half the story. miscite helps teams document how decisions were made.
+              Flagging is only part of the workflow. miscite also supports decision traceability.
             </p>
             <ul class="ds-list">
               <li>Severity scoring for quick triage.</li>
@@ -300,7 +344,7 @@
               <div class="ds-panel-body">
                 <p class="eyebrow">Audit trail</p>
                 <p class="miscite-muted">
-                  Keep an immutable trail of checks and reviewer actions for submission records.
+                  Keep a consistent trail of checks and reviewer actions for submission records.
                 </p>
               </div>
             </div>
@@ -312,66 +356,9 @@
 
   <section class="ds-section">
     <div class="section-header landing-reveal">
-      <p class="eyebrow">Who it helps</p>
-      <h2>Built for high-volume editorial workflows.</h2>
-      <p class="lead">
-        Use miscite to standardize citation quality checks across every submission you handle.
-      </p>
-    </div>
-    <div class="ds-grid landing-use-grid">
-      <div class="span-4 landing-reveal" data-delay="1">
-        <div class="ds-card landing-use-card">
-          <div class="card-content">
-            <h3>Journal editors</h3>
-            <p class="miscite-muted">
-              Catch retractions and missing references before peer review begins.
-            </p>
-            <ul class="ds-list">
-              <li>Desk review support</li>
-              <li>Consistent reviewer packets</li>
-              <li>Reduced compliance risk</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div class="span-4 landing-reveal" data-delay="2">
-        <div class="ds-card landing-use-card">
-          <div class="card-content">
-            <h3>Research offices</h3>
-            <p class="miscite-muted">
-              Protect institutional reputation with centralized citation governance.
-            </p>
-            <ul class="ds-list">
-              <li>Standardized checks</li>
-              <li>Shareable audit trails</li>
-              <li>Fast turnaround</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div class="span-4 landing-reveal" data-delay="3">
-        <div class="ds-card landing-use-card">
-          <div class="card-content">
-            <h3>Lab teams</h3>
-            <p class="miscite-muted">
-              Submit confidently with a clear record of citation integrity.
-            </p>
-            <ul class="ds-list">
-              <li>Pre-submission checks</li>
-              <li>Clean collaboration handoffs</li>
-              <li>Actionable fixes</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="ds-section">
-    <div class="section-header landing-reveal">
       <p class="eyebrow">FAQ</p>
-      <h2>Questions teams ask before deploying.</h2>
-      <p class="lead">Clear answers so you can move quickly.</p>
+      <h2>Common questions</h2>
+      <p class="lead">Short answers before you start.</p>
     </div>
     <div class="ds-disclosure-list landing-faq">
       <details class="ds-disclosure ds-disclosure--low">
@@ -427,9 +414,9 @@
       <div class="card-content">
         <div class="ds-grid">
           <div class="span-8">
-            <h2>Ready to protect every submission?</h2>
+            <h2>Ready to run a focused citation check?</h2>
             <p class="lead">
-              Run a citation check today and keep every review grounded in evidence.
+              Start with one manuscript and get a traceable report in minutes.
             </p>
           </div>
           <div class="span-4 hero-actions">

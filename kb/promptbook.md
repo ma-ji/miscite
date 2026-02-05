@@ -721,3 +721,31 @@ GOAL: Improve end-to-end pipeline efficiency and remove redundant logic across e
 PROMPT: THINK HARD: Analyze entire pipeline, improve the efficiency and remove redundancy.
 FILES TOUCHED: server/miscite/analysis/shared/excluded_sources.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/match/match.py, server/miscite/analysis/deep_analysis/subsections.py, server/miscite/analysis/deep_analysis/references.py, server/miscite/analysis/match/test_match.py, kb/promptbook.md.
 DECISION/RATIONALE: Added cached excluded-source loading and shared helpers to classify OpenAlex/resolved-work source labels in one place, then reused them in both pipeline and deep analysis to remove duplicated venue-matching code. Eliminated a full post-processing issue recount pass by using counts already returned from check stages. Added optional prebuilt reference indexing in citation↔bibliography matching and reused a single index across subsection-level matching to avoid rebuilding the same index per subsection. Also removed repeated deep-analysis second-hop expansion blocks via a shared helper and minor hot-path set allocation overhead.
+
+========
+Date: 2026-02-05
+Goal: Simplify and refocus UI/UX across all pages for clearer task flow and better usability.
+Prompt: Analyze all pages and optimize for simplicity, focus, and usability (reduce visual noise, tighten copy, improve navigation, and strengthen mobile usability).
+Files touched: server/miscite/static/styles.css, server/miscite/templates/base.html, server/miscite/templates/home.html, server/miscite/templates/dashboard.html, server/miscite/templates/login.html, server/miscite/templates/billing.html, server/miscite/templates/report_access.html, server/miscite/templates/billing_success.html, server/miscite/templates/billing_cancel.html, server/miscite/templates/job.html, kb/promptbook.md.
+Decision/rationale: Simplified global styling (lighter surfaces, tighter spacing, calmer typography), reduced redundant marketing/dashboard copy, made navigation context-aware, added mobile card-style table behavior, and improved long-report navigation with active section highlighting to keep users oriented and focused on primary actions.
+
+========
+Date: 2026-02-05
+Goal: Restore decorative color expression after simplification made the UI feel too plain.
+Prompt: Reintroduce decorative color elements across the site while preserving simplicity and usability.
+Files touched: server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Added layered background gradients, accent treatments for header/footer/cards/panels/banners/alerts, richer hero/highlight card visuals, section-title and hero-title color bars, and re-enabled subtle landing reveal motion to keep the interface visually intentional without returning to clutter.
+
+========
+Date: 2026-02-05
+Goal: Restore the original color UI after experimental decorative adjustments.
+Prompt: Restore original color UI.
+Files touched: server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Reverted the shared stylesheet to its original state so the site returns to the baseline brand color treatment and avoids the newer decorative color layer.
+
+========
+Date: 2026-02-05
+Goal: Improve site-wide SEO coverage and metadata quality for public pages.
+Prompt: Improve SEO of the whole site.
+Files touched: server/miscite/web/__init__.py, server/miscite/routes/seo.py, server/miscite/routes/dashboard.py, server/miscite/templates/base.html, server/miscite/templates/home.html, server/miscite/static/og-image.svg, kb/promptbook.md.
+Decision/rationale: Added path-aware SEO defaults (descriptions, keywords, robots, card types), stabilized canonical/public-origin handling, expanded Open Graph/Twitter metadata globally, enriched homepage JSON-LD with FAQ/WebSite/Organization schemas, introduced a dedicated social preview image, and expanded robots/sitemap coverage to include indexable public routes while keeping private/authenticated surfaces disallowed.

@@ -273,7 +273,7 @@ def root(request: Request, db: Session = Depends(db_session)):
         return RedirectResponse("/dashboard", status_code=303)
     return templates.TemplateResponse(
         "home.html",
-        template_context(request, title="Audit-ready citation checks"),
+        template_context(request, title="Citation Checker For Academic Manuscripts"),
     )
 
 
@@ -292,7 +292,7 @@ def report_access_form(request: Request, error: str = ""):
         "report_access.html",
         template_context(
             request,
-            title="Get report",
+            title="Open Shared Citation Report",
             access_error=_report_access_error(error),
         ),
     )
@@ -315,7 +315,7 @@ def report_access(request: Request, token: str = Form(""), db: Session = Depends
             "report_access.html",
             template_context(
                 request,
-                title="Get report",
+                title="Open Shared Citation Report",
                 access_error=error,
             ),
         )
@@ -339,7 +339,7 @@ def report_access_token(request: Request, token: str, db: Session = Depends(db_s
             "report_access.html",
             template_context(
                 request,
-                title="Get report",
+                title="Open Shared Citation Report",
                 access_error=error,
             ),
         )

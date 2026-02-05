@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 import json
+import re
 from urllib.parse import urlsplit
 from urllib.parse import urlparse
 
@@ -16,6 +16,56 @@ templates = Jinja2Templates(directory="server/miscite/templates")
 
 _DEEP_CITE_RE = re.compile(r"\[R(?P<num>\d{1,4})\]")
 _SAFE_URL_SCHEMES = {"http", "https"}
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_DEFAULT_ROBOTS_INDEX = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+_DEFAULT_ROBOTS_NOINDEX = "noindex, nofollow, noarchive"
+_DEFAULT_META_KEYWORDS = (
+    "citation checker, manuscript citation analysis, reference validation, "
+    "retracted citation detection, predatory journal detection, academic integrity"
+)
+
+SEO_SITEMAP_ENTRIES: tuple[dict[str, str], ...] = (
+    {"path": "/", "changefreq": "weekly", "priority": "1.0"},
+    {"path": "/login", "changefreq": "monthly", "priority": "0.6"},
+    {"path": "/reports/access", "changefreq": "monthly", "priority": "0.5"},
+)
+
+_SEO_PATH_DEFAULTS: dict[str, dict[str, str]] = {
+    "/": {
+        "meta_description": (
+            "Audit-ready citation checks for journals, labs, and research teams. "
+            "Upload PDF/DOCX manuscripts, resolve references, and flag missing, retracted, or risky citations."
+        ),
+        "meta_keywords": _DEFAULT_META_KEYWORDS,
+        "robots": _DEFAULT_ROBOTS_INDEX,
+        "twitter_card": "summary_large_image",
+        "og_type": "website",
+    },
+    "/login": {
+        "meta_description": (
+            "Sign in to miscite to run citation checks, review manuscript integrity signals, "
+            "and manage citation reports."
+        ),
+        "meta_keywords": (
+            "citation checker login, manuscript citation reports, academic citation workflow"
+        ),
+        "robots": _DEFAULT_ROBOTS_INDEX,
+        "twitter_card": "summary",
+        "og_type": "website",
+    },
+    "/reports/access": {
+        "meta_description": (
+            "Open a shared miscite report with an access token to review citation flags, "
+            "evidence summaries, and recommendation details."
+        ),
+        "meta_keywords": (
+            "citation report access, manuscript citation report, research citation audit"
+        ),
+        "robots": _DEFAULT_ROBOTS_INDEX,
+        "twitter_card": "summary",
+        "og_type": "website",
+    },
+}
 
 
 def deep_cite_links(text: str | None) -> Markup:
@@ -64,8 +114,25 @@ def pretty_json(value) -> str:
 templates.env.filters["pretty_json"] = pretty_json
 
 
+def _is_local_origin(origin: str) -> bool:
+    try:
+        parsed = urlsplit(origin)
+    except Exception:
+        return True
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in _LOCAL_HOSTS:
+        return True
+    return host.endswith(".local")
+
+
 def public_origin(request: Request) -> str:
     settings = request.app.state.settings
+
+    configured_origin = str(getattr(settings, "public_origin", "") or "").strip().rstrip("/")
+    if configured_origin and not _is_local_origin(configured_origin):
+        return configured_origin
 
     scheme = request.url.scheme or "http"
     host = request.headers.get("host") or request.url.netloc
@@ -96,24 +163,39 @@ def public_origin(request: Request) -> str:
 def template_context(request: Request, **extra):
     settings = request.app.state.settings
     path = request.url.path or "/"
+    path_defaults = _SEO_PATH_DEFAULTS.get(path, {})
     origin = public_origin(request)
-    canonical_url = f"{origin}{path}" if origin else path
+    canonical_url = extra.get("canonical_url")
+    if not canonical_url:
+        canonical_url = f"{origin}{path}" if origin else path
 
     meta_description = extra.get("meta_description")
     if not meta_description:
-        if path == "/":
-            meta_description = (
-                "Audit-ready citation checks for journals, labs, and research teams. "
-                "Upload PDF/DOCX manuscripts, resolve references, and flag missing, retracted, or risky citations."
-            )
-        else:
-            meta_description = (
-                "Audit-ready citation checks with evidence-first reports."
-            )
+        meta_description = path_defaults.get("meta_description") or "Audit-ready citation checks with evidence-first reports."
+
+    meta_keywords = extra.get("meta_keywords")
+    if not meta_keywords:
+        meta_keywords = path_defaults.get("meta_keywords") or _DEFAULT_META_KEYWORDS
 
     robots = extra.get("robots")
     if not robots:
-        robots = "index, follow" if path == "/" else "noindex, nofollow"
+        robots = path_defaults.get("robots") or _DEFAULT_ROBOTS_NOINDEX
+
+    og_type = extra.get("og_type")
+    if not og_type:
+        og_type = path_defaults.get("og_type", "website")
+
+    twitter_card = extra.get("twitter_card")
+    if not twitter_card:
+        twitter_card = path_defaults.get("twitter_card", "summary")
+
+    og_image_url = extra.get("og_image_url")
+    if not og_image_url:
+        og_image_url = f"{origin}/static/og-image.svg" if origin else "/static/og-image.svg"
+
+    og_image_alt = extra.get("og_image_alt")
+    if not og_image_alt:
+        og_image_alt = "miscite citation-check report preview"
 
     return {
         "request": request,
@@ -128,6 +210,11 @@ def template_context(request: Request, **extra):
         "sample_report_url": settings.sample_report_url,
         "canonical_url": canonical_url,
         "meta_description": meta_description,
+        "meta_keywords": meta_keywords,
         "robots": robots,
+        "og_type": og_type,
+        "twitter_card": twitter_card,
+        "og_image_url": og_image_url,
+        "og_image_alt": og_image_alt,
         **extra,
     }

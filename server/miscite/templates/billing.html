@@ -34,7 +34,7 @@
               {% if auto_charge_enabled %}
                 <span class="miscite-muted">Applies after a billed check.</span>
               {% else %}
-                <span class="miscite-muted">Enable in Auto-charge settings.</span>
+                <span class="miscite-muted">Enable in auto-charge settings.</span>
               {% endif %}
             </div>
             {% if can_open_portal %}
@@ -86,7 +86,6 @@
               {% if transactions|length == 0 %}
                 <div class="ds-empty">
                   <h4>No billing activity yet</h4>
-                  <p class="miscite-muted">No billing activity yet.</p>
                   <p class="form-help">Top-ups and usage will appear here once you run checks.</p>
                 </div>
               {% else %}
@@ -121,7 +120,7 @@
                   </div>
                 </div>
                 <div class="ds-table-wrap" role="region" aria-label="Recent billing activity" tabindex="0">
-                  <table class="ds-table" data-txn-table>
+                  <table class="ds-table ds-table--mobile" data-txn-table>
                     <thead>
                       <tr>
                         <th scope="col">Date</th>
@@ -179,7 +178,7 @@
             <div class="ds-card ds-card--subtle">
               <div class="card-content ds-stack">
                 <h3>Add a payment method</h3>
-                <p class="miscite-muted">Required before you can enable auto-charge.</p>
+                <p class="miscite-muted">Required before enabling auto-charge.</p>
                 <ol class="ds-stepper">
                   <li class="ds-stepper-step is-active">
                     <span class="ds-stepper-bullet"></span>
@@ -204,7 +203,7 @@
             <div class="card-content ds-stack">
               <div>
                 <h3>Add funds</h3>
-                <p class="miscite-muted">Top up your balance when you need to run checks. Minimum {{ min_charge_display }}.</p>
+                <p class="miscite-muted">Top up your balance before running checks. Minimum {{ min_charge_display }}.</p>
               </div>
               <div class="ds-filter-group" role="group" aria-label="Quick top-up presets">
                 <button class="ds-button ds-button--secondary ds-button--sm" type="button" data-topup-preset="10">
@@ -261,7 +260,7 @@
             <div class="card-content ds-stack">
               <div>
                 <h3>Auto-charge</h3>
-                <p class="miscite-muted">Keep citation checks running without manual top-ups.</p>
+                <p class="miscite-muted">Keep checks running without manual top-ups.</p>
               </div>
               <form
                 method="post"
@@ -299,7 +298,7 @@
                   recharge <span class="miscite-mono">{{ auto_charge_amount_display }}</span>.
                 </p>
                 <p class="form-help">
-                  Requires a saved payment method. Auto-charge runs after a billed analysis; it will not charge immediately just by enabling.
+                  Requires a saved payment method. Auto-charge runs after billed usage and does not charge immediately when toggled on.
                 </p>
                 {% if auto_charge_last_error %}
                   <div class="ds-alert ds-alert--warning">{{ auto_charge_last_error }}</div>

@@ -14,7 +14,7 @@
           Status: <span class="miscite-mono" id="job-status-text">{{ job.status }}</span>
         </p>
         <p class="miscite-muted">
-          Reports include recommendations to improve citation coverage when available.
+          Review summary metrics, flagged issues, and recommendations in one place.
         </p>
         <div class="hero-meta">
           {% if public_view %}
@@ -26,10 +26,16 @@
             <span class="ds-pill">Needs attention</span>
           {% endif %}
         </div>
+        {% if not public_view %}
+          <div class="hero-actions">
+            <a class="ds-button ds-button--secondary ds-button--sm" href="/dashboard">Back to workspace</a>
+            <a class="ds-button ds-button--ghost ds-button--sm" href="#report-flags">Jump to flags</a>
+          </div>
+        {% endif %}
         <div class="ds-card ds-card--subtle ds-mt-4" id="report-reviewers">
           <div class="card-content">
             <div class="ds-card-header--split">
-              <h4>Potential Reviewers</h4>
+              <h4>Potential reviewers</h4>
               {% if not report %}
                 <span class="ds-pill">pending</span>
               {% elif not da %}
@@ -68,7 +74,7 @@
               </p>
             {% else %}
               <p class="miscite-muted">
-                Based on authors of recent coupling works that share sources with your cited references. Click a name to search.
+                Suggested from recent citation-coupled works related to your reference set.
               </p>
               {% if potential_reviewers and potential_reviewers|length > 0 %}
                 <div class="report-reviewers-scroll">
@@ -353,8 +359,8 @@
             <div class="card-content">
               <p class="eyebrow">Jump to</p>
               <nav class="report-nav-links">
-                <a class="report-nav-link" href="#report-top">Top</a>
-                <a class="report-nav-link" href="#report-reviewers">Potential reviewers</a>
+                <a class="report-nav-link" href="#report-top">Overview</a>
+                <a class="report-nav-link" href="#report-reviewers">Reviewers</a>
                 <a class="report-nav-link" href="#report-summary">Summary</a>
                 <a class="report-nav-link" href="#report-flags">Flags</a>
                 {% if report.deep_analysis %}
@@ -682,8 +688,8 @@
 		          <div class="card-content">
 		            <h3>Recommendations</h3>
 	            <p class="miscite-muted">
-	              Proprietary relevance analysis suggests additional references and improvement opportunities.
-	              Use the <span class="miscite-mono">[R#]</span> markers to jump to the complete reference list below.
+	              Relevance analysis suggests additional references and improvement opportunities.
+	              Use <span class="miscite-mono">[R#]</span> markers to jump to the full reference list below.
 	            </p>
 
             {% if report.deep_analysis.status == "completed" %}
@@ -1478,6 +1484,66 @@
 
       select.addEventListener("change", apply);
       apply();
+    })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll(".report-nav-link[href^='#']"));
+      if (!links.length) {
+        return;
+      }
+
+      var sections = links
+        .map(function (link) {
+          var href = link.getAttribute("href") || "";
+          var id = href.charAt(0) === "#" ? href.slice(1) : "";
+          if (!id) return null;
+          var section = document.getElementById(id);
+          if (!section) return null;
+          return { id: id, link: link, section: section };
+        })
+        .filter(Boolean);
+
+      if (!sections.length) {
+        return;
+      }
+
+      var setCurrent = function (id) {
+        sections.forEach(function (item) {
+          if (item.id === id) {
+            item.link.setAttribute("aria-current", "location");
+          } else {
+            item.link.removeAttribute("aria-current");
+          }
+        });
+      };
+
+      var computeCurrent = function () {
+        var offset = 120;
+        var current = sections[0].id;
+        sections.forEach(function (item) {
+          var top = item.section.getBoundingClientRect().top;
+          if (top <= offset) {
+            current = item.id;
+          }
+        });
+        setCurrent(current);
+      };
+
+      var ticking = false;
+      var onScroll = function () {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(function () {
+          computeCurrent();
+          ticking = false;
+        });
+      };
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+      window.addEventListener("hashchange", computeCurrent);
+      computeCurrent();
     })();
   </script>
   <script nonce="{{ csp_nonce }}">
