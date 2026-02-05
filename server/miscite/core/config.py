@@ -160,6 +160,7 @@ class Settings:
     cache_llm_ttl_days: int
     cache_http_ttl_days: int
     cache_text_ttl_days: int
+    cache_debug_log_each: bool
 
     openrouter_api_key: str
     llm_model: str
@@ -354,6 +355,7 @@ class Settings:
         cache_llm_ttl_days = _env_int("MISCITE_CACHE_LLM_TTL_DAYS", 30, min_value=1, max_value=3650)
         cache_http_ttl_days = _env_int("MISCITE_CACHE_HTTP_TTL_DAYS", 30, min_value=1, max_value=3650)
         cache_text_ttl_days = _env_int("MISCITE_CACHE_TEXT_TTL_DAYS", 30, min_value=1, max_value=3650)
+        cache_debug_log_each = _env_bool("MISCITE_CACHE_DEBUG_LOG_EACH", False)
 
         openrouter_api_key = _env_str("OPENROUTER_API_KEY", "")
         llm_model = _env_str("MISCITE_LLM_MODEL", "google/gemini-3-flash-preview")
@@ -552,6 +554,7 @@ class Settings:
             cache_llm_ttl_days=cache_llm_ttl_days,
             cache_http_ttl_days=cache_http_ttl_days,
             cache_text_ttl_days=cache_text_ttl_days,
+            cache_debug_log_each=cache_debug_log_each,
             openrouter_api_key=openrouter_api_key,
             llm_model=llm_model,
             enable_llm_inappropriate=enable_llm_inappropriate,

@@ -577,7 +577,35 @@ DECISION/RATIONALE: Added thread-safe cache debug counters (hit/miss/error/set) 
 
 ========
 DATE: 2026-02-05
+GOAL: Confirm terminal output reports cache-hit diagnostics.
+PROMPT: Double check the terminal reports cache hits.
+FILES TOUCHED: server/miscite/worker/__init__.py; server/miscite/worker/test_cache_debug_summary.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added worker-side logging of per-job cache-debug summaries (hits/misses/errors/sets plus top namespaces) sourced from `report.cache_debug`, plus a unit test for summary formatting so terminal diagnostics remain stable.
+
+========
+DATE: 2026-02-05
 GOAL: Make “Potential Reviewers” reliably populate from bibliographic coupling.
 PROMPT: “Still shows ‘No reviewer candidates were found for this run.’”
 FILES TOUCHED: server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/references.py; server/miscite/templates/job.html; kb/promptbook.md.
 DECISION/RATIONALE: Deep analysis could hit the node limit during second-hop expansion before collecting citing works, leaving the bibliographic-coupling bucket empty. Reordered expansion to collect citing papers first and changed OpenAlex summary fetching to preserve priority order (so coupling works get author/affiliation metadata within fetch limits). Updated the report template to distinguish “unavailable” (older reports without precomputed reviewers) from true empty results and to surface a hint when no citing works were collected.
+
+========
+DATE: 2026-02-05
+GOAL: Clarify mismatch between cache misses and observed OpenAlex HTTP call volume.
+PROMPT: “The API calls definately more than 282.”
+FILES TOUCHED: server/miscite/sources/openalex.py; server/miscite/worker/__init__.py; server/miscite/worker/test_cache_debug_summary.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added explicit OpenAlex HTTP attempt counters (`http_request`) to cache debug metrics and surfaced `http_calls` in terminal summaries, so cache misses and raw outbound request volume are reported separately and can be compared directly.
+
+========
+DATE: 2026-02-05
+GOAL: Report cache hits/misses per request type (with HTTP counts) for debugging.
+PROMPT: Report cache hits by per request for debugging purposes.
+FILES TOUCHED: server/miscite/worker/__init__.py; server/miscite/worker/test_cache_debug_summary.py; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Extended the worker’s per-job cache summary to include per-namespace `http` counts (when available) so you can correlate cache behavior with outbound request volume per request type without relying on verbose urllib3 debug logs.
+
+========
+DATE: 2026-02-05
+GOAL: Report cache HIT/MISS for every cache lookup.
+PROMPT: I mean report cache status for every request.
+FILES TOUCHED: server/miscite/core/cache.py; server/miscite/core/config.py; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
+DECISION/RATIONALE: Added an opt-in debug flag (`MISCITE_CACHE_DEBUG_LOG_EACH`) that emits per-lookup cache HIT/MISS/EXPIRED lines (with safe OpenAlex hints) so request-by-request cache behavior can be audited without conflating misses with raw HTTP calls.

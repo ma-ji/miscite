@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import logging
 import os
 import threading
 from collections import Counter
@@ -17,6 +18,7 @@ from server.miscite.core.db import get_sessionmaker
 from server.miscite.core.models import CacheEntry
 
 _CACHE_SCHEMA_VERSION = 1
+logger = logging.getLogger("miscite.cache")
 
 
 def _utcnow() -> dt.datetime:
@@ -83,6 +85,35 @@ class Cache:
     def _key(self, namespace: str, parts: Sequence[str]) -> str:
         return _sha256_hex([str(_CACHE_SCHEMA_VERSION), self.scope, namespace, *[str(p) for p in parts]])
 
+    def _debug_log_each(self) -> bool:
+        return bool(
+            self.settings.cache_enabled
+            and getattr(self.settings, "cache_debug_log_each", False)
+            and logger.isEnabledFor(logging.DEBUG)
+        )
+
+    def _debug_hint(self, namespace: str, parts: Sequence[str]) -> str | None:
+        ns = (namespace or "").strip().lower()
+        if not ns or ns.startswith("openrouter."):
+            return None
+
+        if ns == "openalex.work_by_id" and parts:
+            return f"id={str(parts[0]).strip()}"
+        if ns == "openalex.work_by_doi" and parts:
+            return f"doi={str(parts[0]).strip()}"
+        if ns == "openalex.list_citing_works" and parts:
+            suffix = str(parts[0]).strip()
+            rows = str(parts[1]).strip() if len(parts) > 1 else ""
+            return f"id={suffix} rows={rows}".strip()
+        if ns == "openalex.search" and parts:
+            q = " ".join(str(parts[0]).split())
+            if len(q) > 120:
+                q = q[:120] + "…"
+            rows = str(parts[1]).strip() if len(parts) > 1 else ""
+            return f"q={q} rows={rows}".strip()
+
+        return None
+
     def get_json(self, namespace: str, parts: Sequence[str]) -> tuple[bool, Any]:
         if not self.settings.cache_enabled:
             return False, None
@@ -93,20 +124,65 @@ class Cache:
             entry = db.get(CacheEntry, key)
             if not entry:
                 self.debug_stats.increment(namespace, "json_get_miss")
+                if self._debug_log_each():
+                    hint = self._debug_hint(namespace, parts)
+                    logger.debug(
+                        "cache json_get MISS ns=%s scope=%s key=%s%s",
+                        namespace,
+                        self.scope,
+                        key[:12],
+                        f" {hint}" if hint else "",
+                    )
                 return False, None
             expires_at = _as_utc(entry.expires_at)
             if expires_at is None or expires_at < _utcnow():
                 db.delete(entry)
                 db.commit()
                 self.debug_stats.increment(namespace, "json_get_miss")
+                if self._debug_log_each():
+                    hint = self._debug_hint(namespace, parts)
+                    logger.debug(
+                        "cache json_get EXPIRED ns=%s scope=%s key=%s%s",
+                        namespace,
+                        self.scope,
+                        key[:12],
+                        f" {hint}" if hint else "",
+                    )
                 return False, None
             if entry.value_json is None:
                 self.debug_stats.increment(namespace, "json_get_miss")
+                if self._debug_log_each():
+                    hint = self._debug_hint(namespace, parts)
+                    logger.debug(
+                        "cache json_get EMPTY ns=%s scope=%s key=%s%s",
+                        namespace,
+                        self.scope,
+                        key[:12],
+                        f" {hint}" if hint else "",
+                    )
                 return False, None
             self.debug_stats.increment(namespace, "json_get_hit")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache json_get HIT ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key[:12],
+                    f" {hint}" if hint else "",
+                )
             return True, json.loads(entry.value_json)
         except Exception:
             self.debug_stats.increment(namespace, "json_get_error")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache json_get ERROR ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key[:12],
+                    f" {hint}" if hint else "",
+                )
             return False, None
         finally:
             db.close()
@@ -160,13 +236,32 @@ class Cache:
         if not self.settings.cache_enabled:
             return False, ""
         path = self._file_path(namespace, parts, ext="txt")
+        key_short = path.stem[:12]
         try:
             st = path.stat()
         except FileNotFoundError:
             self.debug_stats.increment(namespace, "file_get_miss")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache file_get MISS ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key_short,
+                    f" {hint}" if hint else "",
+                )
             return False, ""
         except Exception:
             self.debug_stats.increment(namespace, "file_get_error")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache file_get ERROR ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key_short,
+                    f" {hint}" if hint else "",
+                )
             return False, ""
 
         ttl_seconds = float(ttl_days) * 86400.0
@@ -176,13 +271,40 @@ class Cache:
             except OSError:
                 pass
             self.debug_stats.increment(namespace, "file_get_expired")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache file_get EXPIRED ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key_short,
+                    f" {hint}" if hint else "",
+                )
             return False, ""
 
         try:
             self.debug_stats.increment(namespace, "file_get_hit")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache file_get HIT ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key_short,
+                    f" {hint}" if hint else "",
+                )
             return True, path.read_text(encoding="utf-8")
         except Exception:
             self.debug_stats.increment(namespace, "file_get_error")
+            if self._debug_log_each():
+                hint = self._debug_hint(namespace, parts)
+                logger.debug(
+                    "cache file_get ERROR ns=%s scope=%s key=%s%s",
+                    namespace,
+                    self.scope,
+                    key_short,
+                    f" {hint}" if hint else "",
+                )
             return False, ""
 
     def set_text_file(self, namespace: str, parts: Sequence[str], value: str) -> None:

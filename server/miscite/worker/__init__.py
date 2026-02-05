@@ -41,6 +41,74 @@ class JobCanceled(RuntimeError):
     """Raised when a job is manually canceled by the user."""
 
 
+def _cache_debug_summary(cache_debug: object, *, max_namespaces: int = 5) -> str | None:
+    if not isinstance(cache_debug, dict):
+        return None
+
+    totals_raw = cache_debug.get("totals")
+    totals = totals_raw if isinstance(totals_raw, dict) else {}
+    hits = 0
+    misses = 0
+    errors = 0
+    sets = 0
+    http_calls = 0
+    for key, val in totals.items():
+        try:
+            count = int(val or 0)
+        except Exception:
+            continue
+        metric = str(key or "")
+        if metric.endswith("_get_hit"):
+            hits += count
+        elif metric.endswith("_get_miss") or metric.endswith("_get_expired"):
+            misses += count
+        elif metric.endswith("_get_error") or metric.endswith("_set_error"):
+            errors += count
+        elif metric.endswith("_set_ok"):
+            sets += count
+        elif metric == "http_request":
+            http_calls += count
+
+    parts = [
+        f"hits={hits}",
+        f"misses={misses}",
+        f"http_calls={http_calls}",
+        f"errors={errors}",
+        f"sets={sets}",
+    ]
+
+    namespaces_raw = cache_debug.get("namespaces")
+    namespaces = namespaces_raw if isinstance(namespaces_raw, dict) else {}
+    ranked: list[tuple[str, int, int, int]] = []
+    for namespace, metrics_raw in namespaces.items():
+        if not isinstance(metrics_raw, dict):
+            continue
+        ns_hits = 0
+        ns_misses = 0
+        ns_http = 0
+        for key, val in metrics_raw.items():
+            try:
+                count = int(val or 0)
+            except Exception:
+                continue
+            metric = str(key or "")
+            if metric.endswith("_get_hit"):
+                ns_hits += count
+            elif metric.endswith("_get_miss") or metric.endswith("_get_expired"):
+                ns_misses += count
+            elif metric == "http_request":
+                ns_http += count
+        if ns_hits or ns_misses:
+            ranked.append((str(namespace), ns_http, ns_hits, ns_misses))
+
+    ranked.sort(key=lambda item: (item[1], item[3], item[2], item[0]), reverse=True)
+    if ranked:
+        top = ranked[: max(1, int(max_namespaces))]
+        ns_parts = [f"{name}(h={h},m={m},http={http})" for name, http, h, m in top]
+        parts.append("top=" + ", ".join(ns_parts))
+    return "; ".join(parts)
+
+
 def _as_utc(ts: dt.datetime | None) -> dt.datetime | None:
     if ts is None:
         return None
@@ -145,7 +213,7 @@ def _ensure_access_token(
         db.close()
 
 
-def _process_job(settings: Settings, job_id: str) -> None:
+def _process_job(settings: Settings, job_id: str, *, log: logging.Logger | None = None) -> None:
     SessionLocal = get_sessionmaker(settings)
     db = SessionLocal()
     progress_db = SessionLocal()
@@ -172,6 +240,10 @@ def _process_job(settings: Settings, job_id: str) -> None:
             progress_cb=progress_cb,
         )
         usage_summary = usage_tracker.summary()
+        if log is not None and isinstance(report, dict):
+            summary = _cache_debug_summary(report.get("cache_debug"))
+            if summary:
+                log.info("Job %s cache debug: %s", job_id, summary)
 
         if _is_job_canceled(db, job_id):
             raise JobCanceled("Canceled by user.")
@@ -595,9 +667,9 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
             time.sleep(settings.worker_poll_seconds)
             continue
 
-        log.info("Processing job %s", job_id)
+            log.info("Processing job %s", job_id)
         try:
-            _process_job(settings, job_id)
+            _process_job(settings, job_id, log=log)
             status = None
             try:
                 with SessionLocal() as status_db:

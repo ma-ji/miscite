@@ -45,6 +45,11 @@ class OpenAlexClient:
         days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
         return float(max(0, days)) * 86400.0
 
+    def _debug_increment(self, namespace: str, metric: str) -> None:
+        cache = self.cache
+        if cache and cache.settings.cache_enabled:
+            cache.debug_stats.increment(namespace, metric)
+
     def get_work_by_doi(self, doi: str) -> dict | None:
         doi_norm = normalize_doi(doi)
         if not doi_norm:
@@ -57,6 +62,7 @@ class OpenAlexClient:
         url = f"https://api.openalex.org/works/https://doi.org/{doi_norm}"
         for attempt in range(3):
             try:
+                self._debug_increment("openalex.work_by_doi", "http_request")
                 resp = self._client().get(url, timeout=self.timeout_seconds)
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled:
@@ -96,6 +102,7 @@ class OpenAlexClient:
 
         for attempt in range(3):
             try:
+                self._debug_increment("openalex.work_by_id", "http_request")
                 resp = self._client().get(url, timeout=self.timeout_seconds)
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled and suffix:
@@ -120,6 +127,7 @@ class OpenAlexClient:
                 return cached
         for attempt in range(3):
             try:
+                self._debug_increment("openalex.search", "http_request")
                 resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 results = (resp.json() or {}).get("results") or []
@@ -152,6 +160,7 @@ class OpenAlexClient:
         }
         for attempt in range(3):
             try:
+                self._debug_increment("openalex.list_citing_works", "http_request")
                 resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 results = (resp.json() or {}).get("results") or []
