@@ -33,7 +33,11 @@ from server.miscite.analysis.checks.inappropriate import check_inappropriate_cit
 from server.miscite.analysis.pipeline.resolve import resolve_references
 from server.miscite.analysis.report.methodology import build_methodology_md
 from server.miscite.analysis.extract.text_extract import extract_text
-from server.miscite.analysis.shared.excluded_sources import load_excluded_sources, matches_excluded_source, reference_is_excluded
+from server.miscite.analysis.shared.excluded_sources import (
+    load_excluded_sources,
+    reference_is_excluded,
+    resolved_work_is_excluded,
+)
 from server.miscite.analysis.shared.normalize import normalize_author_year_locator
 from server.miscite.core.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
@@ -458,29 +462,7 @@ def analyze_document(
     excluded_ref_ids_meta: set[str] = set()
     if excluded_sources:
         for ref_id, work in resolved_by_ref_id.items():
-            if not work:
-                continue
-            candidates: list[str] = []
-            if isinstance(work.journal, str) and work.journal.strip():
-                candidates.append(work.journal.strip())
-            if isinstance(work.publisher, str) and work.publisher.strip():
-                candidates.append(work.publisher.strip())
-            if isinstance(work.openalex_record, dict):
-                host = work.openalex_record.get("host_venue")
-                if isinstance(host, dict):
-                    for key in ("display_name", "publisher"):
-                        val = host.get(key)
-                        if isinstance(val, str) and val.strip():
-                            candidates.append(val.strip())
-                for loc_key in ("primary_location", "best_oa_location"):
-                    loc = work.openalex_record.get(loc_key)
-                    if isinstance(loc, dict):
-                        src = loc.get("source")
-                        if isinstance(src, dict):
-                            val = src.get("display_name")
-                            if isinstance(val, str) and val.strip():
-                                candidates.append(val.strip())
-            if any(matches_excluded_source(name, excluded_sources) for name in candidates):
+            if resolved_work_is_excluded(work, excluded_sources):
                 excluded_ref_ids_meta.add(ref_id)
 
     excluded_ref_ids_all = excluded_ref_ids | excluded_ref_ids_meta
@@ -519,13 +501,13 @@ def analyze_document(
 
     issues: list[dict] = []
 
-    new_issues, _missing_bib, _ambiguous_bib = check_missing_bibliography_refs(
+    new_issues, missing_bib, ambiguous_bib = check_missing_bibliography_refs(
         citation_matches=citation_matches,
         progress=(lambda msg, frac: _progress("flags", msg, 0.72 + 0.03 * frac)),
     )
     issues.extend(new_issues)
 
-    new_issues, _unresolved_refs, _retracted_refs, _predatory_matches = check_retractions_and_predatory_venues(
+    new_issues, unresolved_refs, retracted_refs, predatory_matches = check_retractions_and_predatory_venues(
         settings=settings,
         references=references,
         resolved_by_ref_id=resolved_for_analysis,
@@ -538,7 +520,7 @@ def analyze_document(
     issues.extend(new_issues)
 
     llm_max_calls = int(settings.llm_max_calls)
-    new_issues, _potentially_inappropriate, llm_calls, used_llm = check_inappropriate_citations(
+    new_issues, potentially_inappropriate, llm_calls, used_llm = check_inappropriate_citations(
         settings=settings,
         llm_client=llm_client,
         local_nli=local_nli,
@@ -549,39 +531,16 @@ def analyze_document(
     if used_llm:
         llm_used = True
     issues.extend(new_issues)
-    issue_counts = {
-        "ambiguous_bibliography_refs": 0,
-        "missing_bibliography_refs": 0,
-        "unresolved_references": 0,
-        "retracted_references": 0,
-        "predatory_matches": 0,
-        "potentially_inappropriate": 0,
-    }
-    for issue in issues:
-        if not isinstance(issue, dict):
-            continue
-        issue_type = str(issue.get("type") or "")
-        if issue_type == "ambiguous_bibliography_ref":
-            issue_counts["ambiguous_bibliography_refs"] += 1
-        elif issue_type == "missing_bibliography_ref":
-            issue_counts["missing_bibliography_refs"] += 1
-        elif issue_type == "unresolved_reference":
-            issue_counts["unresolved_references"] += 1
-        elif issue_type == "retracted_article":
-            issue_counts["retracted_references"] += 1
-        elif issue_type == "predatory_venue_match":
-            issue_counts["predatory_matches"] += 1
-        elif issue_type in {"potentially_inappropriate", "needs_manual_review"}:
-            issue_counts["potentially_inappropriate"] += 1
+
     summary = {
         "total_citations": len(references),
         "total_intext_citations": len(citations),
-        "ambiguous_bibliography_refs": issue_counts["ambiguous_bibliography_refs"],
-        "missing_bibliography_refs": issue_counts["missing_bibliography_refs"],
-        "unresolved_references": issue_counts["unresolved_references"],
-        "retracted_references": issue_counts["retracted_references"],
-        "predatory_matches": issue_counts["predatory_matches"],
-        "potentially_inappropriate": issue_counts["potentially_inappropriate"],
+        "ambiguous_bibliography_refs": ambiguous_bib,
+        "missing_bibliography_refs": missing_bib,
+        "unresolved_references": unresolved_refs,
+        "retracted_references": retracted_refs,
+        "predatory_matches": predatory_matches,
+        "potentially_inappropriate": potentially_inappropriate,
     }
 
     deep_analysis_report: dict | None = None

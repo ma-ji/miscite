@@ -4,6 +4,7 @@ import re
 from collections import defaultdict, deque
 from dataclasses import dataclass
 
+from server.miscite.analysis.match.index import build_reference_index
 from server.miscite.analysis.match.match import match_citations_to_references
 from server.miscite.analysis.parse.citation_parsing import (
     CitationInstance,
@@ -170,6 +171,9 @@ def extract_cited_ref_ids_by_subsection(
     if not subsections or not references:
         return {}
 
+    reference_index = build_reference_index(
+        references, reference_records=reference_records
+    )
     cited: dict[str, set[str]] = defaultdict(set)
     for subsection in subsections:
         cits = extract_citation_instances(subsection.text)
@@ -177,7 +181,12 @@ def extract_cited_ref_ids_by_subsection(
             continue
         cits = split_multi_citations(cits)
         cits = normalize_llm_citations(cits)
-        matches = match_citations_to_references(cits, references, reference_records=reference_records)
+        matches = match_citations_to_references(
+            cits,
+            references,
+            reference_records=reference_records,
+            reference_index=reference_index,
+        )
         for m in matches:
             if m.status != "matched" or not m.ref:
                 continue

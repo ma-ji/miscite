@@ -35,7 +35,10 @@ from server.miscite.analysis.deep_analysis.types import (
 from server.miscite.analysis.match.types import CitationMatch
 from server.miscite.analysis.parse.citation_parsing import ReferenceEntry
 from server.miscite.analysis.shared.normalize import normalize_doi
-from server.miscite.analysis.shared.excluded_sources import load_excluded_sources, matches_excluded_source
+from server.miscite.analysis.shared.excluded_sources import (
+    load_excluded_sources,
+    openalex_work_is_excluded,
+)
 from server.miscite.core.config import Settings
 from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.prompts import get_prompt, render_prompt
@@ -73,25 +76,7 @@ def run_deep_analysis(
             progress(message, max(0.0, min(1.0, float(frac))))
 
     def _work_is_excluded(work: dict | None) -> bool:
-        if not excluded_sources or not isinstance(work, dict):
-            return False
-        host = work.get("host_venue")
-        if isinstance(host, dict):
-            for key in ("display_name", "publisher"):
-                val = host.get(key)
-                if isinstance(val, str) and matches_excluded_source(val, excluded_sources):
-                    return True
-        for loc_key in ("primary_location", "best_oa_location"):
-            loc = work.get(loc_key)
-            if not isinstance(loc, dict):
-                continue
-            src = loc.get("source")
-            if not isinstance(src, dict):
-                continue
-            val = src.get("display_name")
-            if isinstance(val, str) and matches_excluded_source(val, excluded_sources):
-                return True
-        return False
+        return openalex_work_is_excluded(work, excluded_sources)
 
     # -------------------------
     # Original refs + contexts
@@ -294,6 +279,19 @@ def run_deep_analysis(
         edges.append((src, dst))
         return True
 
+    def _mark_excluded_node(node_id: str | None) -> None:
+        if not node_id:
+            return
+        node_id = str(node_id).strip()
+        if not node_id:
+            return
+        with excluded_nodes_lock:
+            excluded_nodes.add(node_id)
+            if node_id.startswith("https://openalex.org/") or node_id.startswith("https://api.openalex.org/works/"):
+                suffix = node_id.rstrip("/").split("/")[-1]
+                if suffix:
+                    excluded_nodes.add(suffix)
+
     def _safe_get_work(openalex_id: str) -> dict | None:
         try:
             work = openalex.get_work_by_id(openalex_id)
@@ -303,14 +301,7 @@ def run_deep_analysis(
             node_id = None
             if isinstance(work, dict):
                 node_id = work.get("id")
-            node_id = str(node_id or openalex_id).strip()
-            if node_id:
-                with excluded_nodes_lock:
-                    excluded_nodes.add(node_id)
-                    if node_id.startswith("https://openalex.org/") or node_id.startswith("https://api.openalex.org/works/"):
-                        suffix = node_id.rstrip("/").split("/")[-1]
-                        if suffix:
-                            excluded_nodes.add(suffix)
+            _mark_excluded_node(str(node_id or openalex_id))
             return None
         return work
 
@@ -331,6 +322,27 @@ def run_deep_analysis(
             if len(out) >= settings.deep_analysis_max_references_per_work:
                 break
         return out
+
+    def _expand_second_hop(*, seeds: list[str], sink: set[str]) -> None:
+        if not seeds or trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
+            return
+        with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
+            for sid, work in zip(seeds, ex.map(_safe_get_work, seeds)):
+                if not work:
+                    trunc["skipped_openalex_fetches"] += 1
+                    continue
+                refs2 = _extract_referenced_works(work)
+                for rid in refs2:
+                    if rid in excluded_nodes:
+                        continue
+                    if not _try_add_node(rid):
+                        if trunc["hit_max_nodes"]:
+                            break
+                        continue
+                    sink.add(rid)
+                    _try_add_edge(sid, rid)
+                if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
+                    break
 
     # Step 2: works cited by key refs (Cited Refs)
     cited_refs: set[str] = set()
@@ -379,14 +391,7 @@ def run_deep_analysis(
                     continue
                 if _work_is_excluded(w):
                     wid_ex = w.get("id")
-                    wid_ex = str(wid_ex or "").strip()
-                    if wid_ex:
-                        with excluded_nodes_lock:
-                            excluded_nodes.add(wid_ex)
-                            if wid_ex.startswith("https://openalex.org/") or wid_ex.startswith("https://api.openalex.org/works/"):
-                                suffix = wid_ex.rstrip("/").split("/")[-1]
-                                if suffix:
-                                    excluded_nodes.add(suffix)
+                    _mark_excluded_node(str(wid_ex or ""))
                     continue
                 wid = w.get("id")
                 if not isinstance(wid, str) or not wid.strip():
@@ -424,23 +429,7 @@ def run_deep_analysis(
             limitations.append(
                 "Deep analysis: expansion from citing papers was limited to keep the run fast and memory-safe."
             )
-        with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
-            for sid, work in zip(seeds, ex.map(_safe_get_work, seeds)):
-                if not work:
-                    trunc["skipped_openalex_fetches"] += 1
-                    continue
-                refs2 = _extract_referenced_works(work)
-                for rid in refs2:
-                    if rid in excluded_nodes:
-                        continue
-                    if not _try_add_node(rid):
-                        if trunc["hit_max_nodes"]:
-                            break
-                        continue
-                    citing2_refs.add(rid)
-                    _try_add_edge(sid, rid)
-                if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
-                    break
+        _expand_second_hop(seeds=seeds, sink=citing2_refs)
 
     _p("Collecting second-hop citations", 0.62)
 
@@ -452,24 +441,7 @@ def run_deep_analysis(
             limitations.append(
                 "Deep analysis: second-hop expansion was limited to keep the run fast and memory-safe."
             )
-
-        with ThreadPoolExecutor(max_workers=settings.deep_analysis_max_workers) as ex:
-            for sid, work in zip(seeds, ex.map(_safe_get_work, seeds)):
-                if not work:
-                    trunc["skipped_openalex_fetches"] += 1
-                    continue
-                refs2 = _extract_referenced_works(work)
-                for rid in refs2:
-                    if rid in excluded_nodes:
-                        continue
-                    if not _try_add_node(rid):
-                        if trunc["hit_max_nodes"]:
-                            break
-                        continue
-                    cited2_refs.add(rid)
-                    _try_add_edge(sid, rid)
-                if trunc["hit_max_nodes"] or trunc["hit_max_edges"]:
-                    break
+        _expand_second_hop(seeds=seeds, sink=cited2_refs)
 
     if excluded_nodes:
         cited_refs.difference_update(excluded_nodes)

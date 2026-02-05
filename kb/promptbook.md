@@ -714,3 +714,10 @@ GOAL: Order reviewer suggestions by author centrality with configurable metric.
 PROMPT: Improve the order of authors: build coauthor network from coupling_top articles; compute degree/closeness/betweenness; order by degree by default; make order configurable.
 FILES TOUCHED: server/miscite/analysis/deep_analysis/reviewers.py; server/miscite/analysis/deep_analysis/deep_analysis.py; server/miscite/analysis/deep_analysis/test_reviewers.py; server/miscite/core/config.py; server/miscite/worker/__init__.py; server/miscite/worker/test_reviewer_debug_summary.py; .env.example; docs/DEVELOPMENT.md; kb/promptbook.md.
 DECISION/RATIONALE: Added coauthor-network centrality scoring from coupling-top works and ordered reviewers by the configured centrality metric (default degree). Exposed `MISCITE_DEEP_ANALYSIS_REVIEWER_ORDER` and logged the active order rule in terminal debug output.
+
+========
+DATE: 2026-02-05
+GOAL: Improve end-to-end pipeline efficiency and remove redundant logic across exclusion filtering, matching, and summary aggregation.
+PROMPT: THINK HARD: Analyze entire pipeline, improve the efficiency and remove redundancy.
+FILES TOUCHED: server/miscite/analysis/shared/excluded_sources.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/match/match.py, server/miscite/analysis/deep_analysis/subsections.py, server/miscite/analysis/deep_analysis/references.py, server/miscite/analysis/match/test_match.py, kb/promptbook.md.
+DECISION/RATIONALE: Added cached excluded-source loading and shared helpers to classify OpenAlex/resolved-work source labels in one place, then reused them in both pipeline and deep analysis to remove duplicated venue-matching code. Eliminated a full post-processing issue recount pass by using counts already returned from check stages. Added optional prebuilt reference indexing in citation↔bibliography matching and reused a single index across subsection-level matching to avoid rebuilding the same index per subsection. Also removed repeated deep-analysis second-hop expansion blocks via a shared helper and minor hot-path set allocation overhead.

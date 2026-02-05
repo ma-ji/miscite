@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from server.miscite.analysis.match.index import build_reference_index
+from server.miscite.analysis.match.index import ReferenceIndex, build_reference_index
 from server.miscite.analysis.match.types import CitationMatch, CitationMatchCandidate
 from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
 from server.miscite.analysis.shared.normalize import normalize_author_name, normalize_author_year_locator, normalize_year_token
@@ -76,8 +76,11 @@ def match_citations_to_references(
     references: list[ReferenceEntry],
     *,
     reference_records: dict[str, dict],
+    reference_index: ReferenceIndex | None = None,
 ) -> list[CitationMatch]:
-    index = build_reference_index(references, reference_records=reference_records)
+    index = reference_index or build_reference_index(
+        references, reference_records=reference_records
+    )
     matches: list[CitationMatch] = []
 
     for cit in citations:

@@ -1,5 +1,6 @@
 import unittest
 
+from server.miscite.analysis.match.index import build_reference_index
 from server.miscite.analysis.match.match import match_citations_to_references
 from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
 from server.miscite.analysis.parse.llm_parsing import parse_references_with_llm
@@ -55,6 +56,57 @@ class TestCitationBibliographyMatching(unittest.TestCase):
         self.assertEqual(matches[0].status, "matched")
         self.assertIsNotNone(matches[0].ref)
         self.assertEqual(matches[0].ref.ref_id, "ref-1")
+
+    def test_prebuilt_reference_index_matches_default_path(self) -> None:
+        citations = [
+            CitationInstance(
+                kind="author_year",
+                raw="(Matta, 2026a)",
+                locator="matta-2026a",
+                context="x",
+            ),
+            CitationInstance(
+                kind="author_year",
+                raw="(Varela, Thompson, & Rosch, 1991)",
+                locator="varela, thompson, & rosch, 1991",
+                context="x",
+            ),
+        ]
+        references = [
+            ReferenceEntry(
+                ref_id="ref-1",
+                raw="Matta. (2026). Some title.",
+                ref_number=None,
+                doi=None,
+                year=2026,
+                first_author="matta",
+            ),
+            ReferenceEntry(
+                ref_id="ref-2",
+                raw="Varela, F. J., Thompson, E., & Rosch, E. (1991). The Embodied Mind.",
+                ref_number=None,
+                doi=None,
+                year=1991,
+                first_author="varela",
+            ),
+        ]
+        reference_records: dict[str, dict] = {}
+        default_matches = match_citations_to_references(
+            citations,
+            references,
+            reference_records=reference_records,
+        )
+        prebuilt_index = build_reference_index(
+            references,
+            reference_records=reference_records,
+        )
+        indexed_matches = match_citations_to_references(
+            citations,
+            references,
+            reference_records=reference_records,
+            reference_index=prebuilt_index,
+        )
+        self.assertEqual(default_matches, indexed_matches)
 
 
 class _StubLlm:

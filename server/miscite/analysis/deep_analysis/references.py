@@ -466,6 +466,8 @@ def build_reference_master_list(
             dst["ref_id"] = src.get("ref_id")
         return dst
 
+    key_ref_id_set = set(key_ref_ids)
+
     for node_id in ordered_nodes:
         ref_id = original_ref_id_by_node.get(node_id)
         meta: dict[str, Any] = {
@@ -489,7 +491,7 @@ def build_reference_master_list(
             "type_crossref": None,
             "genre": None,
             "in_paper": bool(ref_id),
-            "is_key": bool(ref_id) and (ref_id in set(key_ref_ids)),
+            "is_key": bool(ref_id) and (ref_id in key_ref_id_set),
             "ref_id": ref_id,
         }
 
