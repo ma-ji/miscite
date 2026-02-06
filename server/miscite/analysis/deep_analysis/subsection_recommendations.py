@@ -11,6 +11,10 @@ from server.miscite.llm.openrouter import OpenRouterClient
 from server.miscite.prompts import get_prompt, render_prompt
 
 
+_RID_RE = re.compile(r"R\d{1,4}", re.IGNORECASE)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
 def build_subsection_recommendations(
     *,
     settings: Settings,
@@ -26,22 +30,24 @@ def build_subsection_recommendations(
 
     subsection_by_id = {s.subsection_id: s for s in subsections}
     graph_by_id: dict[str, dict] = {}
-    for g in subsection_graphs or []:
-        if not isinstance(g, dict):
+    for graph in subsection_graphs or []:
+        if not isinstance(graph, dict):
             continue
-        sid = str(g.get("subsection_id") or "").strip()
+        sid = str(graph.get("subsection_id") or "").strip()
         if not sid or sid not in subsection_by_id or sid in graph_by_id:
             continue
-        graph_by_id[sid] = g
+        graph_by_id[sid] = graph
 
     items: list[dict[str, Any]] = []
-
-    # Convert node-based graphs to rid-based (when available), and prepare a bounded reference payload for the LLM.
     for subsection in subsections:
         sid = subsection.subsection_id
-        g = graph_by_id.get(sid)
+        graph = graph_by_id.get(sid)
 
-        node_distances = g.get("node_distances") if isinstance(g, dict) and isinstance(g.get("node_distances"), dict) else {}
+        node_distances = (
+            graph.get("node_distances")
+            if isinstance(graph, dict) and isinstance(graph.get("node_distances"), dict)
+            else {}
+        )
         dist_by_rid: dict[str, int] = {}
         for node_id, dist in node_distances.items():
             if not isinstance(node_id, str):
@@ -55,44 +61,18 @@ def build_subsection_recommendations(
                 continue
             prev = dist_by_rid.get(rid)
             dist_by_rid[rid] = d if prev is None else min(prev, d)
-        seed_rids = sorted([rid for rid, d in dist_by_rid.items() if d == 0])
-        rids_in_graph = set(dist_by_rid.keys())
 
-        # Convert edges to rid pairs (bounded + de-duped).
-        rid_edges: list[list[str]] = []
-        seen_edges: set[tuple[str, str]] = set()
-        edges = g.get("edges") if isinstance(g, dict) and isinstance(g.get("edges"), list) else []
-        for edge in edges:
-            if not (isinstance(edge, (list, tuple)) and len(edge) == 2):
-                continue
-            src, dst = edge
-            if not isinstance(src, str) or not isinstance(dst, str):
-                continue
-            a = rid_by_node_id.get(src)
-            b = rid_by_node_id.get(dst)
-            if not a or not b or a == b:
-                continue
-            key = (a, b)
-            if key in seen_edges:
-                continue
-            seen_edges.add(key)
-            if a in rids_in_graph and b in rids_in_graph:
-                rid_edges.append([a, b])
-            if len(rid_edges) >= max(100, int(settings.deep_analysis_subsection_graph_max_edges)):
-                break
-
-        # Build a compact reference payload: always include all seed refs, then prioritize uncited nearby works.
         ref_items: list[dict[str, Any]] = []
-        for rid, d in dist_by_rid.items():
+        for rid, distance in dist_by_rid.items():
             ref = references_by_rid.get(rid)
             if not isinstance(ref, dict):
                 continue
             ref_items.append(
                 {
                     "rid": rid,
-                    "distance": d,
+                    "distance": distance,
                     "in_paper": bool(ref.get("in_paper")),
-                    "cited_in_subsection": d == 0,
+                    "cited_in_subsection": distance == 0,
                     "title": ref.get("title"),
                     "year": ref.get("year"),
                     "venue": ref.get("venue"),
@@ -105,59 +85,55 @@ def build_subsection_recommendations(
             ref_items,
             max_refs=max(10, int(settings.deep_analysis_subsection_prompt_max_refs)),
         )
+        seed_count = sum(1 for rid, d in dist_by_rid.items() if d == 0 and rid)
 
         items.append(
             {
                 "subsection_id": sid,
                 "title": subsection.title,
                 "level": subsection.level,
-                "seed_rids": seed_rids,
-                "graph": {
-                    "hop_limit": 3,
-                    "nodes": [
-                        {"rid": rid, "distance": int(dist_by_rid[rid]), "in_paper": bool(references_by_rid.get(rid, {}).get("in_paper"))}
-                        for rid in sorted(dist_by_rid.keys(), key=lambda r: (dist_by_rid.get(r, 99), r))
-                    ],
-                    "edges": rid_edges,
-                    "truncation": g.get("truncation") if isinstance(g, dict) and isinstance(g.get("truncation"), dict) else {},
-                },
                 "prompt_references": ref_items,
                 "plan": None,
                 "plan_mode": "skipped",
+                "_seed_count": seed_count,
+                "_node_count": len(dist_by_rid),
             }
         )
 
     if not items:
         return {"status": "skipped", "reason": "No usable sections were found."}, 0
 
-    # Decide how many LLM calls we can afford.
     llm_enabled = bool(settings.enable_deep_analysis_llm_subsection_recommendations)
     remaining = None if llm_budget is None else max(0, int(llm_budget))
     max_calls = len(items) if remaining is None else min(len(items), remaining)
 
     calls_used = 0
-
     if llm_enabled and max_calls > 0:
         order_by_sid = {s.subsection_id: idx for idx, s in enumerate(subsections)}
 
         def _call_priority(item: dict[str, Any]) -> tuple[int, int, int]:
-            seeds = item.get("seed_rids") if isinstance(item.get("seed_rids"), list) else []
-            graph = item.get("graph") if isinstance(item.get("graph"), dict) else {}
-            nodes = graph.get("nodes") if isinstance(graph.get("nodes"), list) else []
             sid = str(item.get("subsection_id") or "")
             order = int(order_by_sid.get(sid, 1_000_000))
-            return (-len(seeds), -len(nodes), order)
+            return (
+                -int(item.get("_seed_count") or 0),
+                -int(item.get("_node_count") or 0),
+                order,
+            )
 
         to_call = sorted(items, key=_call_priority)[:max_calls]
         calls_used = len(to_call)
         max_workers = min(max(1, int(settings.deep_analysis_max_workers)), len(to_call))
 
         def _call(item: dict[str, Any]) -> dict | None:
+            sid = str(item.get("subsection_id") or "")
+            section = subsection_by_id.get(sid)
+            if not section:
+                return None
             title = str(item.get("title") or "").strip()
-            text = str(subsection_by_id[item["subsection_id"]].text or "")
-            text = " ".join(text.split())
-            if len(text) > int(settings.deep_analysis_subsection_text_max_chars):
-                text = text[: int(settings.deep_analysis_subsection_text_max_chars)] + "\u2026"
+            section_text_full = str(section.text or "")
+            text_for_prompt = " ".join(section_text_full.split())
+            if len(text_for_prompt) > int(settings.deep_analysis_subsection_text_max_chars):
+                text_for_prompt = text_for_prompt[: int(settings.deep_analysis_subsection_text_max_chars)] + "..."
 
             refs_json = json.dumps(item.get("prompt_references") or [], ensure_ascii=False)
             payload = llm_client.chat_json(
@@ -165,7 +141,7 @@ def build_subsection_recommendations(
                 user=render_prompt(
                     "deep_analysis/subsection_plan/user",
                     title=title,
-                    text=text,
+                    text=text_for_prompt,
                     references_json=refs_json,
                 ),
             )
@@ -183,53 +159,62 @@ def build_subsection_recommendations(
                 and (not bool(r.get("cited_in_subsection")))
                 and int(r.get("distance") or 99) > 0
             }
-            cleaned = _validate_plan(
-                payload, allowed_rids=allowed, allowed_integration_rids=allowed_integrations
+            return _validate_plan(
+                payload,
+                allowed_rids=allowed,
+                allowed_integration_rids=allowed_integrations,
+                section_text=section_text_full,
             )
-            return cleaned
 
-        plans: dict[str, dict] = {}
+        plans: dict[str, dict[str, Any]] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures = {ex.submit(_call, item): item["subsection_id"] for item in to_call}
+            futures = {ex.submit(_call, item): str(item.get("subsection_id") or "") for item in to_call}
             for fut in as_completed(futures):
                 sid = futures[fut]
                 try:
                     out = fut.result()
                 except Exception as e:
                     out = None
+                    fallback_anchor = ""
+                    if sid in subsection_by_id:
+                        candidates = _extract_anchor_candidates(str(subsection_by_id.get(sid).text or ""))
+                        fallback_anchor = candidates[0] if candidates else ""
                     plans[sid] = {
-                        "summary": "LLM section plan failed; consider reviewing this section manually.",
+                        "summary": "This section plan failed to generate and should be reviewed manually.",
                         "improvements": [],
                         "reference_integrations": [],
                         "questions": [str(e)[:200]],
+                        "anchor_quote": fallback_anchor,
                     }
                 if out:
                     plans[sid] = out
 
         for item in items:
-            sid = item["subsection_id"]
+            sid = str(item.get("subsection_id") or "")
             if sid in plans:
                 item["plan"] = plans[sid]
                 item["plan_mode"] = "llm"
 
-    # Heuristic fallback for anything left without a plan.
     for item in items:
         if item.get("plan") is not None:
             continue
-        item["plan"] = _heuristic_plan(item.get("prompt_references") or [])
+        sid = str(item.get("subsection_id") or "")
+        section_text = str(subsection_by_id.get(sid).text or "") if sid in subsection_by_id else ""
+        item["plan"] = _heuristic_plan(item.get("prompt_references") or [], section_text=section_text)
         item["plan_mode"] = "heuristic"
 
-    # Remove prompt-only payload from the report.
     for item in items:
         item.pop("prompt_references", None)
+        item.pop("_seed_count", None)
+        item.pop("_node_count", None)
 
     note = None
     if not llm_enabled:
-        note = "LLM section recommendations disabled; used a heuristic fallback."
+        note = "Used heuristic section plans because LLM section planning is disabled."
     elif remaining is not None and remaining <= 0:
-        note = "LLM call budget exhausted; used a heuristic fallback for section recommendations."
+        note = "Used heuristic section plans because the call budget was exhausted."
     elif remaining is not None and remaining < len(items):
-        note = "LLM call budget covered only a subset of sections; remaining sections used a heuristic fallback."
+        note = "Used a mix of LLM and heuristic section plans due to call budget limits."
 
     return (
         {
@@ -247,16 +232,34 @@ def _select_refs_for_prompt(ref_items: list[dict[str, Any]], *, max_refs: int) -
         return int(y) if isinstance(y, int) else 0
 
     seeds = [r for r in ref_items if int(r.get("distance") or 99) == 0]
-    # "Not cited" means not cited in this subsection (distance>0), regardless of whether the work
-    # is cited elsewhere in the manuscript (in_paper).
-    in_paper_neighbors = [r for r in ref_items if bool(r.get("in_paper")) and int(r.get("distance") or 99) > 0]
-    new_neighbors = [r for r in ref_items if (not bool(r.get("in_paper"))) and int(r.get("distance") or 99) > 0]
+    in_paper_neighbors = [
+        r
+        for r in ref_items
+        if bool(r.get("in_paper")) and int(r.get("distance") or 99) > 0
+    ]
+    new_neighbors = [
+        r
+        for r in ref_items
+        if (not bool(r.get("in_paper"))) and int(r.get("distance") or 99) > 0
+    ]
 
     seeds = sorted(seeds, key=lambda r: str(r.get("rid") or ""))
     in_paper_neighbors = sorted(
-        in_paper_neighbors, key=lambda r: (int(r.get("distance") or 99), -_year(r), str(r.get("rid") or "")))
+        in_paper_neighbors,
+        key=lambda r: (
+            int(r.get("distance") or 99),
+            -_year(r),
+            str(r.get("rid") or ""),
+        ),
+    )
     new_neighbors = sorted(
-        new_neighbors, key=lambda r: (int(r.get("distance") or 99), -_year(r), str(r.get("rid") or "")))
+        new_neighbors,
+        key=lambda r: (
+            int(r.get("distance") or 99),
+            -_year(r),
+            str(r.get("rid") or ""),
+        ),
+    )
 
     ordered = seeds + in_paper_neighbors + new_neighbors
     if len(ordered) <= max_refs:
@@ -271,17 +274,24 @@ def _validate_plan(
     *,
     allowed_rids: set[str],
     allowed_integration_rids: set[str],
-) -> dict | None:
+    section_text: str,
+) -> dict[str, Any] | None:
     if not isinstance(plan, dict):
         return None
     summary = plan.get("summary")
     improvements = plan.get("improvements")
     integrations = plan.get("reference_integrations")
     questions = plan.get("questions")
-    if not isinstance(summary, str) or not isinstance(improvements, list) or not isinstance(integrations, list) or not isinstance(questions, list):
+    if (
+        not isinstance(summary, str)
+        or not isinstance(improvements, list)
+        or not isinstance(integrations, list)
+        or not isinstance(questions, list)
+    ):
         return None
 
-    _rid_re = re.compile(r"R\d{1,4}", re.IGNORECASE)
+    anchor_candidates = _extract_anchor_candidates(section_text)
+    default_anchor = anchor_candidates[0] if anchor_candidates else ""
 
     def _norm_rid(value: str) -> str | None:
         text = (value or "").strip()
@@ -289,7 +299,7 @@ def _validate_plan(
             return None
         if text.startswith("[") and text.endswith("]"):
             text = text[1:-1].strip()
-        m = _rid_re.search(text)
+        m = _RID_RE.search(text)
         if not m:
             return None
         return m.group(0).upper()
@@ -298,14 +308,19 @@ def _validate_plan(
         if not isinstance(val, list):
             return []
         out: list[str] = []
+        seen: set[str] = set()
         for rid in val:
             if not isinstance(rid, str):
                 continue
             rid_norm = _norm_rid(rid)
             if not rid_norm:
                 continue
-            if rid_norm and (not allowed_rids or rid_norm in allowed_rids):
-                out.append(rid_norm)
+            if rid_norm in seen:
+                continue
+            if allowed_rids and rid_norm not in allowed_rids:
+                continue
+            seen.add(rid_norm)
+            out.append(rid_norm)
         return out
 
     cleaned_improvements: list[dict[str, Any]] = []
@@ -316,20 +331,28 @@ def _validate_plan(
             priority = int(item.get("priority"))
         except Exception:
             continue
-        action = item.get("action")
-        why = item.get("why")
-        how = item.get("how")
-        rids = item.get("rids")
-        if not isinstance(action, str) or not isinstance(why, str) or not isinstance(how, list):
+        action = _clean_text(item.get("action"))
+        why = _clean_text(item.get("why"))
+        where = _clean_text(item.get("where"))
+        rids = _clean_rids(item.get("rids"))
+        action_type = _clean_text(item.get("action_type")).lower()
+        if action_type not in {"add", "strengthen", "justify", "reconsider"}:
+            action_type = "strengthen"
+        if not action or not why or not where:
             continue
-        how_clean = [str(h).strip() for h in how if isinstance(h, str) and str(h).strip()]
         cleaned_improvements.append(
             {
                 "priority": max(1, priority),
-                "action": action.strip(),
-                "why": why.strip(),
-                "how": how_clean,
-                "rids": _clean_rids(rids),
+                "action_type": action_type,
+                "action": action,
+                "why": why,
+                "where": where,
+                "anchor_quote": _normalize_anchor_quote(
+                    item.get("anchor_quote"),
+                    section_text=section_text,
+                    fallback=default_anchor,
+                ),
+                "rids": rids,
             }
         )
     cleaned_improvements.sort(key=lambda x: int(x.get("priority") or 999))
@@ -338,105 +361,156 @@ def _validate_plan(
     for item in integrations:
         if not isinstance(item, dict):
             continue
-        rid = item.get("rid")
-        priority = item.get("priority")
-        why = item.get("why")
-        where = item.get("where")
-        example = item.get("example")
-        if not isinstance(rid, str) or not isinstance(priority, str) or not isinstance(why, str) or not isinstance(where, str) or not isinstance(example, str):
+        rid = _norm_rid(str(item.get("rid") or ""))
+        if not rid:
             continue
-        rid_clean = _norm_rid(rid)
-        if not rid_clean:
+        if allowed_rids and rid not in allowed_rids:
             continue
-        pr_clean = priority.strip().lower()
-        if allowed_rids and rid_clean not in allowed_rids:
+        if allowed_integration_rids and rid not in allowed_integration_rids:
             continue
-        if allowed_integration_rids and rid_clean not in allowed_integration_rids:
+        priority = _clean_text(item.get("priority")).lower()
+        if priority not in {"high", "medium", "low"}:
+            priority = "medium"
+        action_type = _clean_text(item.get("action_type")).lower()
+        if action_type not in {"add", "strengthen", "justify", "reconsider"}:
+            action_type = "add"
+        action = _clean_text(item.get("action")) or "Integrate this reference where the claim is introduced."
+        why = _clean_text(item.get("why"))
+        where = _clean_text(item.get("where"))
+        example = _clean_text(item.get("example"))
+        if not why or not where or not example:
             continue
-        if pr_clean not in {"high", "medium", "low"}:
-            pr_clean = "medium"
         cleaned_integrations.append(
             {
-                "rid": rid_clean,
-                "priority": pr_clean,
-                "why": why.strip(),
-                "where": where.strip(),
-                "example": example.strip(),
+                "rid": rid,
+                "priority": priority,
+                "action_type": action_type,
+                "action": action,
+                "why": why,
+                "where": where,
+                "anchor_quote": _normalize_anchor_quote(
+                    item.get("anchor_quote"),
+                    section_text=section_text,
+                    fallback=default_anchor,
+                ),
+                "example": example,
             }
         )
 
-    cleaned_questions = [str(q).strip() for q in questions if isinstance(q, str) and str(q).strip()]
+    cleaned_questions = [
+        _clean_text(q) for q in questions if isinstance(q, str) and _clean_text(q)
+    ]
 
     return {
-        "summary": " ".join(summary.split()).strip(),
+        "summary": _clean_text(summary),
         "improvements": cleaned_improvements,
         "reference_integrations": cleaned_integrations,
         "questions": cleaned_questions,
+        "anchor_quote": default_anchor,
     }
 
 
-def _heuristic_plan(ref_items: list[dict[str, Any]]) -> dict[str, Any]:
+def _heuristic_plan(ref_items: list[dict[str, Any]], *, section_text: str) -> dict[str, Any]:
+    anchors = _extract_anchor_candidates(section_text)
+    primary_anchor = anchors[0] if anchors else ""
+    secondary_anchor = anchors[1] if len(anchors) > 1 else primary_anchor
+
     uncited = [
-        r
-        for r in ref_items
-        if isinstance(r, dict) and (not bool(r.get("cited_in_subsection"))) and int(r.get("distance") or 99) > 0
+        row
+        for row in ref_items
+        if isinstance(row, dict)
+        and (not bool(row.get("cited_in_subsection")))
+        and int(row.get("distance") or 99) > 0
     ]
     try:
         uncited = sorted(
             uncited,
-            key=lambda r: (
-                0 if bool(r.get("in_paper")) else 1,
-                int(r.get("distance") or 99),
-                str(r.get("rid") or ""),
+            key=lambda row: (
+                0 if bool(row.get("in_paper")) else 1,
+                int(row.get("distance") or 99),
+                str(row.get("rid") or ""),
             ),
         )
     except Exception:
         pass
-    top = [str(r.get("rid") or "").strip() for r in uncited[:8] if str(r.get("rid") or "").strip()]
+    top = [str(row.get("rid") or "").strip() for row in uncited[:8] if str(row.get("rid") or "").strip()]
 
     improvements = [
         {
             "priority": 1,
-            "action": "Clarify the subsection’s main claim and scope",
-            "why": "A clear claim helps readers understand why the cited work is relevant.",
-            "how": [
-                "Add a one-sentence thesis for the subsection near the start.",
-                "Ensure each paragraph supports the thesis with evidence or reasoning.",
-            ],
+            "action_type": "strengthen",
+            "action": "Clarify the section's main claim in one direct sentence.",
+            "why": "Readers need the central claim to be explicit before evaluating the evidence.",
+            "where": "At the first sentence that states the section's goal.",
+            "anchor_quote": primary_anchor,
             "rids": [],
         },
         {
             "priority": 2,
-            "action": "Strengthen transitions between ideas and evidence",
-            "why": "Explicit transitions reduce citation dumping and make the argument traceable.",
-            "how": [
-                "Add a short bridge sentence when shifting topics.",
-                "After each citation, state what it contributes (definition, evidence, contrast, method).",
-            ],
+            "action_type": "justify",
+            "action": "Add one sentence explaining why each major citation supports the claim.",
+            "why": "Explicit rationale prevents citation dumping and improves traceability.",
+            "where": "Immediately after the sentence introducing each major citation.",
+            "anchor_quote": secondary_anchor,
             "rids": [],
         },
     ]
 
-    integrations = []
-    for rid in top:
+    integrations: list[dict[str, Any]] = []
+    for idx, rid in enumerate(top):
+        anchor = anchors[idx % len(anchors)] if anchors else primary_anchor
         integrations.append(
             {
                 "rid": rid,
                 "priority": "medium",
-                "why": "Potentially strengthens background, evidence, or contrast for the subsection’s claim.",
-                "where": "Near the sentence where you introduce the relevant concept or justify the approach.",
-                "example": f"This point aligns with prior work (see [{rid}]).",
+                "action_type": "add",
+                "action": "Integrate this reference to support the nearby claim.",
+                "why": "This work can strengthen local support for the argument in this section.",
+                "where": "After the sentence that introduces the related concept.",
+                "anchor_quote": anchor,
+                "example": f"This claim is also supported by related findings [{rid}].",
             }
         )
 
     questions = [
-        "What is the single most important claim this subsection must establish for the paper’s argument?",
-        "Which concept(s) should be defined more explicitly to make the subsection self-contained?",
+        "Which sentence in this section carries the core claim, and is it explicit enough?",
+        "Where does the argument need one additional citation to avoid overgeneralizing?",
     ]
 
     return {
-        "summary": "Refine the subsection’s claim and make the link between claims and citations explicit. Add a small number of high-value references where they directly support your key statements.",
+        "summary": "Tighten the core claim, then make each citation's contribution explicit where it appears in the section.",
         "improvements": improvements,
         "reference_integrations": integrations,
         "questions": questions,
+        "anchor_quote": primary_anchor,
     }
+
+
+def _normalize_anchor_quote(value: Any, *, section_text: str, fallback: str) -> str:
+    quote = _clean_text(value)
+    if quote and quote.lower() in section_text.lower():
+        return quote
+    return fallback
+
+
+def _extract_anchor_candidates(section_text: str) -> list[str]:
+    text = _clean_text(section_text)
+    if not text:
+        return []
+    parts = [p.strip() for p in _SENTENCE_SPLIT_RE.split(text) if p.strip()]
+    out: list[str] = []
+    for sentence in parts:
+        if len(sentence) < 30:
+            continue
+        if len(sentence) > 220:
+            sentence = sentence[:217].rstrip() + "..."
+        out.append(sentence)
+        if len(out) >= 5:
+            break
+    return out
+
+
+def _clean_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.replace("\u00a0", " ").split()).strip()

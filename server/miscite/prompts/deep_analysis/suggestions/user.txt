@@ -2,24 +2,26 @@ You will receive groups of papers with short ids.
 
 Return JSON with keys:
 - overview: short narrative paragraph with priorities (Priority 1/2/3)
-- sections: array of objects with keys {title, bullets}
-  - title: string
-  - bullets: array of short strings
+- items: array of objects with keys:
+  - section_title: string, must match one title from SECTION ORDER.
+  - action_type: one of "add", "strengthen", "justify", "reconsider".
+  - rid: one [R#] marker from GROUPS.
+  - priority: "high" | "medium" | "low".
+  - action: one concrete instruction sentence.
+  - why: one sentence explaining value.
+  - where: one sentence describing where to edit.
+  - anchor_quote: a short exact quote copied from PAPER EXCERPT near the edit location.
 
 Rules:
 - Use plain language.
-- Organize sections in the exact order given in SECTION ORDER; omit sections with no bullets.
-- Do NOT repeat full reference details; cite papers using APA-style in-text citations plus [R#] markers.
-- For overview: each priority sentence must include an APA in-text citation (e.g., "Merton (1988)" or "(Merton, 1988)") and the matching [R#] marker.
-- Start each bullet with the [R#] marker.
-- Under each section, group and order bullets by:
-  1) Core background refs
-  2) Refs connecting ideas (and how)
-  3) Refs to add (why and how)
-  4) Refs to consider removing
-- In every bullet, label the group and include a priority tag: High for not yet covered (in_paper=false), Low for already covered (in_paper=true).
-- Make bullets concrete: mention the section and what to do.
-- For each group below, write one bullet per item in that group.
+- Organize section_title values using SECTION ORDER.
+- Do NOT repeat full reference details.
+- For overview: each priority sentence must include a [R#] marker.
+- For each item, use only one rid and make action/why/where specific to that section.
+- Set priority to high for urgent fixes or uncited additions, medium for useful improvements, low for optional polishing.
+- anchor_quote must be copied verbatim from PAPER EXCERPT; do not invent quotes.
+- Include recommendations for tangential_citations as "reconsider" or "justify", not "remove".
+- Cover all available groups when possible.
 - Do not put raw newline characters inside strings.
 
 SECTION ORDER (use these titles exactly, in order):
@@ -35,11 +37,11 @@ GROUP KEY MEANINGS:
 - core_papers: core background that should be clearly positioned
 - tangential_citations: citations in the paper that may need justification or removal
 
-GROUP MAPPING FOR BULLET LABELS:
-- Core background refs -> core_papers
-- Refs connecting ideas -> bridge_papers
-- Refs to add -> highly_connected + bibliographic_coupling
-- Refs to consider removing -> tangential_citations
+GROUP MAPPING FOR ACTION TYPES:
+- Core background refs -> core_papers (usually add/strengthen)
+- Refs connecting ideas -> bridge_papers (usually strengthen/add)
+- Refs to add -> highly_connected + bibliographic_coupling (usually add)
+- Refs to consider removing -> tangential_citations (reconsider/justify)
 
 GROUPS:
 $groups_payload

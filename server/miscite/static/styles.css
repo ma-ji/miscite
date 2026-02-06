@@ -2380,6 +2380,30 @@ input[readonly] {
   color: var(--success);
 }
 
+.ds-chip--action-add {
+  border-color: var(--severity-low-border);
+  background: var(--severity-low-soft);
+  color: var(--severity-low);
+}
+
+.ds-chip--action-strengthen {
+  border-color: var(--severity-medium-border);
+  background: var(--severity-medium-soft);
+  color: var(--severity-medium);
+}
+
+.ds-chip--action-justify {
+  border-color: var(--primary-border-soft);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.ds-chip--action-reconsider {
+  border-color: var(--severity-high-border);
+  background: var(--severity-high-soft);
+  color: var(--severity-high);
+}
+
 .ds-raw {
   margin-top: var(--space-3);
 }

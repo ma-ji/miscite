@@ -2,21 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["overview", "sections"],
+  "required": ["overview", "items"],
   "properties": {
     "overview": {"type": "string"},
-    "sections": {
+    "items": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["title", "bullets"],
+        "required": [
+          "section_title",
+          "action_type",
+          "rid",
+          "priority",
+          "action",
+          "why",
+          "where",
+          "anchor_quote"
+        ],
         "properties": {
-          "title": {"type": "string"},
-          "bullets": {
-            "type": "array",
-            "items": {"type": "string"}
-          }
+          "section_title": {"type": "string"},
+          "action_type": {"type": "string", "enum": ["add", "strengthen", "justify", "reconsider"]},
+          "rid": {"type": "string"},
+          "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+          "action": {"type": "string"},
+          "why": {"type": "string"},
+          "where": {"type": "string"},
+          "anchor_quote": {"type": "string"}
         }
       }
     }

@@ -259,6 +259,13 @@ THINK HARD: Add a Deep Analysis pipeline after the flagging process:
 
 10. For the user report and suggestions, use user-friendly format and language, no need to mention the background methodology and technical terms. Focus on how to help users improve their paper.
 
+========
+Date: 2026-02-06
+Goal: Redesign report Recommendations to be concretely actionable for both researchers and editors.
+Prompt: "Analyze Recommendations block in the report, propose a plan to improve it... Implement all proposed changes by phases." with decisions: keep "reconsider/justify" language, hide technical metadata, emit top 5 global + up to 3 per section, allow report schema changes, require specific quoted text anchors.
+Files touched: server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/analysis/deep_analysis/suggestions.py, server/miscite/analysis/deep_analysis/subsection_recommendations.py, server/miscite/analysis/deep_analysis/recommendations.py, server/miscite/templates/job.html, server/miscite/web/report_pdf.py, server/miscite/prompts/deep_analysis/suggestions/user.txt, server/miscite/prompts/deep_analysis/subsection_plan/user.txt, server/miscite/prompts/schemas/deep_suggestions.schema.json, server/miscite/prompts/schemas/deep_subsection_plan.schema.json, server/miscite/analysis/deep_analysis/test_recommendations.py, server/miscite/analysis/deep_analysis/test_subsection_recommendations.py, server/miscite/analysis/deep_analysis/test_suggestions.py, docs/ARCHITECTURE.md, docs/DEVELOPMENT.md, AGENTS.md.
+Decision/rationale: Replaced brittle free-text recommendation parsing with structured recommendation items, introduced deterministic aggregation/ranking limits for clearer prioritization, added location + quote anchors for concrete manuscript edits, and aligned HTML/PDF rendering to a single canonical `deep_analysis.recommendations` contract.
+
 11. Use parallel processing to speedup, pay attention to OOM and rate limit.
 
 ======

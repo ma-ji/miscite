@@ -85,7 +85,9 @@ Stages:
   - `server/miscite/analysis/deep_analysis/prep.py`: data prep
   - `server/miscite/analysis/deep_analysis/network.py`: network metrics
   - `server/miscite/analysis/deep_analysis/references.py`: OpenAlex metadata summarization/formatting
-  - `server/miscite/analysis/deep_analysis/suggestions.py`: LLM/heuristic suggestions
+  - `server/miscite/analysis/deep_analysis/suggestions.py`: structured suggestion generation
+  - `server/miscite/analysis/deep_analysis/subsection_recommendations.py`: section-specific revision plans with anchor quotes
+  - `server/miscite/analysis/deep_analysis/recommendations.py`: deterministic ranking/merge into report-ready actions
   - `server/miscite/analysis/deep_analysis/types.py`: shared types
 - Report:
   - `server/miscite/analysis/report/methodology.py`: methodology markdown embedded in reports
@@ -125,3 +127,10 @@ The report JSON returned by `analysis/pipeline/` is:
 
 If you add new issue types or change schema/summary fields, update the template and any
 API consumers.
+
+Deep-analysis recommendation contract:
+
+- `report.deep_analysis.recommendations` is the canonical rendered payload.
+- `recommendations.global_actions` contains the top 5 cross-manuscript actions.
+- `recommendations.sections[].actions` contains up to 3 actions per section.
+- Actions include concrete `where`, verbatim `anchor_quote`, and supporting `[R#]` ids.

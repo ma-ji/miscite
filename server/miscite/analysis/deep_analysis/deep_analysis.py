@@ -13,6 +13,7 @@ from server.miscite.analysis.deep_analysis.prep import (
     filter_verified_original_refs,
 )
 from server.miscite.analysis.deep_analysis.references import build_reference_master_list
+from server.miscite.analysis.deep_analysis.recommendations import build_recommendations
 from server.miscite.analysis.deep_analysis.reviewers import build_potential_reviewers_from_coupling
 from server.miscite.analysis.deep_analysis.subsections import (
     build_weak_adjacency,
@@ -738,6 +739,13 @@ def run_deep_analysis(
         llm_budget=(None if llm_budget is None else max(0, llm_budget - llm_calls_used)),
     )
     llm_calls_used += subrec_calls
+    recommendations_payload = build_recommendations(
+        suggestions=suggestion_payload,
+        subsection_recommendations=subrec_payload,
+        references_by_rid=references_by_rid,
+        max_global_actions=5,
+        max_actions_per_section=3,
+    )
     if suggestion_calls > 0 or subrec_calls > 0:
         used_sources.append(
             {
@@ -763,6 +771,7 @@ def run_deep_analysis(
         "manuscript_structure": structure_report,
         "suggestions": suggestion_payload,
         "subsection_recommendations": subrec_payload,
+        "recommendations": recommendations_payload,
         "truncation": trunc,
         "llm_calls_used": llm_calls_used,
     }

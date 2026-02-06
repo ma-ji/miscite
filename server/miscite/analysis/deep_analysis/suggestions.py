@@ -44,6 +44,8 @@ _DEFAULT_SECTION_ORDER = [
 ]
 
 _HEADING_LINE_RE = re.compile(r"^[\s\d\.\-–—]*([A-Za-z][A-Za-z &/\\-]{2,})\s*$")
+_RID_RE = re.compile(r"R\d{1,4}", re.IGNORECASE)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 def extract_section_order(text: str) -> list[str]:
@@ -90,7 +92,6 @@ def build_suggestions(
     if not section_order:
         section_order = list(_DEFAULT_SECTION_ORDER)
 
-    # Build a compact, no-dup payload for suggestions (references are always via [R#] markers).
     groups_payload: dict[str, dict[str, Any]] = {}
     for group in citation_groups:
         if not isinstance(group, dict):
@@ -103,18 +104,16 @@ def build_suggestions(
         items: list[dict[str, Any]] = []
         seen_rids: set[str] = set()
         for rid in rids:
-            if not isinstance(rid, str) or not rid.strip():
+            rid_norm = _normalize_rid(rid)
+            if not rid_norm or rid_norm in seen_rids:
                 continue
-            rid = rid.strip()
-            if rid in seen_rids:
-                continue
-            seen_rids.add(rid)
-            ref = references_by_rid.get(rid)
+            seen_rids.add(rid_norm)
+            ref = references_by_rid.get(rid_norm)
             if not isinstance(ref, dict):
                 continue
             items.append(
                 {
-                    "rid": rid,
+                    "rid": rid_norm,
                     "in_paper": bool(ref.get("in_paper")),
                     "title": ref.get("title"),
                     "year": ref.get("year"),
@@ -127,15 +126,23 @@ def build_suggestions(
     if not groups_payload:
         return {"status": "skipped", "reason": "No reference items available for suggestions."}, calls_used
 
-    # If no budget or disabled, return a heuristic guide.
+    section_anchors = _build_section_anchor_map(paper_excerpt, section_order)
+    default_anchor = _extract_first_sentence(paper_excerpt)
+
     if not settings.enable_deep_analysis_llm_suggestions or (llm_budget is not None and llm_budget <= 0):
-        overview, sections = _heuristic_suggestions(groups_payload, references_by_rid, section_order)
+        overview, items = _heuristic_suggestions(
+            groups_payload=groups_payload,
+            references_by_rid=references_by_rid,
+            section_order=section_order,
+            section_anchors=section_anchors,
+            default_anchor=default_anchor,
+        )
         return (
             {
                 "status": "completed",
                 "mode": "heuristic",
                 "overview": overview,
-                "sections": sections,
+                "items": items,
             },
             calls_used,
         )
@@ -143,7 +150,7 @@ def build_suggestions(
     calls_used += 1
     excerpt = " ".join((paper_excerpt or "").split())
     if len(excerpt) > settings.deep_analysis_paper_excerpt_max_chars:
-        excerpt = excerpt[: settings.deep_analysis_paper_excerpt_max_chars] + "\u2026"
+        excerpt = excerpt[: settings.deep_analysis_paper_excerpt_max_chars] + "..."
 
     try:
         llm_out = llm_client.chat_json(
@@ -156,72 +163,70 @@ def build_suggestions(
             ),
         )
     except Exception as e:
-        overview, sections = _heuristic_suggestions(groups_payload, references_by_rid, section_order)
+        overview, items = _heuristic_suggestions(
+            groups_payload=groups_payload,
+            references_by_rid=references_by_rid,
+            section_order=section_order,
+            section_anchors=section_anchors,
+            default_anchor=default_anchor,
+        )
         note = str(e).strip()
         if len(note) > 240:
-            note = note[:240] + "\u2026"
+            note = note[:240] + "..."
         return (
             {
                 "status": "completed",
                 "mode": "heuristic",
                 "overview": overview,
-                "sections": sections,
-                "note": f"LLM suggestions failed ({note}); used a fallback.",
+                "items": items,
+                "note": f"Suggestion generation failed ({note}); used a fallback.",
             },
             calls_used,
         )
 
-    if not isinstance(llm_out, dict):
-        overview, sections = _heuristic_suggestions(groups_payload, references_by_rid, section_order)
+    validated = _validate_llm_suggestions(
+        llm_out,
+        allowed_rids=set(references_by_rid.keys()),
+        allowed_sections=set(section_order),
+        excerpt=excerpt,
+        section_anchors=section_anchors,
+        default_anchor=default_anchor,
+    )
+    if not validated:
+        overview, items = _heuristic_suggestions(
+            groups_payload=groups_payload,
+            references_by_rid=references_by_rid,
+            section_order=section_order,
+            section_anchors=section_anchors,
+            default_anchor=default_anchor,
+        )
         return (
             {
                 "status": "completed",
                 "mode": "heuristic",
                 "overview": overview,
-                "sections": sections,
-                "note": "LLM suggestion output was invalid; used a fallback.",
+                "items": items,
+                "note": "Suggestion output had an unexpected shape; used a fallback.",
             },
             calls_used,
         )
 
-    overview = llm_out.get("overview")
-    sections = llm_out.get("sections")
-    if not isinstance(overview, str) or not isinstance(sections, list):
-        h_overview, h_sections = _heuristic_suggestions(groups_payload, references_by_rid, section_order)
-        return (
-            {
-                "status": "completed",
-                "mode": "heuristic",
-                "overview": h_overview,
-                "sections": h_sections,
-                "note": "LLM suggestion output had an unexpected shape; used a fallback.",
-            },
-            calls_used,
-        )
-
-    index_by_title = {s.lower(): idx for idx, s in enumerate(section_order)}
-    def _section_sort_key(item: dict[str, Any]) -> tuple[int, str]:
-        title = str(item.get("title") or "").strip()
-        key = title.lower()
-        if key in index_by_title:
-            return (index_by_title[key], "")
-        return (len(section_order) + 1, key)
-
-    try:
-        sections = sorted(
-            [s for s in sections if isinstance(s, dict) and isinstance(s.get("title"), str)],
-            key=_section_sort_key,
-        )
-    except Exception:
-        # Keep LLM order if sorting fails.
-        pass
+    by_order = {title: idx for idx, title in enumerate(section_order)}
+    items = sorted(
+        validated["items"],
+        key=lambda item: (
+            by_order.get(str(item.get("section_title") or "").strip(), len(section_order) + 1),
+            str(item.get("action_type") or ""),
+            str(item.get("rid") or ""),
+        ),
+    )
 
     return (
         {
             "status": "completed",
             "mode": "llm",
-            "overview": overview,
-            "sections": sections,
+            "overview": validated["overview"],
+            "items": items,
             "groups_used": list(groups_payload.keys()),
         },
         calls_used,
@@ -229,37 +234,19 @@ def build_suggestions(
 
 
 def _heuristic_suggestions(
+    *,
     groups_payload: dict[str, dict[str, Any]],
     references_by_rid: dict[str, dict],
     section_order: list[str],
-) -> tuple[str, list[dict]]:
+    section_anchors: dict[str, str],
+    default_anchor: str,
+) -> tuple[str, list[dict[str, Any]]]:
     section_order = [s for s in section_order if isinstance(s, str) and s.strip()]
     if not section_order:
         section_order = list(_DEFAULT_SECTION_ORDER)
 
-    def _last_name(author: str) -> str:
-        cleaned = " ".join((author or "").split()).strip()
-        if not cleaned:
-            return "Unknown"
-        if "," in cleaned:
-            return cleaned.split(",", 1)[0].strip() or "Unknown"
-        return cleaned.split()[-1] if cleaned.split() else "Unknown"
-
-    def _apa_in_text(meta: dict[str, Any]) -> str:
-        authors = meta.get("authors") if isinstance(meta.get("authors"), list) else []
-        year = meta.get("year")
-        year_str = str(year) if isinstance(year, int) and year > 0 else "n.d."
-        names = [_last_name(a) for a in authors if isinstance(a, str) and a.strip()]
-        if not names:
-            return f"(Unknown, {year_str})"
-        if len(names) == 1:
-            return f"({names[0]}, {year_str})"
-        if len(names) == 2:
-            return f"({names[0]} & {names[1]}, {year_str})"
-        return f"({names[0]} et al., {year_str})"
-
     section_prefs = {
-        "highly_connected": ["Introduction", "Literature Review", "Background"],
+        "highly_connected": ["Introduction", "Literature Review", "Background", "Discussion"],
         "core_papers": ["Literature Review", "Background", "Introduction"],
         "bibliographic_coupling": ["Literature Review", "Methods", "Discussion"],
         "bridge_papers": ["Methods", "Results", "Discussion"],
@@ -273,155 +260,218 @@ def _heuristic_suggestions(
                 return sec
         return section_order[0]
 
-    def _bullet_for(
-        rid: str,
-        *,
-        section_title: str,
-        group_label: str,
-        action_add: str,
-        action_strengthen: str,
-    ) -> str:
-        ref = references_by_rid.get(rid) if isinstance(references_by_rid.get(rid), dict) else {}
-        in_paper = bool(ref.get("in_paper"))
-        action = action_strengthen if in_paper else action_add
-        priority = "High" if not in_paper else "Low"
-        cite = _apa_in_text(ref)
-        return f"[{rid}] {group_label} (Priority: {priority}) - In {section_title}, {action} {cite}"
+    def _priority_label(group_key: str, in_paper: bool) -> str:
+        if group_key == "tangential_citations":
+            return "high"
+        return "low" if in_paper else "high"
 
-    def _overview_sentence(priority: int, rid: str, section_title: str, action: str) -> str:
-        ref = references_by_rid.get(rid) if isinstance(references_by_rid.get(rid), dict) else {}
-        cite = _apa_in_text(ref)
-        pr_label = "High" if not ref.get("in_paper") else "Low"
-        return f"Priority {priority} ({pr_label}): In {section_title}, {action} {cite} [{rid}]."
+    def _action_for(group_key: str, in_paper: bool) -> tuple[str, str, str]:
+        if group_key == "tangential_citations":
+            return (
+                "reconsider",
+                "Reconsider this citation and justify it explicitly in the surrounding sentence.",
+                "This citation currently appears weakly connected to the claim and needs a clear rationale.",
+            )
+        if group_key == "bridge_papers":
+            return (
+                "strengthen" if in_paper else "add",
+                "Use this work to make the transition between ideas explicit.",
+                "Bridging evidence helps readers follow how concepts connect across sections.",
+            )
+        if group_key == "core_papers":
+            return (
+                "strengthen" if in_paper else "add",
+                "State how this core work frames the problem and how your manuscript builds on it.",
+                "Core references establish field context and strengthen the contribution claim.",
+            )
+        if group_key == "bibliographic_coupling":
+            return (
+                "add" if not in_paper else "strengthen",
+                "Compare this work's framing with your own and explain overlap or contrast.",
+                "This helps position your manuscript within adjacent literature using similar evidence bases.",
+            )
+        return (
+            "add" if not in_paper else "strengthen",
+            "Integrate this reference where you motivate the claim or justify the method.",
+            "This reference can directly support a central claim in the section.",
+        )
 
-    overview_sentences: list[str] = []
-    priority_order = ["highly_connected", "core_papers", "bridge_papers", "tangential_citations", "bibliographic_coupling"]
-    priority = 1
-    for key in priority_order:
-        group = groups_payload.get(key)
-        items = group.get("items") if isinstance(group, dict) else None
-        if not isinstance(items, list) or not items:
+    items: list[dict[str, Any]] = []
+    overview_bits: list[str] = []
+
+    ordered_group_keys = [
+        "highly_connected",
+        "core_papers",
+        "bridge_papers",
+        "bibliographic_coupling",
+        "tangential_citations",
+    ]
+
+    for group_key in ordered_group_keys:
+        group = groups_payload.get(group_key)
+        if not isinstance(group, dict):
             continue
-        picked = None
-        for item in items:
-            if not isinstance(item, dict):
+        rows = group.get("items")
+        if not isinstance(rows, list) or not rows:
+            continue
+        section_title = _pick_section(group_key)
+        anchor = section_anchors.get(section_title) or default_anchor
+        for idx, row in enumerate(rows):
+            if not isinstance(row, dict):
                 continue
-            if not item.get("in_paper"):
-                picked = item
-                break
-        if picked is None:
-            picked = items[0] if isinstance(items[0], dict) else None
-        if not isinstance(picked, dict):
-            continue
-        rid = str(picked.get("rid") or "").strip()
-        if not rid:
-            continue
-        section_title = _pick_section(key)
-        if key == "tangential_citations":
-            action = "justify or remove the citation so it directly supports the claim."
-        elif key == "bridge_papers":
-            action = "use this to connect subtopics and clarify the transition."
-        elif key == "core_papers":
-            action = "add a 1-2 sentence summary of how your work builds on it."
-        elif key == "bibliographic_coupling":
-            action = "clarify how its framing aligns or contrasts with your approach."
-        else:
-            action = "strengthen the rationale for citing this work."
-        overview_sentences.append(_overview_sentence(priority, rid, section_title, action))
-        priority += 1
-        if priority > 3:
-            break
+            rid = _normalize_rid(row.get("rid"))
+            if not rid:
+                continue
+            ref = references_by_rid.get(rid) if isinstance(references_by_rid.get(rid), dict) else {}
+            in_paper = bool(ref.get("in_paper"))
+            action_type, action, why = _action_for(group_key, in_paper)
+            priority = _priority_label(group_key, in_paper)
+            items.append(
+                {
+                    "section_title": section_title,
+                    "action_type": action_type,
+                    "rid": rid,
+                    "priority": priority,
+                    "action": action,
+                    "why": why,
+                    "where": "Immediately after the sentence that makes the related claim.",
+                    "anchor_quote": anchor,
+                }
+            )
+            if idx == 0 and len(overview_bits) < 3:
+                overview_bits.append(
+                    f"Priority {len(overview_bits) + 1}: In {section_title}, {action} [{rid}]."
+                )
 
     overview = (
-        " ".join(overview_sentences)
-        if overview_sentences
+        " ".join(overview_bits)
+        if overview_bits
         else "No major deep-analysis priorities were generated for this run."
     )
 
-    section_buckets: dict[str, list[str]] = {title: [] for title in section_order}
-    group_plan = [
-        ("core_papers", "Core background refs"),
-        ("bridge_papers", "Refs connecting ideas"),
-        ("highly_connected", "Refs to add"),
-        ("bibliographic_coupling", "Refs to add"),
-        ("tangential_citations", "Refs to consider removing"),
-    ]
+    return overview, items
 
-    for key, label in group_plan:
-        group = groups_payload.get(key)
-        if not isinstance(group, dict):
+
+def _validate_llm_suggestions(
+    payload: Any,
+    *,
+    allowed_rids: set[str],
+    allowed_sections: set[str],
+    excerpt: str,
+    section_anchors: dict[str, str],
+    default_anchor: str,
+) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    overview = payload.get("overview")
+    items = payload.get("items")
+    if not isinstance(overview, str) or not isinstance(items, list):
+        return None
+
+    cleaned_items: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
             continue
-        items = group.get("items")
-        if not isinstance(items, list) or not items:
+        section_title = _clean_text(item.get("section_title"))
+        if not section_title:
             continue
-        try:
-            items = sorted(items, key=lambda item: bool(item.get("in_paper")) if isinstance(item, dict) else True)
-        except Exception:
-            pass
-        section_title = _pick_section(key)
-        bullets: list[str] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            rid = str(item.get("rid") or "").strip()
-            if not rid:
-                continue
-            if key == "tangential_citations":
-                bullets.append(
-                    _bullet_for(
-                        rid,
-                        section_title=section_title,
-                        group_label=label,
-                        action_add="add one sentence explaining why it supports your specific claim (or remove it).",
-                        action_strengthen="add one sentence explaining why it supports your specific claim, or remove it if it's not doing real work for the argument.",
-                    )
-                )
-            elif key == "bridge_papers":
-                bullets.append(
-                    _bullet_for(
-                        rid,
-                        section_title=section_title,
-                        group_label=label,
-                        action_add="use it to connect subtopics and clarify the transition you are making (explain how it links them).",
-                        action_strengthen="use it to make the transition between subtopics more explicit (explain the link).",
-                    )
-                )
-            elif key == "core_papers":
-                bullets.append(
-                    _bullet_for(
-                        rid,
-                        section_title=section_title,
-                        group_label=label,
-                        action_add="add a 1-2 sentence summary of what it contributes that your paper builds on.",
-                        action_strengthen="add a clearer 1-2 sentence summary of what it contributes and how your paper builds on it.",
-                    )
-                )
-            elif key == "bibliographic_coupling":
-                bullets.append(
-                    _bullet_for(
-                        rid,
-                        section_title=section_title,
-                        group_label=label,
-                        action_add="situate your work alongside it and clarify the overlap in framing or evidence.",
-                        action_strengthen="add one sentence clarifying how its framing compares to yours.",
-                    )
-                )
-            else:  # highly_connected
-                bullets.append(
-                    _bullet_for(
-                        rid,
-                        section_title=section_title,
-                        group_label=label,
-                        action_add="add it where you motivate the problem, justify the method, or discuss prior evidence.",
-                        action_strengthen="strengthen the surrounding sentence so the reason for citing it is explicit.",
-                    )
-                )
-        if bullets:
-            section_buckets[section_title].extend(bullets)
+        if allowed_sections and section_title not in allowed_sections:
+            continue
+        action_type = _clean_text(item.get("action_type")).lower()
+        if action_type not in {"add", "strengthen", "justify", "reconsider"}:
+            continue
+        rid = _normalize_rid(item.get("rid"))
+        if not rid:
+            continue
+        if allowed_rids and rid not in allowed_rids:
+            continue
+        priority = _clean_text(item.get("priority")).lower()
+        if priority not in {"high", "medium", "low"}:
+            priority = "medium"
+        action = _clean_text(item.get("action"))
+        why = _clean_text(item.get("why"))
+        where = _clean_text(item.get("where"))
+        if not action or not why or not where:
+            continue
+        anchor = _normalize_anchor_quote(
+            item.get("anchor_quote"),
+            excerpt=excerpt,
+            fallback=section_anchors.get(section_title) or default_anchor,
+        )
+        cleaned_items.append(
+            {
+                "section_title": section_title,
+                "action_type": action_type,
+                "rid": rid,
+                "priority": priority,
+                "action": action,
+                "why": why,
+                "where": where,
+                "anchor_quote": anchor,
+            }
+        )
 
-    sections = [{"title": title, "bullets": bullets} for title, bullets in section_buckets.items() if bullets]
+    if not cleaned_items:
+        return None
 
-    if not sections:
-        sections.append({"title": "No strong recommendations", "bullets": ["No deep suggestions were generated for this run."]})
+    return {
+        "overview": _clean_text(overview),
+        "items": cleaned_items,
+    }
 
-    return overview, sections
+
+def _build_section_anchor_map(text: str, section_order: list[str]) -> dict[str, str]:
+    raw = str(text or "")
+    lower = raw.lower()
+    out: dict[str, str] = {}
+    fallback = _extract_first_sentence(raw)
+    for section in section_order:
+        section_clean = _clean_text(section)
+        if not section_clean:
+            continue
+        idx = lower.find(section_clean.lower())
+        if idx < 0:
+            out[section_clean] = fallback
+            continue
+        snippet = raw[idx : idx + 800]
+        anchor = _extract_first_sentence(snippet) or fallback
+        out[section_clean] = anchor
+    return out
+
+
+def _normalize_anchor_quote(value: Any, *, excerpt: str, fallback: str) -> str:
+    quote = _clean_text(value)
+    if quote and quote.lower() in excerpt.lower():
+        return quote
+    return fallback
+
+
+def _extract_first_sentence(text: str) -> str:
+    cleaned = _clean_text(text)
+    if not cleaned:
+        return ""
+    parts = [p.strip() for p in _SENTENCE_SPLIT_RE.split(cleaned) if p.strip()]
+    if not parts:
+        return ""
+    sentence = parts[0]
+    if len(sentence) > 180:
+        sentence = sentence[:177].rstrip() + "..."
+    return sentence
+
+
+def _normalize_rid(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip().upper()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1].strip()
+    match = _RID_RE.search(text)
+    if not match:
+        return ""
+    return match.group(0).upper()
+
+
+def _clean_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.replace("\u00a0", " ").split()).strip()

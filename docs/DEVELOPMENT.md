@@ -74,8 +74,9 @@ make check
 
 Deep analysis is disabled by default (`MISCITE_ENABLE_DEEP_ANALYSIS=false`). When enabled, it expands a citation neighborhood around key references and produces:
 
-- A high-level recommendation section.
-- Section-by-section revision plans (top-level only; optional; can increase LLM usage).
+- A ranked recommendation block with top 5 global actions.
+- Section-by-section recommendations (top-level only), capped at 3 actions per section.
+- Each action includes a concrete edit location (`where`) and a quoted nearby text anchor (`anchor_quote`).
 
 Key settings:
 

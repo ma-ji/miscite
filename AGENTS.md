@@ -53,6 +53,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/web/`: Jinja template helpers + filters.
 - `server/miscite/web/report_pdf.py`: branded PDF export renderer used by report download endpoints.
 - `server/miscite/analysis/`: pipeline steps (extract/parse/checks/deep_analysis/report/shared + pipeline/).
+- `server/miscite/analysis/deep_analysis/recommendations.py`: merges/ranks deep-analysis actions into report-ready recommendations (top global + per-section limits).
 - `server/miscite/analysis/match/`: citation↔bibliography matching (indexes + ambiguity/confidence).
 - `server/miscite/prompts/`: LLM prompts organized by stage (parsing/matching/checks/deep_analysis) with paired `system.txt` + `user.txt`.
 - `server/miscite/prompts/registry.yaml`: prompt catalog (purpose, inputs, schema).
@@ -81,7 +82,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
    - Match in-text citations to bibliography entries (`analysis/match/`).
    - Resolve references in order: OpenAlex -> Crossref -> PubMed -> arXiv (LLM assists ambiguous matches).
    - Flag issues: missing bibliography, unresolved refs, retractions, predatory venues, inappropriate citations (LLM + optional local NLI).
-   - Optional deep analysis: expands citation neighborhood via OpenAlex and suggests additions/removals plus subsection-by-subsection revision plans (`analysis/deep_analysis/deep_analysis.py`).
+   - Optional deep analysis: expands citation neighborhood via OpenAlex and produces ranked manuscript recommendations (top priorities + per-section actions with location anchors) (`analysis/deep_analysis/deep_analysis.py`).
    - Report assembled + methodology markdown.
    - On completion, the worker issues the access token, deducts LLM usage cost from balance, and emails the access token.
 4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can manage access tokens + delete reports here), plus report PDF exports at `/jobs/{id}/report.pdf` and `/reports/{token}/report.pdf`.
@@ -97,7 +98,9 @@ Recent additions to the report shape:
 - `report.citations[]` includes per-citation match status/confidence + top candidates (for traceability).
 - New issue type: `ambiguous_bibliography_ref` (separate from `missing_bibliography_ref`).
 - New summary fields: `total_intext_citations`, `ambiguous_bibliography_refs`.
-- `report.deep_analysis.subsection_recommendations` adds subsection-specific citation subnetworks + prioritized revision plans.
+- `report.deep_analysis.recommendations` is the canonical recommendation block for UI/PDF (`overview`, `global_actions` top 5, and `sections[].actions` up to 3 per section) with concrete `where` guidance + quoted `anchor_quote` text + `[R#]` links.
+- `report.deep_analysis.suggestions` now uses structured suggestion items instead of free-text bullet lists.
+- `report.deep_analysis.subsection_recommendations` now stores section plans for aggregation (without graph/seed details in the rendered report).
 - `report.deep_analysis.manuscript_structure` records the (LLM or heuristic) subsection structure used for deep-analysis recommendations.
 - `report.deep_analysis.potential_reviewers` lists reviewer candidates (name + affiliation + Google search link) with popularity ordering metadata (`popularity_score` from degree centrality), derived from bibliographic coupling works.
 

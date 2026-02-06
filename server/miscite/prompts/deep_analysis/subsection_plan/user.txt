@@ -5,17 +5,22 @@ You will receive:
 
 Return JSON with keys:
 - summary: 2-3 sentences summarizing the main revision priorities for this section (single line).
-- improvements: array of objects {priority, action, why, how, rids}
+- improvements: array of objects {priority, action_type, action, why, where, anchor_quote, rids}
   - priority: integer 1..N (1 is highest priority)
+  - action_type: one of "add", "strengthen", "justify", "reconsider"
   - action: short imperative (e.g., "Clarify the claim in the opening sentence")
   - why: one sentence
-  - how: array of concrete edit steps (each a short string)
+  - where: where to edit in this section
+  - anchor_quote: short exact quote copied from SECTION TEXT near the edit target
   - rids: array of [R#] markers that support the action (may be empty)
-- reference_integrations: array of objects {rid, priority, why, where, example}
+- reference_integrations: array of objects {rid, priority, action_type, action, why, where, anchor_quote, example}
   - rid: a single [R#] marker to integrate
   - priority: "high" | "medium" | "low"
+  - action_type: one of "add", "strengthen", "justify", "reconsider"
+  - action: short imperative instruction
   - why: one sentence on what it adds (theory, evidence, method, contrast, definition)
   - where: where to add it (e.g., "after paragraph 2", "in the first sentence", "in the transition to the next subheading")
+  - anchor_quote: short exact quote copied from SECTION TEXT near the insertion point
   - example: a draft sentence template that cites the work using the [R#] marker (do not fabricate bibliographic details)
 - questions: array of short questions for the author (optional; may be empty)
 
@@ -23,6 +28,9 @@ Rules:
 - Be specific to the given section text; do not invent content outside it.
 - Prefer integrating references with cited_in_subsection=false (not yet cited in this section), especially low-distance neighbors (distance=1 or 2). This can include references that appear elsewhere in the manuscript (in_paper=true) but are not currently cited in this section.
 - Use ONLY the provided [R#] markers; never invent new ids.
+- Keep recommendations concrete and manuscript-facing; do not mention graph/network/internal analysis terms.
+- Use "reconsider" or "justify" language for weak citations; do not recommend outright removal.
+- anchor_quote must be copied verbatim from SECTION TEXT.
 - Do not include raw newline characters inside JSON strings.
 
 SECTION TITLE:

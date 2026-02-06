@@ -625,137 +625,104 @@ def build_report_pdf(
     else:
         da_status = _clean_text(deep_analysis.get("status") or "", max_chars=40).lower()
         if da_status == "completed":
-            subsection_recs = deep_analysis.get("subsection_recommendations")
-            if isinstance(subsection_recs, Mapping):
-                sub_status = _clean_text(subsection_recs.get("status") or "", max_chars=40).lower()
-                if sub_status == "completed":
-                    items = subsection_recs.get("items")
-                    if isinstance(items, list) and items:
-                        note = _clean_text(subsection_recs.get("note") or "", max_chars=600)
-                        if note:
-                            story.append(Paragraph(escape(note), styles["Body"]))
-                        for idx, item in enumerate(items, 1):
-                            if not isinstance(item, Mapping):
-                                continue
-                            title = _clean_text(item.get("title") or f"Section {idx}", max_chars=200)
-                            story.append(Paragraph(f"{idx}. {escape(title)}", styles["IssueTitle"]))
-
-                            plan = item.get("plan") if isinstance(item.get("plan"), Mapping) else {}
-                            summary = _clean_text(plan.get("summary") or "", max_chars=1200)
-                            if summary:
-                                story.append(Paragraph(escape(summary), styles["Body"]))
-
-                            graph = item.get("graph") if isinstance(item.get("graph"), Mapping) else {}
-                            graph_nodes = graph.get("nodes") if isinstance(graph.get("nodes"), list) else []
-                            graph_edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
-                            seed_rids = item.get("seed_rids") if isinstance(item.get("seed_rids"), list) else []
-                            story.append(
-                                Paragraph(
-                                    f"Graph: {len(graph_nodes)} refs, {len(graph_edges)} links. Seeds: {len(seed_rids)}.",
-                                    styles["Body"],
-                                )
-                            )
-
-                            improvements = plan.get("improvements") if isinstance(plan.get("improvements"), list) else []
-                            if improvements:
-                                story.append(Paragraph("Improvements", styles["Subsection"]))
-                                for imp in improvements:
-                                    if not isinstance(imp, Mapping):
-                                        continue
-                                    priority = _clean_text(imp.get("priority") or "", max_chars=20) or "n/a"
-                                    action = _clean_text(imp.get("action") or "", max_chars=700)
-                                    story.append(
-                                        Paragraph(
-                                            f"- Priority {escape(priority)}: {escape(action)}",
-                                            styles["Body"],
-                                        )
-                                    )
-                                    why = _clean_text(imp.get("why") or "", max_chars=1000)
-                                    if why:
-                                        story.append(Paragraph(f"Why: {escape(why)}", styles["Body"]))
-                                    how_steps = imp.get("how") if isinstance(imp.get("how"), list) else []
-                                    for step in how_steps:
-                                        step_text = _clean_text(step or "", max_chars=800)
-                                        if step_text:
-                                            story.append(Paragraph(f"- {escape(step_text)}", styles["Body"]))
-                                    rids = imp.get("rids") if isinstance(imp.get("rids"), list) else []
-                                    if rids:
-                                        rid_text = ", ".join(
-                                            _clean_text(str(rid).replace("[", "").replace("]", ""), max_chars=20)
-                                            for rid in rids
-                                        )
-                                        story.append(Paragraph(f"Supporting refs: {escape(rid_text)}", styles["Body"]))
-
-                            ref_integrations = (
-                                plan.get("reference_integrations")
-                                if isinstance(plan.get("reference_integrations"), list)
-                                else []
-                            )
-                            if ref_integrations:
-                                story.append(Paragraph("References to integrate", styles["Subsection"]))
-                                for add in ref_integrations:
-                                    if not isinstance(add, Mapping):
-                                        continue
-                                    rid = _clean_text(str(add.get("rid") or "").replace("[", "").replace("]", ""), max_chars=20)
-                                    priority = _clean_text(add.get("priority") or "medium", max_chars=40)
-                                    story.append(
-                                        Paragraph(
-                                            f"- [{escape(rid)}] priority: {escape(priority)}",
-                                            styles["Body"],
-                                        )
-                                    )
-                                    why = _clean_text(add.get("why") or "", max_chars=900)
-                                    where = _clean_text(add.get("where") or "", max_chars=500)
-                                    example = _clean_text(add.get("example") or "", max_chars=900)
-                                    if why:
-                                        story.append(Paragraph(f"Why: {escape(why)}", styles["Body"]))
-                                    if where:
-                                        story.append(Paragraph(f"Where: {escape(where)}", styles["Body"]))
-                                    if example:
-                                        story.append(Paragraph(f"Draft: {escape(example)}", styles["Body"]))
-
-                            questions = plan.get("questions") if isinstance(plan.get("questions"), list) else []
-                            if questions:
-                                story.append(Paragraph("Questions", styles["Subsection"]))
-                                for q in questions:
-                                    q_text = _clean_text(q or "", max_chars=700)
-                                    if q_text:
-                                        story.append(Paragraph(f"- {escape(q_text)}", styles["Body"]))
-                            story.append(Spacer(1, 3))
-                elif sub_status == "skipped":
-                    reason = _clean_text(
-                        subsection_recs.get("reason") or "Section recommendations were skipped.",
-                        max_chars=700,
-                    )
-                    story.append(Paragraph(escape(reason), styles["Body"]))
-
-            suggestions = deep_analysis.get("suggestions")
-            if isinstance(suggestions, Mapping):
-                sugg_status = _clean_text(suggestions.get("status") or "", max_chars=40).lower()
-                if sugg_status == "completed":
-                    note = _clean_text(suggestions.get("note") or "", max_chars=1000)
+            recommendations = deep_analysis.get("recommendations")
+            if isinstance(recommendations, Mapping):
+                rec_status = _clean_text(recommendations.get("status") or "", max_chars=40).lower()
+                if rec_status == "completed":
+                    overview = _clean_text(recommendations.get("overview") or "", max_chars=1500)
+                    if overview:
+                        story.append(Paragraph(escape(overview), styles["Body"]))
+                    note = _clean_text(recommendations.get("note") or "", max_chars=1000)
                     if note:
                         story.append(Paragraph(escape(note), styles["Body"]))
-                    sections = suggestions.get("sections")
-                    if isinstance(sections, list):
-                        story.append(Paragraph("Suggested additions/removals", styles["Subsection"]))
+
+                    global_actions = recommendations.get("global_actions")
+                    if isinstance(global_actions, list) and global_actions:
+                        story.append(Paragraph("Top priorities", styles["Subsection"]))
+                        for idx, action in enumerate(global_actions, 1):
+                            if not isinstance(action, Mapping):
+                                continue
+                            section_title = _clean_text(action.get("section_title") or "", max_chars=180)
+                            action_text = _clean_text(action.get("action") or "", max_chars=900)
+                            if not action_text:
+                                continue
+                            action_type = _clean_text(action.get("action_type") or "", max_chars=30).lower()
+                            action_label = action_type.title() if action_type else "Action"
+                            heading = f"{idx}. [{action_label}] {action_text}"
+                            if section_title:
+                                heading += f" ({section_title})"
+                            story.append(Paragraph(escape(heading), styles["IssueTitle"]))
+
+                            why = _clean_text(action.get("why") or "", max_chars=900)
+                            if why:
+                                story.append(Paragraph(f"Why: {escape(why)}", styles["Body"]))
+                            where = _clean_text(action.get("where") or "", max_chars=700)
+                            if where:
+                                story.append(Paragraph(f"Where: {escape(where)}", styles["Body"]))
+                            anchor = _clean_text(action.get("anchor_quote") or "", max_chars=500)
+                            if anchor:
+                                story.append(Paragraph(f"Anchor quote: \"{escape(anchor)}\"", styles["Body"]))
+                            rids = action.get("rids") if isinstance(action.get("rids"), list) else []
+                            if rids:
+                                rid_text = ", ".join(
+                                    _clean_text(str(rid).replace("[", "").replace("]", ""), max_chars=20)
+                                    for rid in rids
+                                    if _clean_text(str(rid), max_chars=20)
+                                )
+                                if rid_text:
+                                    story.append(Paragraph(f"Supporting refs: {escape(rid_text)}", styles["Body"]))
+                            story.append(Spacer(1, 2))
+
+                    sections = recommendations.get("sections")
+                    if isinstance(sections, list) and sections:
+                        story.append(Paragraph("By section", styles["Subsection"]))
                         for idx, section in enumerate(sections, 1):
                             if not isinstance(section, Mapping):
                                 continue
-                            title = _clean_text(section.get("title") or f"Section {idx}", max_chars=200)
+                            title = _clean_text(section.get("title") or f"Section {idx}", max_chars=240)
                             story.append(Paragraph(f"{idx}. {escape(title)}", styles["IssueTitle"]))
-                            bullets = section.get("bullets") if isinstance(section.get("bullets"), list) else []
-                            if not bullets:
-                                story.append(Paragraph("No new recommendations for this section.", styles["Body"]))
-                            for bullet in bullets:
-                                bullet_text = _clean_text(bullet or "", max_chars=1200)
-                                if bullet_text:
-                                    story.append(Paragraph(f"- {escape(bullet_text)}", styles["Body"]))
-                elif sugg_status:
-                    reason = _clean_text(suggestions.get("reason") or "No recommendations were generated.", max_chars=700)
+                            actions = section.get("actions") if isinstance(section.get("actions"), list) else []
+                            if not actions:
+                                story.append(Paragraph("No recommendations for this section.", styles["Body"]))
+                                continue
+                            for action in actions:
+                                if not isinstance(action, Mapping):
+                                    continue
+                                action_text = _clean_text(action.get("action") or "", max_chars=900)
+                                if not action_text:
+                                    continue
+                                action_type = _clean_text(action.get("action_type") or "", max_chars=30).lower()
+                                action_label = action_type.title() if action_type else "Action"
+                                story.append(Paragraph(f"- [{escape(action_label)}] {escape(action_text)}", styles["Body"]))
+                                why = _clean_text(action.get("why") or "", max_chars=900)
+                                if why:
+                                    story.append(Paragraph(f"Why: {escape(why)}", styles["Body"]))
+                                where = _clean_text(action.get("where") or "", max_chars=700)
+                                if where:
+                                    story.append(Paragraph(f"Where: {escape(where)}", styles["Body"]))
+                                anchor = _clean_text(action.get("anchor_quote") or "", max_chars=500)
+                                if anchor:
+                                    story.append(Paragraph(f"Anchor quote: \"{escape(anchor)}\"", styles["Body"]))
+                                rids = action.get("rids") if isinstance(action.get("rids"), list) else []
+                                if rids:
+                                    rid_text = ", ".join(
+                                        _clean_text(str(rid).replace("[", "").replace("]", ""), max_chars=20)
+                                        for rid in rids
+                                        if _clean_text(str(rid), max_chars=20)
+                                    )
+                                    if rid_text:
+                                        story.append(Paragraph(f"Supporting refs: {escape(rid_text)}", styles["Body"]))
+                            story.append(Spacer(1, 3))
+                elif rec_status == "skipped":
+                    reason = _clean_text(
+                        recommendations.get("reason") or "No recommendations were generated.",
+                        max_chars=700,
+                    )
                     story.append(Paragraph(escape(reason), styles["Body"]))
                 else:
                     story.append(Paragraph("No recommendations were generated for this run.", styles["Body"]))
+            else:
+                story.append(Paragraph("No recommendations were generated for this run.", styles["Body"]))
         elif da_status == "skipped":
             reason = _clean_text(deep_analysis.get("reason") or "Recommendations were skipped.", max_chars=700)
             story.append(Paragraph(escape(reason), styles["Body"]))
