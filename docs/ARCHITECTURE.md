@@ -21,7 +21,7 @@ The worker is responsible for:
 - Claiming queued jobs and managing status transitions.
 - Running `analysis.pipeline.analyze_document` and persisting report JSON + methodology.
 - Emitting progress events for SSE.
-- Issuing access tokens after completion and triggering delivery via email (when configured).
+- Seeding access-token material after completion while keeping sharing disabled by default until the owner enables it.
 - Ensuring required datasets are present (retraction/predatory).
 
 ## Routes
@@ -29,7 +29,7 @@ The worker is responsible for:
 FastAPI routes live under `server/miscite/routes/`:
 
 - `auth.py`: email login + session management.
-- `dashboard.py`: uploads, job status, report UI + API.
+- `dashboard.py`: uploads, job status, report UI + API (including owner sharing toggles/token controls and owner-side UI metric ingestion).
 - `billing.py`: Stripe billing endpoints (feature-flagged).
 - `health.py`: liveness/readiness probes.
 - `seo.py`: robots.txt + sitemap + favicon redirect.
@@ -47,7 +47,7 @@ Prompt files live under `server/miscite/prompts/`:
 1) Upload route stores the file and creates `Document` + `AnalysisJob` rows.
 2) A worker claims the job and emits progress events.
 3) The worker runs the analysis pipeline and persists report JSON + methodology markdown.
-4) On completion, the worker issues the access token and emails it to the user.
+4) On completion, the worker seeds token material in a protected/disabled state; owners enable sharing from the report page when needed.
 5) The UI renders the report; `/api/jobs/{id}` returns the report JSON.
 
 ## Analysis pipeline

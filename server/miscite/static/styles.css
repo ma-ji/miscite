@@ -333,13 +333,18 @@ textarea {
   min-width: 0;
 }
 
+#report-top .ds-grid {
+  align-items: start;
+}
+
 #report-top .span-5 {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
 }
 
 #report-top .span-5 > .ds-card {
-  margin-top: auto;
+  margin-top: 0;
 }
 
 .report-nav {
@@ -1035,6 +1040,11 @@ a.miscite-wordmark:hover {
   color: var(--muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.form-label--normal {
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .form-help {
@@ -1854,6 +1864,157 @@ p {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.share-access-header {
+  align-items: center;
+}
+
+.share-access-header-main {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.share-access-header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.share-access-panel-body {
+  gap: var(--space-2);
+}
+
+.share-inline-status {
+  min-height: 1.15rem;
+}
+
+.share-inline-status[data-tone="info"] {
+  color: var(--muted);
+}
+
+.share-inline-status[data-tone="success"] {
+  color: var(--severity-low);
+}
+
+.share-inline-status[data-tone="warning"] {
+  color: var(--severity-medium);
+}
+
+.share-inline-status[data-tone="error"] {
+  color: var(--severity-high);
+}
+
+.share-toast {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 40;
+  max-width: min(360px, calc(100vw - (var(--space-4) * 2)));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+  pointer-events: none;
+}
+
+.share-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.share-toast[data-tone="success"] {
+  border-color: var(--severity-low-border);
+  background: var(--severity-low-soft);
+}
+
+.share-toast[data-tone="warning"] {
+  border-color: var(--severity-medium-border);
+  background: var(--severity-medium-soft);
+}
+
+.share-toast[data-tone="error"] {
+  border-color: var(--severity-high-border);
+  background: var(--severity-high-soft);
+}
+
+.share-advanced-details {
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-2) var(--space-3);
+}
+
+.share-advanced-details[open] {
+  box-shadow: var(--shadow-1);
+}
+
+.share-advanced-details > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--text-13);
+  font-weight: 600;
+  list-style: none;
+}
+
+.share-advanced-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.share-advanced-details > summary::after {
+  content: "v";
+  margin-left: var(--space-2);
+  color: var(--muted);
+}
+
+.share-advanced-details[open] > summary::after {
+  content: "^";
+}
+
+.share-advanced-body {
+  margin-top: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ds-card--danger {
+  border-color: var(--severity-high-border);
+  background: var(--surface);
+}
+
+.danger-zone-details > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--severity-high);
+  list-style: none;
+}
+
+.danger-zone-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.danger-zone-details > summary::after {
+  content: "v";
+  margin-left: var(--space-2);
+  color: var(--severity-high);
+}
+
+.danger-zone-details[open] > summary::after {
+  content: "^";
+}
+
+.danger-zone-body {
+  margin-top: var(--space-3);
+  display: grid;
   gap: var(--space-3);
 }
 
@@ -2683,6 +2844,16 @@ input[readonly] {
 
   .ds-card-header--split {
     flex-direction: column;
+  }
+
+  .share-access-header-actions {
+    align-items: flex-start;
+  }
+
+  .share-toast {
+    left: var(--space-3);
+    right: var(--space-3);
+    max-width: none;
   }
 
   .ds-job-file span {

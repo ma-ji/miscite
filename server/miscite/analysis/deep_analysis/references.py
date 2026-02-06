@@ -637,7 +637,7 @@ def build_reference_master_list(
     master_group_defs.append(
         {
             "key": "tangential_citations",
-            "title": "Citations to revisit",
+            "title": "Citations to remove",
             "keys": _assign_group([k for k in tangential_keys if meta_by_key.get(k, {}).get("in_paper")]),
         }
     )
@@ -766,7 +766,7 @@ def build_reference_master_list(
     citation_groups.append(
         {
             "key": "tangential_citations",
-            "title": "Citations to revisit",
+            "title": "Citations to remove",
             "rids": [rid_by_key[k] for k in tangential_keys if k in rid_by_key],
         }
     )
@@ -777,7 +777,7 @@ def build_reference_master_list(
             0,
             {
                 "key": "key_refs",
-                "title": "Key references used to build the pool",
+                "title": "Key references already cited",
                 "rids": [rid_by_key[k] for k in key_keys if k in rid_by_key],
             },
         )

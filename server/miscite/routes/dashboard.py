@@ -124,6 +124,23 @@ def _resolve_token_expiration(
     return expires_at, None
 
 
+def _enable_sharing(settings: Settings, job: AnalysisJob) -> None:
+    now = dt.datetime.now(dt.UTC)
+    token_value = (job.access_token_value or "").strip()
+    created_token = False
+    if not token_value:
+        token_value = generate_access_token()
+        created_token = True
+    job.access_token_value = token_value
+    job.access_token_hint = access_token_hint(token_value)
+    job.access_token_hash = hash_token(token_value)
+    expires_at = _as_utc(job.access_token_expires_at)
+    if expires_at is not None and expires_at < now:
+        job.access_token_expires_at = now + dt.timedelta(days=settings.access_token_days)
+    elif created_token and job.access_token_expires_at is None:
+        job.access_token_expires_at = now + dt.timedelta(days=settings.access_token_days)
+
+
 def _relative_time(ts: dt.datetime | None) -> str:
     ts = _as_utc(ts)
     if ts is None:
@@ -691,6 +708,7 @@ def job_page(
                 "status": job.status,
                 "filename": doc.original_filename,
                 "error_message": _safe_error_message(settings, job.error_message),
+                "access_token_enabled": bool(job.access_token_hash),
                 "access_token_hint": job.access_token_hint,
                 "access_token_value": job.access_token_value,
                 "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
@@ -747,6 +765,51 @@ def job_pdf(
     )
 
 
+@router.post("/jobs/{job_id}/sharing")
+def job_sharing_toggle(
+    request: Request,
+    job_id: str,
+    action: str = Form(""),
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-sharing",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+
+    job = db.scalar(
+        select(AnalysisJob)
+        .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
+        .limit(1)
+    )
+    if not job:
+        raise HTTPException(status_code=404)
+
+    redirect_path = f"/jobs/{job.id}"
+    action_value = (action or "").strip().lower()
+    if action_value == "enable":
+        _enable_sharing(settings, job)
+        db.commit()
+        redirect_path = f"/jobs/{job.id}?sharing=enabled"
+    elif action_value == "disable":
+        if job.access_token_hash:
+            job.access_token_hash = None
+            db.commit()
+        redirect_path = f"/jobs/{job.id}?sharing=disabled"
+
+    return RedirectResponse(redirect_path, status_code=303)
+
+
 @router.post("/jobs/{job_id}/access-token")
 def job_access_token(
     request: Request,
@@ -784,6 +847,9 @@ def job_access_token(
     if action_value not in {"rotate", "update-expiration"}:
         action_value = "rotate"
 
+    if not job.access_token_hash:
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
     has_token = bool(job.access_token_hash)
     if action_value == "update-expiration" and (not has_token or job.access_token_value is None):
         action_value = "rotate"
@@ -815,6 +881,7 @@ def job_access_token(
                     "status": job.status,
                     "filename": doc.original_filename,
                     "error_message": _safe_error_message(settings, job.error_message),
+                    "access_token_enabled": bool(job.access_token_hash),
                     "access_token_hint": job.access_token_hint,
                     "access_token_value": job.access_token_value,
                     "access_token_expires_at": job.access_token_expires_at.isoformat()
@@ -865,6 +932,7 @@ def job_access_token(
                 "status": job.status,
                 "filename": doc.original_filename,
                 "error_message": _safe_error_message(settings, job.error_message),
+                "access_token_enabled": bool(job.access_token_hash),
                 "access_token_hint": job.access_token_hint,
                 "access_token_value": job.access_token_value,
                 "access_token_expires_at": job.access_token_expires_at.isoformat() if job.access_token_expires_at else None,
@@ -1062,6 +1130,54 @@ def job_cancel_api(
     )
     db.commit()
     return {"status": job.status}
+
+
+@router.post("/api/jobs/{job_id}/ui-metric")
+def job_ui_metric_api(
+    request: Request,
+    job_id: str,
+    name: str = Form(""),
+    value: str = Form(""),
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-ui-metric",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+
+    job = db.scalar(select(AnalysisJob).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id))
+    if not job:
+        raise HTTPException(status_code=404)
+
+    metric = (name or "").strip().lower()
+    if not metric or len(metric) > 64 or re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", metric) is None:
+        raise HTTPException(status_code=400, detail="Invalid metric name.")
+
+    raw_value = (value or "").strip()
+    metric_payload: dict[str, str] = {"metric": metric}
+    if raw_value:
+        metric_payload["value"] = raw_value[:256]
+
+    db.add(
+        AnalysisJobEvent(
+            job_id=job.id,
+            stage="ui_metric",
+            message=json.dumps(metric_payload, ensure_ascii=False, separators=(",", ":")),
+            progress=None,
+        )
+    )
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/api/jobs/{job_id}")

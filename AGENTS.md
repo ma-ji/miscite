@@ -84,8 +84,8 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
    - Flag issues: missing bibliography, unresolved refs, retractions, predatory venues, inappropriate citations (LLM + optional local NLI).
    - Optional deep analysis: expands citation neighborhood via OpenAlex and produces ranked manuscript recommendations (top priorities + per-section actions with location anchors) (`analysis/deep_analysis/deep_analysis.py`).
    - Report assembled + methodology markdown.
-   - On completion, the worker issues the access token, deducts LLM usage cost from balance, and emails the access token.
-4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can manage access tokens + delete reports here), plus report PDF exports at `/jobs/{id}/report.pdf` and `/reports/{token}/report.pdf`.
+   - On completion, the worker prepares token material in a disabled/protected state (sharing off by default), deducts LLM usage cost from balance, and leaves sharing activation to the owner in the report UI.
+4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can toggle sharing, manage token expiration/rotation when sharing is enabled, and delete reports), plus report PDF exports at `/jobs/{id}/report.pdf` and `/reports/{token}/report.pdf`. Owner-side UX interaction telemetry is accepted at `/api/jobs/{id}/ui-metric` (stored in `AnalysisJobEvent` rows with stage `ui_metric`).
 
 ## Report schema contract
 
@@ -169,7 +169,7 @@ If you add new env vars:
 - LLM parsing and inappropriate checks are mandatory; missing `OPENROUTER_API_KEY` or disabled `MISCITE_ENABLE_LLM_INAPPROPRIATE` fails jobs.
 - Docling is required for text extraction (`docling` package).
 - Stale RUNNING jobs are reaped based on `MISCITE_JOB_STALE_SECONDS`; be mindful of long-running documents.
-- Access tokens are issued when a report completes; expiration can be adjusted or removed in the report UI (default is `MISCITE_ACCESS_TOKEN_DAYS`). Expired jobs/uploads are auto-deleted by the worker when an expiration is set.
+- Reports are protected by default after completion. Owners can explicitly enable/disable sharing in the report UI; enabling activates the access token. Expiration can be adjusted or removed in the report UI (default is `MISCITE_ACCESS_TOKEN_DAYS`). Expired jobs/uploads are auto-deleted by the worker when an expiration is set.
 
 ## Common commands
 

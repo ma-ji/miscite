@@ -107,7 +107,14 @@
         {% if public_view %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
-              <h3>Read-only report</h3>
+              <div class="ds-card-header--split">
+                <h3>Read-only report</h3>
+                {% if report_pdf_url %}
+                  <a class="ds-button ds-button--secondary ds-button--sm" href="{{ report_pdf_url }}">
+                    Download PDF
+                  </a>
+                {% endif %}
+              </div>
               <p class="miscite-muted">
                 This view is shared via access token and can show live progress until the report is ready.
                 Get access to manage jobs and exports.
@@ -127,177 +134,201 @@
                   </button>
                 </div>
                 <p class="form-help">Anyone with this link can view the report until it expires.</p>
-                {% if report_pdf_url %}
-                  <a class="ds-button ds-button--secondary ds-button--sm" href="{{ report_pdf_url }}">
-                    Download PDF report
-                  </a>
-                {% endif %}
               </div>
             </div>
           </div>
         {% else %}
           {% set token_value = access_token or job.access_token_value %}
           {% set share_link = token_value and (public_origin ~ "/reports/" ~ token_value) %}
+          {% set sharing_enabled = job.access_token_enabled %}
           {% set has_token = token_value or job.access_token_hint %}
-          {% set sharing_enabled = has_token and (not job.access_token_expired) %}
-          {% set share_link_ready = sharing_enabled and share_link %}
+          {% set share_link_ready = sharing_enabled and (not job.access_token_expired) and share_link %}
           {% set share_link_display = share_link if share_link_ready else "" %}
-          {% set share_link_placeholder = "Generate or renew a token to enable sharing" %}
-          {% if job.access_token_expired %}
-            {% set share_link_placeholder = "Token expired. Renew token to enable sharing" %}
+          {% set share_link_placeholder = "Turn sharing on and rotate token to generate a link" %}
+          {% if sharing_enabled and job.access_token_expired %}
+            {% set share_link_placeholder = "Token expired. Renew token to restore sharing" %}
           {% elif sharing_enabled and not share_link %}
-            {% set share_link_placeholder = "Rotate token to reveal a new share link" %}
+            {% set share_link_placeholder = "Rotate token to reveal a new link" %}
           {% endif %}
-          {% set token_status = "Not generated" %}
-          {% if has_token %}
-            {% if job.access_token_expired %}
-              {% set token_status = "Expired" %}
-            {% elif token_value %}
-              {% set token_status = "Active" %}
-            {% else %}
-              {% set token_status = "Active (hidden)" %}
-            {% endif %}
+          {% set state_sentence = "Sharing is off. Turn sharing on to generate a secure link." %}
+          {% if sharing_enabled and job.access_token_expired %}
+            {% set state_sentence = "Sharing is on, but the token is expired. Renew it to restore access." %}
+          {% elif sharing_enabled %}
+            {% set state_sentence = "Sharing is on. Anyone with the link can open this report." %}
           {% endif %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
-              <h3>Share access</h3>
-              <p class="miscite-muted">
-                Report sharing is enabled only while an access token is active. Otherwise the report remains protected.
-              </p>
-              <div class="ds-panel ds-panel--compact ds-mt-4">
-                <div class="ds-panel-body ds-stack ds-stack--tight">
-                  <div class="hero-meta">
-                    <span class="ds-pill">Sharing: {% if sharing_enabled %}Enabled{% else %}Protected{% endif %}</span>
-                    <span class="ds-pill">Token: {{ token_status }}</span>
-                    {% if token_value %}
-                      {% if job.access_token_expires_at_human %}
-                        <span class="ds-pill">Expires {{ job.access_token_expires_at_human }}</span>
-                      {% else %}
-                        <span class="ds-pill">No expiration</span>
-                      {% endif %}
-                    {% endif %}
-                  </div>
-                  <div class="ds-input-row">
-                    <div class="form-field">
-                      <label class="form-label" for="access-link-value">Share link</label>
-                      <input
-                        id="access-link-value"
-                        class="miscite-mono"
-                        type="text"
-                        readonly
-                        placeholder="{{ share_link_placeholder }}"
-                        value="{{ share_link_display }}"
-                      />
-                    </div>
-                    <button
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      type="button"
-                      data-copy-target="access-link-value"
-                      {% if not share_link_ready %}disabled{% endif %}
-                    >
-                      Copy link
-                    </button>
-                    <a
-                      class="ds-button ds-button--secondary ds-button--sm"
-                      href="{{ share_link if share_link_ready else '#' }}"
-                      target="_blank"
-                      rel="noopener"
-                      aria-disabled="{% if not share_link_ready %}true{% else %}false{% endif %}"
-                      {% if not share_link_ready %}tabindex="-1"{% endif %}
-                    >
-                      Open
-                    </a>
-                  </div>
-                  {% if share_link_ready %}
-                    <p class="form-help">Anyone with this link can view the report while sharing is enabled.</p>
-                  {% elif job.access_token_expired %}
-                    <p class="form-help">This report is protected because the token expired. Renew token to re-enable sharing.</p>
-                  {% elif job.access_token_hint and not token_value %}
-                    <p class="form-help">
-                      Sharing is enabled, but the current token is hidden and ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>. Rotate to reveal a new one.
-                    </p>
-                  {% else %}
-                    <p class="form-help">This report is protected. Generate a token to enable sharing.</p>
-                  {% endif %}
-                  {% if access_token_error %}
-                    <div class="ds-alert ds-alert--error ds-mt-3">{{ access_token_error }}</div>
-                  {% endif %}
-                  <form method="post" action="/jobs/{{ job.id }}/access-token" class="ds-stack ds-stack--tight ds-mt-3">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <div class="ds-input-row">
-                      <div class="form-field">
-                        <label class="form-label" for="access-token-expiry-mode">Expiration</label>
-                        <select id="access-token-expiry-mode" name="expires_mode">
-                          <option value="current" {% if job.access_token_expires_mode == "current" %}selected{% endif %}>
-                            Keep current
-                          </option>
-                          <option value="default" {% if job.access_token_expires_mode == "default" %}selected{% endif %}>
-                            Default ({{ access_token_days }} days)
-                          </option>
-                          <option value="date" {% if job.access_token_expires_mode == "date" %}selected{% endif %}>
-                            Specific date &amp; time (UTC)
-                          </option>
-                          <option value="never" {% if job.access_token_expires_mode == "never" %}selected{% endif %}>
-                            No expiration
-                          </option>
-                        </select>
-                        <p class="form-help">Choose how long the token should remain valid.</p>
-                      </div>
-                      <div class="form-field" id="access-token-expires-at-field">
-                        <label class="form-label" for="access-token-expires-at">Expires at (UTC)</label>
-                        <input
-                          id="access-token-expires-at"
-                          name="expires_at"
-                          type="datetime-local"
-                          value="{{ job.access_token_expires_at_input }}"
-                        />
-                      </div>
-                    </div>
-                    <div class="ds-input-row">
-                      <button
-                        class="ds-button ds-button--secondary ds-button--sm"
-                        type="submit"
-                        name="action"
-                        value="update-expiration"
-                      >
-                        Update expiration
-                      </button>
-                      <button
-                        class="ds-button ds-button--ghost ds-button--sm"
-                        type="submit"
-                        name="action"
-                        value="rotate"
-                      >
-                        {% if has_token %}
-                          {% if job.access_token_expired %}
-                            Renew token
-                          {% else %}
-                            Rotate token
-                          {% endif %}
-                        {% else %}
-                          Generate token
-                        {% endif %}
-                      </button>
-                    </div>
-                  </form>
+              <div class="ds-card-header--split share-access-header">
+                <div class="share-access-header-main">
+                  <h3>Share access</h3>
                   {% if report_pdf_url %}
                     <a class="ds-button ds-button--secondary ds-button--sm" href="{{ report_pdf_url }}">
-                      Download PDF report
+                      Download PDF
                     </a>
                   {% endif %}
                 </div>
+                <div class="share-access-header-actions">
+                  <form method="post" action="/jobs/{{ job.id }}/sharing" id="sharing-toggle-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button
+                      class="ds-button {% if sharing_enabled %}ds-button--secondary{% else %}ds-button--primary{% endif %} ds-button--sm"
+                      type="submit"
+                      name="action"
+                      id="sharing-toggle-button"
+                      data-sharing-toggle="{% if sharing_enabled %}on{% else %}off{% endif %}"
+                      value="{% if sharing_enabled %}disable{% else %}enable{% endif %}"
+                    >
+                      {% if sharing_enabled %}
+                        Turn off
+                      {% else %}
+                        Turn on
+                      {% endif %}
+                    </button>
+                  </form>
+                  <span class="ds-pill">State: {% if sharing_enabled %}Shareable{% else %}Protected{% endif %}</span>
+                </div>
               </div>
-              <form
-                method="post"
-                action="/jobs/{{ job.id }}/delete"
-                class="ds-mt-4"
-                onsubmit="return confirm('Delete this report and uploaded file? This cannot be undone.');"
-              >
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button class="ds-button ds-button--warning ds-button--sm" type="submit">
-                  Delete report
-                </button>
-              </form>
+              <p class="miscite-muted">{{ state_sentence }}</p>
+              <p class="form-help share-inline-status" id="share-inline-status" role="status" aria-live="polite"></p>
+              <div class="share-toast" id="share-toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+              {% if sharing_enabled %}
+                <div class="ds-panel ds-panel--compact ds-mt-4">
+                  <div class="ds-panel-body ds-stack ds-stack--tight share-access-panel-body">
+                    <div class="ds-input-row">
+                      <div class="form-field">
+                        <label class="form-label form-label--normal" for="access-link-value">Share link</label>
+                        <input
+                          id="access-link-value"
+                          class="miscite-mono"
+                          type="text"
+                          readonly
+                          placeholder="{{ share_link_placeholder }}"
+                          value="{{ share_link_display }}"
+                        />
+                      </div>
+                      <button
+                        class="ds-button ds-button--primary ds-button--sm"
+                        type="button"
+                        data-copy-target="access-link-value"
+                        {% if not share_link_ready %}disabled{% endif %}
+                      >
+                        Copy link
+                      </button>
+                      <a
+                        class="ds-button ds-button--secondary ds-button--sm"
+                        id="share-link-open"
+                        href="{{ share_link if share_link_ready else '#' }}"
+                        target="_blank"
+                        rel="noopener"
+                        aria-disabled="{% if not share_link_ready %}true{% else %}false{% endif %}"
+                        {% if not share_link_ready %}tabindex="-1"{% endif %}
+                      >
+                        Open
+                      </a>
+                    </div>
+                    {% if share_link_ready and job.access_token_expires_at_human %}
+                      <p class="form-help">Link active until {{ job.access_token_expires_at_human }}.</p>
+                    {% elif share_link_ready %}
+                      <p class="form-help">Link active with no expiration.</p>
+                    {% elif job.access_token_expired %}
+                      <p class="form-help">Token expired. Renew token to restore access.</p>
+                    {% elif job.access_token_hint and not token_value %}
+                      <p class="form-help">Token is hidden and ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>. Rotate to reveal a new one.</p>
+                    {% else %}
+                      <p class="form-help">Rotate token to activate this link.</p>
+                    {% endif %}
+                    <details class="share-advanced-details" id="share-advanced-settings">
+                      <summary>Advanced access settings</summary>
+                      <div class="share-advanced-body">
+                        {% if access_token_error %}
+                          <div class="ds-alert ds-alert--error ds-mt-3">{{ access_token_error }}</div>
+                        {% endif %}
+                        <form method="post" action="/jobs/{{ job.id }}/access-token" class="ds-stack ds-stack--tight">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                          <div class="ds-input-row">
+                            <div class="form-field">
+                              <label class="form-label form-label--normal" for="access-token-expiry-mode">Expiration</label>
+                              <select id="access-token-expiry-mode" name="expires_mode">
+                                <option value="current" {% if job.access_token_expires_mode == "current" %}selected{% endif %}>
+                                  Keep current
+                                </option>
+                                <option value="default" {% if job.access_token_expires_mode == "default" %}selected{% endif %}>
+                                  Default ({{ access_token_days }} days)
+                                </option>
+                                <option value="date" {% if job.access_token_expires_mode == "date" %}selected{% endif %}>
+                                  Specific date &amp; time (UTC)
+                                </option>
+                                <option value="never" {% if job.access_token_expires_mode == "never" %}selected{% endif %}>
+                                  No expiration
+                                </option>
+                              </select>
+                              <p class="form-help">Choose how long the token should remain valid.</p>
+                            </div>
+                            <div class="form-field" id="access-token-expires-at-field">
+                              <label class="form-label form-label--normal" for="access-token-expires-at">Expires at (UTC)</label>
+                              <input
+                                id="access-token-expires-at"
+                                name="expires_at"
+                                type="datetime-local"
+                                value="{{ job.access_token_expires_at_input }}"
+                              />
+                            </div>
+                          </div>
+                          <div class="ds-input-row">
+                            <button
+                              class="ds-button ds-button--secondary ds-button--sm"
+                              type="submit"
+                              name="action"
+                              value="update-expiration"
+                            >
+                              Update expiration
+                            </button>
+                            <button
+                              class="ds-button ds-button--ghost ds-button--sm"
+                              type="submit"
+                              name="action"
+                              value="rotate"
+                            >
+                              {% if has_token %}
+                                {% if job.access_token_expired %}
+                                  Renew token
+                                {% else %}
+                                  Rotate token
+                                {% endif %}
+                              {% else %}
+                                Generate token
+                              {% endif %}
+                            </button>
+                          </div>
+                        </form>
+                        {% if job.access_token_hint and not token_value %}
+                          <p class="form-help">Current hidden token ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>.</p>
+                        {% endif %}
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="ds-card ds-card--subtle ds-card--danger">
+            <div class="card-content">
+              <details class="danger-zone-details">
+                <summary>Danger zone</summary>
+                <div class="danger-zone-body">
+                  <p class="miscite-muted">Delete this report and uploaded file. This action cannot be undone.</p>
+                  <form
+                    method="post"
+                    action="/jobs/{{ job.id }}/delete"
+                    id="delete-report-form"
+                  >
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button class="ds-button ds-button--warning ds-button--sm" type="submit">
+                      Delete report
+                    </button>
+                  </form>
+                </div>
+              </details>
             </div>
           </div>
         {% endif %}
@@ -1479,6 +1510,185 @@
       window.addEventListener("resize", onScroll);
       window.addEventListener("hashchange", computeCurrent);
       computeCurrent();
+    })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var publicView = {{ "true" if public_view else "false" }};
+      if (publicView) {
+        return;
+      }
+
+      var jobId = "{{ job.id }}";
+      var csrfToken = "{{ csrf_token }}";
+      var inlineStatus = document.getElementById("share-inline-status");
+      var toast = document.getElementById("share-toast");
+      var openLink = document.getElementById("share-link-open");
+      var toggleForm = document.getElementById("sharing-toggle-form");
+      var toggleButton = document.getElementById("sharing-toggle-button");
+      var deleteForm = document.getElementById("delete-report-form");
+      var advancedSettings = document.getElementById("share-advanced-settings");
+      var shareViewLoadedAt = Date.now();
+      var tracked = {
+        copied: false,
+        opened: false,
+        advancedOpened: false,
+      };
+      var toastTimer = 0;
+
+      var setFeedback = function (message, tone) {
+        if (!message) {
+          return;
+        }
+        var level = tone || "info";
+        if (inlineStatus) {
+          inlineStatus.textContent = message;
+          inlineStatus.setAttribute("data-tone", level);
+        }
+        if (!toast) {
+          return;
+        }
+        if (toastTimer) {
+          window.clearTimeout(toastTimer);
+        }
+        toast.hidden = false;
+        toast.textContent = message;
+        toast.setAttribute("data-tone", level);
+        toast.classList.add("is-visible");
+        toastTimer = window.setTimeout(function () {
+          toast.classList.remove("is-visible");
+          window.setTimeout(function () {
+            toast.hidden = true;
+          }, 180);
+        }, 1200);
+      };
+
+      var metricBody = function (name, value) {
+        var params = new URLSearchParams();
+        params.append("csrf_token", csrfToken || "");
+        params.append("name", name || "");
+        if (typeof value === "string" && value) {
+          params.append("value", value);
+        }
+        return params.toString();
+      };
+
+      var sendMetric = function (name, value, options) {
+        if (!jobId || !csrfToken || !name) {
+          return;
+        }
+        var body = metricBody(name, value);
+        var path = "/api/jobs/" + encodeURIComponent(jobId) + "/ui-metric";
+        var useBeacon = !!(options && options.keepalive && navigator.sendBeacon);
+        if (useBeacon) {
+          try {
+            var blob = new Blob([body], { type: "application/x-www-form-urlencoded" });
+            if (navigator.sendBeacon(path, blob)) {
+              return;
+            }
+          } catch (err) {
+            // fallback to fetch below
+          }
+        }
+        fetch(path, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+          },
+          credentials: "same-origin",
+          keepalive: !!(options && options.keepalive),
+          body: body,
+        }).catch(function () {
+          // ignore metric submission errors
+        });
+      };
+
+      window.addEventListener("miscite:copy", function (event) {
+        var detail = (event && event.detail) || {};
+        if ((detail.targetId || "") !== "access-link-value") {
+          return;
+        }
+        if (detail.ok === false) {
+          setFeedback("Could not copy the share link.", "error");
+          return;
+        }
+        setFeedback("Share link copied.", "success");
+        if (!tracked.copied) {
+          tracked.copied = true;
+          sendMetric("share_link_copy_ms", String(Math.max(0, Date.now() - shareViewLoadedAt)));
+        }
+      });
+
+      if (openLink) {
+        openLink.addEventListener("click", function () {
+          if (openLink.getAttribute("aria-disabled") === "true") {
+            return;
+          }
+          setFeedback("Opening shared report in a new tab.", "info");
+          if (!tracked.opened) {
+            tracked.opened = true;
+            sendMetric("share_link_open_ms", String(Math.max(0, Date.now() - shareViewLoadedAt)));
+          }
+        });
+      }
+
+      if (advancedSettings) {
+        var trackAdvancedOpen = function () {
+          if (advancedSettings.open && !tracked.advancedOpened) {
+            tracked.advancedOpened = true;
+            sendMetric("share_advanced_opened", "1");
+          }
+        };
+        advancedSettings.addEventListener("toggle", trackAdvancedOpen);
+        trackAdvancedOpen();
+      }
+
+      if (toggleForm && toggleButton) {
+        toggleForm.addEventListener("submit", function (event) {
+          var action = (toggleButton.value || "").toLowerCase();
+          if (action !== "disable") {
+            sendMetric("share_toggle_on", "1", { keepalive: true });
+            setFeedback("Turning sharing on...", "success");
+            return;
+          }
+          if (!window.confirm("Turn off sharing? Existing share links will stop working until you turn sharing on again.")) {
+            event.preventDefault();
+            setFeedback("Sharing stays on.", "info");
+            sendMetric("share_disable_misclick", "1");
+            return;
+          }
+          sendMetric("share_toggle_off", "1", { keepalive: true });
+          setFeedback("Turning sharing off...", "warning");
+        });
+      }
+
+      if (deleteForm) {
+        deleteForm.addEventListener("submit", function (event) {
+          if (!window.confirm("Delete this report and uploaded file? This cannot be undone.")) {
+            event.preventDefault();
+            setFeedback("Delete canceled.", "info");
+            sendMetric("delete_report_misclick", "1");
+            return;
+          }
+          sendMetric("delete_report_confirmed", "1", { keepalive: true });
+          setFeedback("Deleting report...", "warning");
+        });
+      }
+
+      var params = new URLSearchParams(window.location.search || "");
+      var sharingState = params.get("sharing");
+      if (sharingState === "disabled") {
+        setFeedback("Sharing disabled. The report is now protected.", "warning");
+      } else if (sharingState === "enabled") {
+        setFeedback("Sharing enabled.", "success");
+      }
+      if (sharingState && window.history && window.history.replaceState) {
+        params.delete("sharing");
+        var nextQuery = params.toString();
+        var nextUrl = window.location.pathname + (nextQuery ? "?" + nextQuery : "") + window.location.hash;
+        window.history.replaceState({}, document.title, nextUrl);
+      }
     })();
   </script>
   <script nonce="{{ csp_nonce }}">

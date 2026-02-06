@@ -218,6 +218,20 @@
             resolve();
           });
         };
+        var emitCopyEvent = function (targetId, ok) {
+          try {
+            window.dispatchEvent(
+              new CustomEvent("miscite:copy", {
+                detail: {
+                  targetId: targetId || "",
+                  ok: !!ok,
+                },
+              })
+            );
+          } catch (err) {
+            // ignore event errors
+          }
+        };
 
         copyButtons.forEach(function (button) {
           button.addEventListener("click", function () {
@@ -247,6 +261,7 @@
                 var previous = button.textContent;
                 button.textContent = "Copied";
                 button.disabled = true;
+                emitCopyEvent(targetId, true);
                 window.setTimeout(function () {
                   button.textContent = previous;
                   button.disabled = false;
@@ -254,6 +269,7 @@
               })
               .catch(function () {
                 fallbackCopy(text);
+                emitCopyEvent(targetId, false);
               });
           });
         });

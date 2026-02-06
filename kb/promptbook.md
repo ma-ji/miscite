@@ -847,3 +847,38 @@ Goal: Add PDF navigation aids with a beginning TOC and per-page return control.
 Prompt: Build a TOC for the PDF at the beginning. Also add button on each page (except the first) to go back to the TOC.
 Files touched: server/miscite/web/report_pdf.py, kb/promptbook.md.
 Decision/rationale: Added a clickable Table of Contents block near the start of the PDF and anchored all major sections (`Summary`, `Potential Reviewers`, `Flags`, `Recommendations`, plus conditional sections). Updated footer rendering to draw a visible "Back to TOC" button on pages after page 1 using internal PDF link rectangles targeting the TOC anchor.
+
+========
+Date: 2026-02-06
+Goal: Make report sharing explicitly owner-controlled with disabled-by-default behavior and cleaner Share access UX.
+Prompt: THINK HARD and carefully: add an enable/disable sharing button (default disabled), hide redundant sharing controls while disabled, and move Download PDF to the top-right of the Share access block.
+Files touched: server/miscite/routes/dashboard.py, server/miscite/templates/job.html, server/miscite/worker/__init__.py, AGENTS.md, docs/ARCHITECTURE.md, kb/promptbook.md.
+Decision/rationale: Introduced an explicit owner sharing toggle route and persisted state using `access_token_hash` presence as the on/off gate. Disabling sharing clears the active token hash (report remains protected); enabling sharing restores/creates token material and reactivates hash with a valid expiration policy. Updated worker completion behavior to seed token material but keep sharing disabled by default (no automatic activation/email send). Simplified the Share access card by hiding token-expiration/rotation/link controls when sharing is off, and moved PDF download actions into each card header’s top-right alignment for faster access.
+
+========
+Date: 2026-02-06
+Goal: Implement full Share access UX refinement plan (workflow focus, advanced disclosure, danger-zone separation, and measurable interaction metrics).
+Prompt: Implement all proposed changes to improve Share access UI/UX (header/action hierarchy, minimal protected state, primary share flow, advanced access settings collapse, separated delete zone, tighter hierarchy, and quick UX metrics).
+Files touched: server/miscite/templates/job.html, server/miscite/static/styles.css, server/miscite/routes/dashboard.py, server/miscite/templates/base.html, AGENTS.md, docs/ARCHITECTURE.md, kb/promptbook.md.
+Decision/rationale: Rebuilt the owner Share access card around a single top-row control model (state pill + on/off toggle + PDF CTA) and shortened state messaging. When sharing is off, only protected-state guidance remains; when on, the share-link row is primary and token controls move into a collapsed "Advanced access settings" section. Delete action moved into a separate danger-zone card to reduce destructive-action misclicks. Added inline + toast feedback for copy/open/toggle/delete actions and introduced authenticated `POST /api/jobs/{id}/ui-metric` logging (via `AnalysisJobEvent` stage `ui_metric`) to track first copy/open latency, disable/delete misclick cancellations, and advanced-settings open rate without schema changes.
+
+========
+Date: 2026-02-06
+Goal: Refine the owner report page layout for the protected-sharing state shown in screenshot feedback.
+Prompt: THINK HARD: Improve the UI/UX of Screenshot 2026-02-06 125913.png.
+Files touched: server/miscite/templates/job.html, server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Reduced right-column clutter in the disabled sharing state by removing the redundant empty control panel and replacing it with a single actionable helper sentence. Tightened Share access header hierarchy by grouping state + toggle together and shortening the PDF CTA label to reduce wrapping pressure. Lowered visual noise/risk for destructive actions by collapsing Danger zone behind a details disclosure and reducing its vertical separation from Share access for better column balance.
+
+========
+Date: 2026-02-06
+Goal: Improve right-column balance and remove residual redundancy in the protected-share screenshot state.
+Prompt: THINK HARD: Improve UI/UX according to Screenshot 2026-02-06 131121.png.
+Files touched: server/miscite/static/styles.css, server/miscite/templates/job.html, kb/promptbook.md.
+Decision/rationale: Removed flex auto-margin behavior that was forcing large vertical gaps between Share access and Danger zone cards, replacing it with explicit, consistent column spacing. Simplified disabled-sharing messaging by merging protection and next-step guidance into one concise sentence and dropping the extra helper line. Also removed redundant per-card margin utility in the right column to keep spacing system-driven and visually stable.
+
+========
+Date: 2026-02-06
+Goal: Ensure Danger zone sits directly beneath Share access and expands downward when opened.
+Prompt: Current: Clicking Danger zone expands upwards. Expected: place it right under Share access and expand downwards.
+Files touched: server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Added section-specific top alignment for `#report-top .ds-grid` and switched the right column (`#report-top .span-5`) from flex to an explicit top-aligned grid stack. This prevents bottom-anchoring/stretch side effects and guarantees the Danger zone remains immediately below Share access with downward expansion behavior.

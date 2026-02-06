@@ -5,7 +5,7 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 
 from sqlalchemy import or_, select, update
@@ -20,21 +20,11 @@ from server.miscite.analysis.pipeline import analyze_document
 from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
 from server.miscite.core.db import get_sessionmaker, init_db
-from server.miscite.core.email import send_access_token_email
 from server.miscite.core.jobs import delete_job_and_document
-from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus, User
-from server.miscite.core.security import access_token_hint, generate_access_token, hash_token
+from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAccount, Document, JobStatus
+from server.miscite.core.security import access_token_hint, generate_access_token
 from server.miscite.sources.predatory_sync import sync_predatory_datasets
 from server.miscite.sources.retractionwatch_sync import sync_retractionwatch_dataset
-
-
-@dataclass(frozen=True)
-class _AccessTokenEmail:
-    token: str
-    to_email: str
-    job_id: str
-    filename: str
-    expires_at: dt.datetime | None
 
 
 class JobCanceled(RuntimeError):
@@ -244,53 +234,38 @@ def _is_job_canceled(db: Session, job_id: str) -> bool:
     return status == JobStatus.canceled.value
 
 
-def _ensure_access_token(
+def _prepare_access_token_material(
     settings: Settings,
     job_id: str,
     *,
-    send_existing: bool = False,
     require_completed: bool = False,
-) -> _AccessTokenEmail | None:
+) -> bool:
     SessionLocal = get_sessionmaker(settings)
     db = SessionLocal()
     try:
-        row = db.execute(
-            select(AnalysisJob, Document, User)
-            .join(Document, Document.id == AnalysisJob.document_id)
-            .join(User, User.id == AnalysisJob.user_id)
-            .where(AnalysisJob.id == job_id)
-        ).first()
-        if not row:
-            return None
-        job, doc, user = row
+        job = db.scalar(select(AnalysisJob).where(AnalysisJob.id == job_id))
+        if not job:
+            return False
         if require_completed and job.status != JobStatus.completed.value:
-            return None
+            return False
         now = dt.datetime.now(dt.UTC)
-        expires_at = _as_utc(job.access_token_expires_at)
-        if job.access_token_hash and (expires_at is None or expires_at >= now):
-            if send_existing and job.access_token_value:
-                return _AccessTokenEmail(
-                    token=job.access_token_value,
-                    to_email=user.email,
-                    job_id=job.id,
-                    filename=doc.original_filename,
-                    expires_at=expires_at,
-                )
-            return None
-        token = generate_access_token()
-        job.access_token_hash = hash_token(token)
-        job.access_token_hint = access_token_hint(token)
-        job.access_token_value = token
-        job.access_token_expires_at = now + dt.timedelta(days=settings.access_token_days)
-        db.add(job)
-        db.commit()
-        return _AccessTokenEmail(
-            token=token,
-            to_email=user.email,
-            job_id=job.id,
-            filename=doc.original_filename,
-            expires_at=job.access_token_expires_at,
-        )
+        changed = False
+        token = (job.access_token_value or "").strip()
+        if not token:
+            token = generate_access_token()
+            job.access_token_value = token
+            changed = True
+        hint = access_token_hint(token)
+        if job.access_token_hint != hint:
+            job.access_token_hint = hint
+            changed = True
+        if job.access_token_expires_at is None:
+            job.access_token_expires_at = now + dt.timedelta(days=settings.access_token_days)
+            changed = True
+        if changed:
+            db.add(job)
+            db.commit()
+        return changed
     except Exception:
         db.rollback()
         raise
@@ -774,22 +749,8 @@ def run_worker_loop(settings: Settings, *, process_index: int = 0) -> None:
 
             log.info("Completed job %s", job_id)
             try:
-                payload = _ensure_access_token(settings, job_id, send_existing=True, require_completed=True)
+                _prepare_access_token_material(settings, job_id, require_completed=True)
             except Exception as e:
-                payload = None
-                log.warning("Failed to issue access token for job %s: %s", job_id, e)
-            if payload:
-                try:
-                    send_access_token_email(
-                        settings,
-                        to_email=payload.to_email,
-                        token=payload.token,
-                        job_id=payload.job_id,
-                        filename=payload.filename,
-                        expires_at=payload.expires_at,
-                    )
-                    log.info("Sent access token email for job %s", job_id)
-                except Exception as e:
-                    log.warning("Failed to send access token email for job %s: %s", job_id, e)
+                log.warning("Failed to prepare sharing token for job %s: %s", job_id, e)
         except Exception as e:
             log.exception("Job %s failed: %s", job_id, e)
