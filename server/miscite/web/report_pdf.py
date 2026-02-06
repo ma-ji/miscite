@@ -70,25 +70,6 @@ def _clean_text(value: object, *, max_chars: int | None = 1200) -> str:
     return safe_text.strip() or "?"
 
 
-def _plain_markdown(value: str, *, max_chars: int | None = None) -> list[str]:
-    if not value:
-        return []
-    lines: list[str] = []
-    for raw in value.splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        line = re.sub(r"`([^`]*)`", r"\1", line)
-        line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
-        line = re.sub(r"^#{1,6}\s*", "", line)
-        line = re.sub(r"^[-*+]\s+", "", line)
-        line = re.sub(r"^\d+\.\s+", "", line)
-        cleaned = _clean_text(line, max_chars=max_chars)
-        if cleaned:
-            lines.append(cleaned)
-    return lines
-
-
 def _safe_http_url(value: object) -> str:
     if value is None:
         return ""
@@ -104,17 +85,6 @@ def _safe_http_url(value: object) -> str:
     if not parsed.netloc:
         return ""
     return raw
-
-
-def _openalex_url(value: object) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    if raw.startswith("https://api.openalex.org/works/"):
-        raw = raw.replace("https://api.openalex.org/works/", "https://openalex.org/")
-    elif raw.startswith("W"):
-        raw = f"https://openalex.org/{raw}"
-    return _safe_http_url(raw)
 
 
 def _format_score(value: object) -> str:
@@ -185,7 +155,6 @@ def _issue_entries(report: Mapping[str, Any] | None) -> list[dict[str, object]]:
         details = issue.get("details") if isinstance(issue.get("details"), Mapping) else {}
         citation = details.get("citation") if isinstance(details.get("citation"), Mapping) else {}
         resolution = details.get("resolution") if isinstance(details.get("resolution"), Mapping) else {}
-        openalex_url = _openalex_url(resolution.get("openalex_id") or "")
 
         item: dict[str, object] = {
             "type": issue_type,
@@ -204,8 +173,6 @@ def _issue_entries(report: Mapping[str, Any] | None) -> list[dict[str, object]]:
             "resolution_pmid": _clean_text(resolution.get("pmid") or "", max_chars=80),
             "resolution_pmcid": _clean_text(resolution.get("pmcid") or "", max_chars=80),
             "resolution_arxiv_id": _clean_text(resolution.get("arxiv_id") or "", max_chars=120),
-            "resolution_openalex": _clean_text(resolution.get("openalex_id") or "", max_chars=160),
-            "resolution_openalex_url": openalex_url,
             "resolution_journal": _clean_text(resolution.get("journal") or "", max_chars=200),
             "resolution_publisher": _clean_text(resolution.get("publisher") or "", max_chars=200),
             "resolution_year": _clean_text(resolution.get("year") or "", max_chars=20),
@@ -228,19 +195,6 @@ def _issue_entries(report: Mapping[str, Any] | None) -> list[dict[str, object]]:
 
         items.append(item)
     return items
-
-
-def _source_rows(data_sources: list[dict] | None) -> list[list[str]]:
-    if not data_sources:
-        return []
-    rows: list[list[str]] = []
-    for src in data_sources:
-        if not isinstance(src, Mapping):
-            continue
-        name = _clean_text(src.get("name") or "Source", max_chars=120)
-        detail = _clean_text(src.get("detail") or "", max_chars=500)
-        rows.append([name, detail or "-"])
-    return rows
 
 
 def build_report_pdf(
@@ -279,8 +233,8 @@ def build_report_pdf(
     summary_rows = _summary_rows(report)
     reviewer_entries = _reviewer_entries(report)
     issue_entries = _issue_entries(report)
-    source_rows = _source_rows(data_sources)
-    methodology_lines = _plain_markdown(methodology_md or "")
+    # Source and methodology internals are intentionally excluded from PDF output.
+    _ = data_sources, methodology_md
     deep_analysis = report.get("deep_analysis") if isinstance(report, Mapping) else None
     if not isinstance(deep_analysis, Mapping):
         deep_analysis = {}
@@ -428,8 +382,6 @@ def build_report_pdf(
     da_status_for_toc = _clean_text(deep_analysis.get("status") or "", max_chars=40).lower()
     da_refs_for_toc = deep_analysis.get("references") if isinstance(deep_analysis, Mapping) else None
     has_reference_list = da_status_for_toc == "completed" and isinstance(da_refs_for_toc, Mapping) and bool(da_refs_for_toc)
-    has_sources_used = bool(source_rows)
-    has_methodology = bool(methodology_lines)
 
     toc_entries: list[tuple[str, str]] = [
         ("summary", "Summary"),
@@ -439,10 +391,6 @@ def build_report_pdf(
     ]
     if has_reference_list:
         toc_entries.append(("complete-reference-list", "Complete Reference List"))
-    if has_sources_used:
-        toc_entries.append(("sources-used", "Sources Used"))
-    if has_methodology:
-        toc_entries.append(("methodology-notes", "Methodology Notes"))
 
     story.append(Paragraph('<a name="toc"/>Table of Contents', styles["Section"]))
     for anchor, label in toc_entries:
@@ -611,20 +559,6 @@ def build_report_pdf(
                     )
                 else:
                     story.append(Paragraph(f"<b>arXiv:</b> {escape(arxiv_id)}", styles["Body"]))
-
-            openalex_label = str(issue.get("resolution_openalex") or "").strip()
-            openalex_url = str(issue.get("resolution_openalex_url") or "").strip()
-            if openalex_label:
-                if openalex_url:
-                    link_label = openalex_label.replace("https://openalex.org/", "")
-                    story.append(
-                        Paragraph(
-                            f"<b>OpenAlex:</b> <a href=\"{escape(openalex_url)}\">{escape(link_label or openalex_label)}</a>",
-                            styles["Body"],
-                        )
-                    )
-                else:
-                    story.append(Paragraph(f"<b>OpenAlex:</b> {escape(openalex_label)}", styles["Body"]))
 
             if issue.get("citation_context"):
                 story.append(Paragraph(f"<b>Context:</b> {escape(str(issue['citation_context']))}", styles["Body"]))
@@ -810,20 +744,6 @@ def build_report_pdf(
                 else:
                     story.append(Paragraph(f"<b>DOI:</b> {escape(doi)}", styles["Body"]))
 
-            openalex_id = _clean_text(ref.get("openalex_id") or "", max_chars=180)
-            openalex_url = _openalex_url(ref.get("openalex_id") or "")
-            if openalex_id:
-                if openalex_url:
-                    label = openalex_url.replace("https://openalex.org/", "")
-                    story.append(
-                        Paragraph(
-                            f"<b>OpenAlex:</b> <a href=\"{escape(openalex_url)}\">{escape(label or openalex_id)}</a>",
-                            styles["Body"],
-                        )
-                    )
-                else:
-                    story.append(Paragraph(f"<b>OpenAlex:</b> {escape(openalex_id)}", styles["Body"]))
-
             official_url = _safe_http_url(ref.get("official_url") or "")
             if official_url:
                 story.append(
@@ -846,34 +766,6 @@ def build_report_pdf(
                 story.append(Paragraph("<b>Status:</b> Already cited in manuscript.", styles["Body"]))
 
             story.append(Spacer(1, 3))
-
-    if source_rows:
-        story.append(Paragraph('<a name="sources-used"/>Sources Used', styles["Section"]))
-        source_table = Table(source_rows, colWidths=[2.1 * inch, 4.5 * inch], hAlign="LEFT")
-        source_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor(_SURFACE_ALT)),
-                    ("BACKGROUND", (1, 0), (1, -1), colors.white),
-                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor(_TEXT)),
-                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                    ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D9DDE0")),
-                    ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D9DDE0")),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 7),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ]
-            )
-        )
-        story.append(source_table)
-
-    if methodology_lines:
-        story.append(Paragraph('<a name="methodology-notes"/>Methodology Notes', styles["Section"]))
-        for line in methodology_lines:
-            story.append(Paragraph(escape(line), styles["Body"]))
 
     story.append(Spacer(1, 8))
     story.append(

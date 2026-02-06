@@ -1293,6 +1293,33 @@ p {
   margin-bottom: var(--space-5);
 }
 
+.ds-section--workspace {
+  padding-top: var(--space-5);
+}
+
+.section-header--workspace {
+  max-width: none;
+  margin-bottom: var(--space-4);
+}
+
+.section-header--workspace .eyebrow {
+  margin-bottom: 6px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.section-header--workspace h2 {
+  margin-bottom: var(--space-2);
+  font-size: clamp(40px, 4vw, 54px);
+  letter-spacing: -0.02em;
+}
+
+.section-header--workspace .lead {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(24px, 2.1vw, 32px);
+}
+
 .landing-hero-grid {
   align-items: center;
 }
@@ -1681,6 +1708,72 @@ p {
   display: inline-flex;
 }
 
+.ds-card--jobs {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--control-bg, var(--bg));
+}
+
+.ds-card--jobs .card-content {
+  padding: 0 var(--space-3);
+}
+
+.ds-table--jobs th,
+.ds-table--jobs td {
+  padding: var(--space-4) var(--space-3);
+}
+
+.ds-table--jobs th {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.ds-table--jobs tbody tr:hover {
+  background: rgb(7 35 50 / 0.03);
+}
+
+.ds-table--jobs tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ds-table--jobs .ds-table-select-col,
+.ds-table--jobs .ds-table-select-cell {
+  width: 52px;
+  padding-right: var(--space-2);
+}
+
+.ds-table--jobs .ds-table-actions {
+  gap: 10px;
+  align-items: center;
+}
+
+.ds-table--jobs .ds-job-date time {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ds-table--jobs .ds-job-file span {
+  max-width: 420px;
+  font-weight: 600;
+}
+
+.ds-table-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  font-size: var(--text-14);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ds-table-link:hover {
+  color: var(--text);
+}
+
+.ds-action-button {
+  min-width: 96px;
+}
+
 .ds-table-controls {
   display: grid;
   grid-template-columns: minmax(220px, 1.2fr) minmax(240px, 1fr) minmax(160px, 0.5fr);
@@ -1728,6 +1821,7 @@ p {
 
 .ds-filter-count {
   font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .ds-filter-pill input:checked + span {
@@ -1803,6 +1897,101 @@ p {
 
 .ds-bulk-action-select {
   min-width: 190px;
+}
+
+.ds-table-controls--workspace {
+  grid-template-columns: minmax(280px, 1.5fr) minmax(320px, auto) minmax(160px, 200px);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ds-table-controls--workspace .ds-input-with-icon input {
+  min-height: 46px;
+  border-radius: 14px;
+}
+
+.ds-table-controls--workspace .ds-input-with-icon .material-icons {
+  color: var(--text);
+}
+
+.ds-table-controls--workspace .ds-filter-group {
+  flex-wrap: nowrap;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.ds-table-controls--workspace .ds-filter-pill span {
+  padding: 8px 16px;
+  border-color: rgb(7 35 50 / 0.26);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-14);
+  white-space: nowrap;
+}
+
+.ds-table-controls--workspace .ds-filter-pill input:checked + span {
+  background: rgb(153 0 0 / 0.1);
+  border-color: rgb(153 0 0 / 0.38);
+}
+
+.ds-table-controls--workspace .ds-table-control {
+  justify-self: end;
+  min-width: 0;
+  width: 100%;
+  max-width: 200px;
+}
+
+.ds-table-controls--workspace .form-label {
+  color: var(--text);
+}
+
+.ds-table-controls--workspace select {
+  min-height: 46px;
+  border-radius: 14px;
+}
+
+.ds-section--workspace .ds-results-meta p {
+  color: var(--text);
+  font-size: var(--text-16);
+}
+
+.ds-bulk-actions--workspace {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+}
+
+.ds-bulk-actions--workspace .ds-bulk-select-label {
+  font-size: var(--text-16);
+  font-weight: 700;
+}
+
+.ds-bulk-actions--workspace .ds-bulk-select input {
+  margin: 0;
+}
+
+.ds-bulk-actions--workspace .ds-bulk-count {
+  font-size: var(--text-14);
+  color: var(--text);
+}
+
+.ds-bulk-actions--workspace .ds-bulk-buttons {
+  margin-left: auto;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  min-width: 270px;
+}
+
+.ds-bulk-actions--workspace .ds-bulk-action-select {
+  min-width: 270px;
+  min-height: 46px;
+  border-radius: 14px;
+}
+
+.ds-bulk-actions--workspace .ds-bulk-apply {
+  min-width: 74px;
 }
 
 [data-workspace-results] {
@@ -2258,6 +2447,33 @@ p {
   color: var(--severity-medium);
 }
 
+.ds-table--jobs .ds-status {
+  padding: 5px 14px;
+  font-size: var(--text-14);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ds-table--jobs .ds-status--success {
+  border-color: rgb(7 35 50 / 0.26);
+  background: rgb(7 35 50 / 0.06);
+}
+
+.ds-table--jobs .ds-status--error {
+  border-color: rgb(153 0 0 / 0.42);
+  background: rgb(153 0 0 / 0.12);
+}
+
+.ds-table--jobs .ds-status--processing {
+  border-color: rgb(153 0 0 / 0.42);
+  background: rgb(153 0 0 / 0.12);
+}
+
+.ds-table--jobs .ds-status--processing i {
+  color: var(--primary);
+  animation: status-spin 1.1s linear infinite;
+}
+
 .ds-progress-inline {
   margin-top: var(--space-2);
   width: 100%;
@@ -2277,6 +2493,23 @@ p {
   width: 40%;
   background: var(--primary);
   animation: progress-slide 1.4s ease-in-out infinite;
+}
+
+.ds-table--jobs .ds-progress-inline {
+  max-width: 196px;
+  background: rgb(7 35 50 / 0.12);
+}
+
+.ds-table--jobs .ds-progress-inline::after {
+  width: 38%;
+  background: var(--primary);
+  animation: none;
+}
+
+@keyframes status-spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .ds-job-date {
@@ -2823,6 +3056,24 @@ input[readonly] {
     grid-template-columns: 1fr;
   }
 
+  .section-header--workspace h2 {
+    font-size: clamp(36px, 8vw, 46px);
+  }
+
+  .section-header--workspace .lead {
+    font-size: clamp(22px, 5vw, 28px);
+  }
+
+  .ds-table-controls--workspace .ds-filter-group {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .ds-table-controls--workspace .ds-table-control {
+    justify-self: start;
+    max-width: 240px;
+  }
+
   .ds-bulk-actions {
     flex-direction: column;
     align-items: flex-start;
@@ -2833,6 +3084,17 @@ input[readonly] {
   }
 
   .ds-bulk-action-select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .ds-bulk-actions--workspace .ds-bulk-buttons {
+    margin-left: 0;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .ds-bulk-actions--workspace .ds-bulk-action-select {
     min-width: 0;
     width: 100%;
   }
@@ -2935,6 +3197,30 @@ input[readonly] {
     max-width: 100%;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+
+  .ds-card--jobs .card-content {
+    padding: 0;
+  }
+
+  .ds-table--mobile.ds-table--jobs tbody tr {
+    background: var(--control-bg, var(--bg));
+  }
+
+  .ds-table--mobile.ds-table--jobs td {
+    grid-template-columns: minmax(86px, 98px) 1fr;
+  }
+
+  .ds-table--mobile.ds-table--jobs .ds-table-actions {
+    gap: var(--space-2);
+  }
+
+  .ds-table--mobile.ds-table--jobs .ds-progress-inline {
+    max-width: 160px;
+  }
+
+  .ds-table--mobile.ds-table--jobs .ds-action-button {
+    min-width: 84px;
   }
 }
 

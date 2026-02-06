@@ -215,13 +215,13 @@
     </section>
   {% endif %}
 
-  <section class="ds-section">
-    <div class="section-header">
+  <section class="ds-section ds-section--workspace">
+    <div class="section-header section-header--workspace">
       <p class="eyebrow">Workspace</p>
       <h2>Recent analyses</h2>
       <p class="lead">Search, filter, and revisit your latest jobs.</p>
     </div>
-    <form class="ds-table-controls" method="get" action="/dashboard" data-auto-submit>
+    <form class="ds-table-controls ds-table-controls--workspace" method="get" action="/dashboard" data-auto-submit>
       <div class="ds-input-with-icon">
         <i class="material-icons" aria-hidden="true">search</i>
         <input
@@ -236,7 +236,7 @@
       <div class="ds-filter-group" role="radiogroup" aria-label="Filter jobs by status">
         <label class="ds-filter-pill">
           <input type="radio" name="status" value="all" {{ "checked" if status_filter == "all" else "" }} />
-          <span>All <strong class="ds-filter-count">{{ total_jobs }}</strong></span>
+          <span>All <span class="ds-filter-count">{{ total_jobs }}</span></span>
         </label>
         <label class="ds-filter-pill">
           <input
@@ -245,11 +245,11 @@
             value="completed"
             {{ "checked" if status_filter == "completed" else "" }}
           />
-          <span>Completed <strong class="ds-filter-count">{{ completed_count }}</strong></span>
+          <span>Completed <span class="ds-filter-count">{{ completed_count }}</span></span>
         </label>
         <label class="ds-filter-pill">
           <input type="radio" name="status" value="failed" {{ "checked" if status_filter == "failed" else "" }} />
-          <span>Failed <strong class="ds-filter-count">{{ failed_count }}</strong></span>
+          <span>Failed <span class="ds-filter-count">{{ failed_count }}</span></span>
         </label>
         <label class="ds-filter-pill">
           <input
@@ -258,7 +258,7 @@
             value="processing"
             {{ "checked" if status_filter == "processing" else "" }}
           />
-          <span>Processing <strong class="ds-filter-count">{{ processing_count }}</strong></span>
+          <span>Processing <span class="ds-filter-count">{{ processing_count }}</span></span>
         </label>
       </div>
       <div class="form-field ds-table-control">
@@ -292,7 +292,7 @@
           {% endif %}
         </div>
       {% else %}
-        <form id="bulk-job-form" class="ds-bulk-actions" method="post" action="/dashboard/bulk-action">
+        <form id="bulk-job-form" class="ds-bulk-actions ds-bulk-actions--workspace" method="post" action="/dashboard/bulk-action">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
           <div class="ds-bulk-select">
             <label class="ds-bulk-select-label">
@@ -302,21 +302,21 @@
             <span class="miscite-muted ds-bulk-count" data-bulk-count>0 selected</span>
           </div>
           <div class="ds-bulk-buttons">
-            <label class="sr-only" for="bulk-action-select">Bulk action</label>
+            <label class="sr-only" for="bulk-action-select">Select bulk action</label>
             <select id="bulk-action-select" class="ds-bulk-action-select" name="bulk_action" data-bulk-action-select>
               <option value="">Select bulk action</option>
               <option value="stop">Stop job</option>
               <option value="delete">Delete report</option>
             </select>
-            <button class="ds-button ds-button--secondary ds-button--sm" type="submit" data-bulk-apply disabled>
+            <button class="ds-button ds-button--secondary ds-button--sm ds-bulk-apply" type="submit" data-bulk-apply disabled>
               Apply
             </button>
           </div>
         </form>
-        <div class="ds-card ds-card--plain">
+        <div class="ds-card ds-card--plain ds-card--jobs">
           <div class="card-content">
             <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
-              <table class="ds-table ds-table--wide ds-table--mobile">
+              <table class="ds-table ds-table--wide ds-table--mobile ds-table--jobs">
                 <caption class="sr-only">Recent analysis jobs and actions</caption>
                 <thead>
                   <tr>
@@ -379,7 +379,7 @@
                       <td data-label="Actions">
                         <div class="ds-table-actions">
                           {% if job.status == "COMPLETED" %}
-                            <a class="ds-button ds-button--secondary ds-button--sm" href="/jobs/{{ job.id }}">
+                            <a class="ds-button ds-button--secondary ds-button--sm ds-action-button" href="/jobs/{{ job.id }}">
                               View report
                             </a>
                           {% elif job.status == "FAILED" %}
@@ -397,7 +397,7 @@
                               Retry
                             </button>
                           {% else %}
-                            <a class="ds-button ds-button--ghost ds-button--sm" href="/jobs/{{ job.id }}">
+                            <a class="ds-table-link" href="/jobs/{{ job.id }}">
                               View status
                             </a>
                           {% endif %}
@@ -408,7 +408,7 @@
                             onsubmit="return confirm('Delete this report and uploaded file? This cannot be undone.');"
                           >
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                            <button class="ds-button ds-button--warning ds-button--sm" type="submit">Delete</button>
+                            <button class="ds-button ds-button--warning ds-button--sm ds-action-button" type="submit">Delete</button>
                           </form>
                         </div>
                       </td>

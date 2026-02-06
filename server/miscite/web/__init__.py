@@ -25,6 +25,14 @@ _DEFAULT_META_KEYWORDS = (
     "retracted citation detection, predatory journal detection, academic integrity"
 )
 
+_DATABASE_SOURCE_NAMES = {
+    "openalex",
+    "crossref",
+    "pubmed",
+    "ncbi",
+    "ncbi pubmed",
+}
+
 SEO_SITEMAP_ENTRIES: tuple[dict[str, str], ...] = (
     {"path": "/", "changefreq": "weekly", "priority": "1.0"},
     {"path": "/login", "changefreq": "monthly", "priority": "0.6"},
@@ -69,26 +77,6 @@ _SEO_PATH_DEFAULTS: dict[str, dict[str, str]] = {
 }
 
 
-def _reference_source_names(reference_payload: Mapping[str, object] | None) -> list[str]:
-    if not isinstance(reference_payload, Mapping):
-        return []
-    names: list[str] = []
-    seen: set[str] = set()
-    for key in ("source", "venue", "publisher"):
-        value = reference_payload.get(key)
-        if not isinstance(value, str):
-            continue
-        name = " ".join(value.split()).strip()
-        if not name:
-            continue
-        norm = name.casefold()
-        if norm in seen:
-            continue
-        seen.add(norm)
-        names.append(name)
-    return names
-
-
 def _reference_summary_text(reference_payload: Mapping[str, object] | None) -> str:
     if not isinstance(reference_payload, Mapping):
         return ""
@@ -99,16 +87,38 @@ def _reference_summary_text(reference_payload: Mapping[str, object] | None) -> s
     return ""
 
 
+def _normalize_source_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+def _is_database_source_name(value: str) -> bool:
+    normalized = _normalize_source_name(value)
+    return normalized in _DATABASE_SOURCE_NAMES
+
+
+def _reference_source_names(reference_payload: Mapping[str, object] | None) -> list[str]:
+    if not isinstance(reference_payload, Mapping):
+        return []
+    names: list[str] = []
+    seen: set[str] = set()
+    for key in ("source", "venue", "publisher"):
+        value = reference_payload.get(key)
+        if not isinstance(value, str):
+            continue
+        name = " ".join(value.split()).strip()
+        if not name or _is_database_source_name(name):
+            continue
+        norm = name.casefold()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        names.append(name)
+    return names
+
+
 def _reference_hover_text(reference_payload: Mapping[str, object] | None) -> str:
     summary = _reference_summary_text(reference_payload)
-    sources = _reference_source_names(reference_payload)
-    if summary and sources:
-        return f"{summary} | Source: {' · '.join(sources)}"[:420]
-    if summary:
-        return summary
-    if sources:
-        return f"Source: {' · '.join(sources)}"[:420]
-    return ""
+    return summary
 
 
 def _reference_tooltip(reference_tooltips: Mapping[str, object] | None, rid: str) -> str:

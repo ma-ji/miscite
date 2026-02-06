@@ -1,6 +1,7 @@
 import unittest
 
 from server.miscite.web import deep_cite_links
+from server.miscite.web import reference_sources
 
 
 class TestDeepCiteLinks(unittest.TestCase):
@@ -24,7 +25,7 @@ class TestDeepCiteLinks(unittest.TestCase):
         self.assertIn('href="#da-ref-R7"', html)
         self.assertNotIn("title=", html)
 
-    def test_tooltip_includes_source_names(self) -> None:
+    def test_tooltip_excludes_source_names(self) -> None:
         html = str(
             deep_cite_links(
                 "Compare [R5].",
@@ -38,7 +39,30 @@ class TestDeepCiteLinks(unittest.TestCase):
                 },
             )
         )
-        self.assertIn("Smith, A. (2022). Methods paper. | Source: Journal of Methods · Science Press", html)
+        self.assertIn('title="Smith, A. (2022). Methods paper."', html)
+        self.assertNotIn("Source:", html)
+
+
+class TestReferenceSources(unittest.TestCase):
+    def test_keeps_publication_source_names(self) -> None:
+        labels = reference_sources(
+            {
+                "source": "Journal of Methods",
+                "venue": "Journal of Methods",
+                "publisher": "Science Press",
+            }
+        )
+        self.assertEqual(labels, ["Journal of Methods", "Science Press"])
+
+    def test_excludes_database_source_names(self) -> None:
+        labels = reference_sources(
+            {
+                "source": "OpenAlex",
+                "venue": "Crossref",
+                "publisher": "Science Press",
+            }
+        )
+        self.assertEqual(labels, ["Science Press"])
 
 
 if __name__ == "__main__":

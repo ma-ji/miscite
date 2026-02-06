@@ -390,7 +390,6 @@
 	      {% endif %}
 	    {% endfor %}
 	    {% set summary = report.summary or {} %}
-      {% set has_methodology = (data_sources|default([])|length > 0) or (methodology_md|default('')|trim) %}
       <div class="report-shell">
         <aside class="report-nav" aria-label="Report navigation">
           <div class="ds-card ds-card--subtle report-nav-card">
@@ -406,9 +405,6 @@
                 {% endif %}
                 {% if report.deep_analysis and report.deep_analysis.status == "completed" and report.deep_analysis.references %}
                   <a class="report-nav-link" href="#report-reference-list">Reference list</a>
-                {% endif %}
-                {% if has_methodology %}
-                  <a class="report-nav-link" href="#report-methodology">Sources &amp; methodology</a>
                 {% endif %}
               </nav>
             </div>
@@ -631,29 +627,6 @@
                                     {{ resolution.arxiv_id }}
                                   </a>
                                 </dd>
-                              {% endif %}
-                              {% if resolution.openalex_id %}
-                                {% set oa_url = resolution.openalex_id %}
-                                {% if oa_url.startswith("https://api.openalex.org/works/") %}
-                                  {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
-                                {% elif oa_url.startswith("W") %}
-                                  {% set oa_url = "https://openalex.org/" ~ oa_url %}
-                                {% endif %}
-                                {% set safe_oa_url = oa_url|safe_url %}
-                                {% if safe_oa_url %}
-                                  {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
-                                  <dt>OpenAlex</dt>
-                                  <dd>
-                                    <a
-                                      class="miscite-mono"
-                                      href="{{ safe_oa_url }}"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      {{ oa_label or resolution.openalex_id }}
-                                    </a>
-                                  </dd>
-                                {% endif %}
                               {% endif %}
                               {% if resolution.journal %}
                                 <dt>Journal</dt>
@@ -910,8 +883,8 @@
 		              <p class="miscite-muted ds-mt-3" id="da-ref-count" aria-live="polite"></p>
 		            {% endif %}
 	            <ol class="ds-list ds-mt-3">
-	              {% for ref in all_refs %}
-	                <li id="da-ref-{{ ref.rid }}" data-da-rid="{{ ref.rid }}">
+		              {% for ref in all_refs %}
+		                <li id="da-ref-{{ ref.rid }}" data-da-rid="{{ ref.rid }}">
                       <div>
                         <span class="miscite-mono">[{{ ref.rid }}]</span>
                         {{ ref.apa_base }}
@@ -927,21 +900,6 @@
 	                      <a class="ds-chip miscite-mono" href="https://doi.org/{{ ref.doi }}" target="_blank" rel="noopener noreferrer">
 	                        DOI: {{ ref.doi }}
 	                      </a>
-	                    {% endif %}
-	                    {% if ref.openalex_id %}
-	                      {% set oa_url = ref.openalex_id %}
-	                      {% if oa_url.startswith("https://api.openalex.org/works/") %}
-	                        {% set oa_url = oa_url|replace("https://api.openalex.org/works/", "https://openalex.org/") %}
-	                      {% elif oa_url.startswith("W") %}
-	                        {% set oa_url = "https://openalex.org/" ~ oa_url %}
-	                      {% endif %}
-	                      {% set safe_oa_url = oa_url|safe_url %}
-	                      {% if safe_oa_url %}
-	                        {% set oa_label = safe_oa_url|replace("https://openalex.org/", "") %}
-	                        <a class="ds-chip miscite-mono" href="{{ safe_oa_url }}" target="_blank" rel="noopener noreferrer">
-	                          OpenAlex: {{ oa_label or ref.openalex_id }}
-	                        </a>
-	                      {% endif %}
 	                    {% endif %}
 	                    {% if not ref.doi %}
 	                      {% set safe_url = ref.official_url|safe_url %}
@@ -966,57 +924,6 @@
                 </li>
               {% endfor %}
             </ol>
-	          </div>
-	        </div>
-	      </section>
-	    {% endif %}
-
-	    {% if (data_sources and data_sources|length > 0) or (methodology_md and methodology_md|trim) %}
-	      <section class="ds-section" id="report-methodology">
-	        <div class="ds-card">
-	          <div class="card-content">
-	            <h3>Sources &amp; methodology</h3>
-	            <p class="miscite-muted">How this report was produced and what data it relied on.</p>
-	            <div class="ds-disclosure-list ds-mt-4">
-	              {% if data_sources and data_sources|length > 0 %}
-	                <details class="ds-disclosure ds-disclosure--low">
-	                  <summary class="ds-disclosure-summary">
-	                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">source</i>
-	                    <span class="ds-disclosure-type">Sources</span>
-	                    <span class="ds-disclosure-title">Data sources used</span>
-	                    <span class="ds-severity">{{ data_sources|length }} items</span>
-	                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-	                  </summary>
-	                  <div class="ds-disclosure-body">
-	                    <ul class="ds-list">
-	                      {% for src in data_sources %}
-	                        <li>
-	                          <div>
-	                            <span class="ds-source-name">{{ src.name|default("Source") }}</span>
-	                          </div>
-	                          {% if src.detail %}
-	                            <div class="miscite-muted ds-mt-3">{{ src.detail }}</div>
-	                          {% endif %}
-	                        </li>
-	                      {% endfor %}
-	                    </ul>
-	                  </div>
-	                </details>
-	              {% endif %}
-	              {% if methodology_md and methodology_md|trim %}
-	                <details class="ds-disclosure ds-disclosure--low">
-	                  <summary class="ds-disclosure-summary">
-	                    <i class="material-icons ds-disclosure-icon" aria-hidden="true">description</i>
-	                    <span class="ds-disclosure-type">Method</span>
-	                    <span class="ds-disclosure-title">Methodology</span>
-	                    <i class="material-icons ds-disclosure-caret" aria-hidden="true">expand_more</i>
-	                  </summary>
-	                  <div class="ds-disclosure-body">
-	                    <pre class="pre-wrap ds-pre-scroll">{{ methodology_md }}</pre>
-	                  </div>
-	                </details>
-	              {% endif %}
-	            </div>
 	          </div>
 	        </div>
 	      </section>

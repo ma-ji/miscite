@@ -882,3 +882,45 @@ Goal: Ensure Danger zone sits directly beneath Share access and expands downward
 Prompt: Current: Clicking Danger zone expands upwards. Expected: place it right under Share access and expand downwards.
 Files touched: server/miscite/static/styles.css, kb/promptbook.md.
 Decision/rationale: Added section-specific top alignment for `#report-top .ds-grid` and switched the right column (`#report-top .span-5`) from flex to an explicit top-aligned grid stack. This prevents bottom-anchoring/stretch side effects and guarantees the Danger zone remains immediately below Share access with downward expansion behavior.
+
+========
+Date: 2026-02-06
+Goal: Match the workspace "Recent analyses" table UX to screenshot-driven layout and interaction expectations.
+Prompt: THINK HARD: Improve and optimize the UI/UX according to Screenshot 2026-02-06 151244.png.
+Files touched: server/miscite/templates/dashboard.html, server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Scoped a workspace-specific UI refresh without changing backend contracts: promoted clearer section typography, tightened search/filter/sort controls, and refined bulk-action ergonomics (right-aligned select + apply flow). Updated jobs table presentation with stronger row hierarchy, status chip styling, processing indicator treatment, and action affordances (`View status` link + consistent report/delete buttons), with responsive adjustments to preserve usability on smaller screens.
+
+========
+Date: 2026-02-06
+Goal: Remove sensitive source and methodology disclosure from the report page.
+Prompt: For the report page, remove the sources and methodology section because the details are business secrets.
+Files touched: server/miscite/templates/job.html, kb/promptbook.md.
+Decision/rationale: Removed the `Sources & methodology` section from report rendering and deleted its sidebar navigation link/flag to ensure those internal details are not exposed in the report UI.
+
+========
+Date: 2026-02-06
+Goal: Remove sensitive source and methodology disclosure from PDF exports.
+Prompt: Also remove it from PDF.
+Files touched: server/miscite/web/report_pdf.py, kb/promptbook.md.
+Decision/rationale: Removed `Sources Used` and `Methodology Notes` from PDF output and from the PDF TOC so source/method internals are not disclosed in downloaded reports.
+
+========
+Date: 2026-02-06
+Goal: Remove business-secret source labeling from per-reference report UX.
+Prompt: Yes, also remove the business secrets from per-reference source labels.
+Files touched: server/miscite/templates/job.html, server/miscite/web/__init__.py, server/miscite/web/test_filters.py, kb/promptbook.md.
+Decision/rationale: Removed visible per-reference `Source(s)` labels from the deep-analysis reference list and changed citation hover tooltips to include only summary citation text (no source/venue/publisher labels). Updated filter tests to enforce source-label exclusion.
+
+========
+Date: 2026-02-06
+Goal: Ensure PDF exports exclude remaining source-style disclosure fields.
+Prompt: Make sure to also remove business secrets from PDF files.
+Files touched: server/miscite/web/report_pdf.py, kb/promptbook.md.
+Decision/rationale: Removed remaining source-style issue detail output in PDFs (`Journal` and `Publisher` lines under Flags) to keep business-sensitive source labeling out of exported reports.
+
+========
+Date: 2026-02-06
+Goal: Preserve publication source names while hiding database/provider names in report and PDF surfaces.
+Prompt: THINK HARD. Not to remove publication source names, remove database source names.
+Files touched: server/miscite/templates/job.html, server/miscite/web/__init__.py, server/miscite/web/report_pdf.py, server/miscite/web/test_filters.py, kb/promptbook.md.
+Decision/rationale: Restored publication-source labeling (`source`/`venue`/`publisher`) in the deep-analysis reference list and restored Journal/Publisher fields in PDF Flags output. Removed database/provider labeling by dropping OpenAlex render paths in report UI and PDF, and added a source-label filter that excludes known database names (`OpenAlex`, `Crossref`, `PubMed`/`NCBI`) while retaining publication names.
