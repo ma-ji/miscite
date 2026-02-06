@@ -1900,35 +1900,39 @@ p {
 }
 
 .ds-table-controls--workspace {
-  grid-template-columns: minmax(280px, 1fr) minmax(160px, 220px);
-  gap: var(--space-3) var(--space-4);
-  align-items: center;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(340px, 1.2fr) minmax(130px, 180px);
+  gap: var(--space-2) var(--space-3);
+  align-items: end;
   margin-bottom: var(--space-3);
 }
 
 .ds-filter-cluster {
-  grid-column: 1 / -1;
-  display: grid;
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .ds-filter-label {
   margin: 0;
-  font-size: var(--text-12);
+  font-size: var(--text-11);
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .ds-table-controls--workspace .ds-input-with-icon {
   grid-column: 1;
   min-width: 0;
+  max-width: 440px;
 }
 
 .ds-table-controls--workspace .ds-input-with-icon input {
-  min-height: 46px;
-  border-radius: 14px;
+  min-height: 42px;
+  border-radius: 12px;
 }
 
 .ds-table-controls--workspace .ds-input-with-icon .material-icons {
@@ -1937,20 +1941,20 @@ p {
 
 .ds-table-controls--workspace .ds-filter-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
   min-width: 0;
-  overflow: visible;
-  padding: 0;
+  overflow-x: auto;
+  padding: 1px 0;
 }
 
 .ds-table-controls--workspace .ds-filter-pill span {
-  gap: 6px;
-  padding: 7px 12px;
+  gap: 5px;
+  padding: 5px 10px;
   border-color: rgb(7 35 50 / 0.22);
   background: var(--surface);
   color: var(--text);
-  font-size: var(--text-13);
+  font-size: var(--text-12);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1959,13 +1963,13 @@ p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  min-height: 22px;
-  padding: 0 6px;
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 5px;
   border: 1px solid rgb(7 35 50 / 0.22);
   border-radius: 999px;
   background: var(--control-bg, var(--bg));
-  font-size: var(--text-12);
+  font-size: var(--text-11);
 }
 
 .ds-table-controls--workspace .ds-filter-pill input:checked + span {
@@ -1979,11 +1983,11 @@ p {
 }
 
 .ds-table-controls--workspace .ds-table-control--sort {
-  grid-column: 2;
+  grid-column: 3;
   justify-self: end;
   min-width: 0;
   width: 100%;
-  max-width: 220px;
+  max-width: 180px;
 }
 
 .ds-table-controls--workspace .form-label {
@@ -1991,8 +1995,8 @@ p {
 }
 
 .ds-table-controls--workspace select {
-  min-height: 46px;
-  border-radius: 14px;
+  min-height: 42px;
+  border-radius: 12px;
 }
 
 .ds-section--workspace .ds-results-meta p {
@@ -2026,22 +2030,26 @@ p {
 }
 
 .ds-bulk-actions--workspace .ds-bulk-buttons {
-  margin-left: 0;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
   gap: var(--space-2);
   min-width: 0;
 }
 
 .ds-bulk-actions--workspace .ds-bulk-action-select {
-  min-width: 220px;
+  min-width: 210px;
   min-height: 40px;
   border-radius: 12px;
+  width: auto;
 }
 
 .ds-bulk-actions--workspace .ds-bulk-apply {
   min-width: 72px;
   min-height: 40px;
+  flex: 0 0 auto;
 }
 
 .ds-bulk-actions--workspace[data-selection-state="idle"] .ds-bulk-buttons {
@@ -3120,7 +3128,7 @@ input[readonly] {
 
   .ds-table-controls--workspace .ds-filter-group {
     flex-wrap: wrap;
-    overflow: visible;
+    overflow-x: visible;
   }
 
   .ds-table-controls--workspace {
@@ -3132,6 +3140,13 @@ input[readonly] {
   .ds-filter-cluster,
   .ds-table-controls--workspace .ds-table-control--sort {
     grid-column: 1;
+    max-width: none;
+  }
+
+  .ds-filter-cluster {
+    display: grid;
+    gap: var(--space-2);
+    align-items: start;
   }
 
   .ds-table-controls--workspace .ds-table-control--sort {

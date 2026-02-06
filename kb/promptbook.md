@@ -931,3 +931,10 @@ Goal: Simplify and tidy the workspace "Recent analyses" controls based on screen
 Prompt: THINK HARD: Improve the UI/UX based on Screenshot 2026-02-06 163634.png. It's too complicated and not neat.
 Files touched: server/miscite/templates/dashboard.html, server/miscite/static/styles.css, kb/promptbook.md.
 Decision/rationale: Reworked the workspace control hierarchy to reduce cognitive load: search + sort now anchor the top control row, status filters moved into a labeled compact cluster, typography scale was reduced for section title/subtitle, and bulk actions were redesigned into a tighter two-column control bar with clearer idle/active selection states. This keeps the same workflow while reducing visual noise and misaligned control emphasis.
+
+========
+Date: 2026-02-06
+Goal: Make workspace filters/search more compact and align bulk controls on one right-aligned row.
+Prompt: THINK HARD: For the Recent analyses, make the filer and search box smaller, in one row if possible. For the bulk action area, line dropdown menu and apply button on the same row ("apply" on right of dropdown, both right aligned).
+Files touched: server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Tightened control sizing (search input, status chips, sort select) and switched desktop workspace controls to a compact three-column row so search + status filters + sort stay aligned on one line when space allows. Updated bulk-action controls to force a no-wrap, right-aligned inline arrangement with `Apply` immediately to the right of the dropdown.
