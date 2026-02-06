@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from server.miscite.billing.ledger import get_or_create_account
@@ -477,6 +477,42 @@ def dashboard(
     if sort_choice not in {"newest", "oldest", "status"}:
         sort_choice = "newest"
 
+    total_jobs = (
+        db.scalar(select(func.count()).select_from(AnalysisJob).where(AnalysisJob.user_id == user.id))
+        or 0
+    )
+    status_rows = db.execute(
+        select(AnalysisJob.status, func.count())
+        .where(AnalysisJob.user_id == user.id)
+        .group_by(AnalysisJob.status)
+    ).all()
+    raw_status_counts = {status_name: int(count or 0) for status_name, count in status_rows}
+    completed_count = raw_status_counts.get(JobStatus.completed.value, 0)
+    failed_count = raw_status_counts.get(JobStatus.failed.value, 0) + raw_status_counts.get(
+        JobStatus.canceled.value, 0
+    )
+    processing_count = raw_status_counts.get(JobStatus.pending.value, 0) + raw_status_counts.get(
+        JobStatus.running.value, 0
+    )
+
+    filter_stmt = (
+        select(AnalysisJob.id)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.user_id == user.id)
+    )
+    if q:
+        filter_stmt = filter_stmt.where(Document.original_filename.ilike(f"%{q}%"))
+    if status_filter == "completed":
+        filter_stmt = filter_stmt.where(AnalysisJob.status == JobStatus.completed.value)
+    elif status_filter == "failed":
+        filter_stmt = filter_stmt.where(
+            AnalysisJob.status.in_([JobStatus.failed.value, JobStatus.canceled.value])
+        )
+    elif status_filter == "processing":
+        filter_stmt = filter_stmt.where(AnalysisJob.status.in_([JobStatus.pending.value, JobStatus.running.value]))
+
+    matching_count = db.scalar(select(func.count()).select_from(filter_stmt.subquery())) or 0
+
     stmt = (
         select(AnalysisJob, Document)
         .join(Document, Document.id == AnalysisJob.document_id)
@@ -500,7 +536,8 @@ def dashboard(
     else:
         stmt = stmt.order_by(desc(AnalysisJob.created_at))
 
-    rows = db.execute(stmt.limit(25)).all()
+    display_limit = 25
+    rows = db.execute(stmt.limit(display_limit)).all()
 
     latest_row = db.execute(
         select(AnalysisJob, Document)
@@ -554,6 +591,12 @@ def dashboard(
             sort_choice=sort_choice,
             max_upload_mb=settings.max_upload_mb,
             latest_job=latest_job,
+            total_jobs=total_jobs,
+            completed_count=completed_count,
+            failed_count=failed_count,
+            processing_count=processing_count,
+            matching_count=matching_count,
+            display_limit=display_limit,
         ),
     )
 
@@ -886,6 +929,97 @@ def job_delete(
     return RedirectResponse("/dashboard", status_code=303)
 
 
+def _cancel_job(job: AnalysisJob, *, message: str = "Canceled by user.") -> bool:
+    if job.status in {
+        JobStatus.completed.value,
+        JobStatus.failed.value,
+        JobStatus.canceled.value,
+    }:
+        return False
+    job.status = JobStatus.canceled.value
+    job.error_message = message
+    job.finished_at = dt.datetime.now(dt.UTC)
+    return True
+
+
+@router.post("/dashboard/bulk-action")
+def dashboard_bulk_action(
+    request: Request,
+    bulk_action: str = Form(""),
+    job_ids: list[str] = Form([]),
+    csrf_token: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="dashboard-bulk-action",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    require_csrf(request, csrf_token)
+    if settings.maintenance_mode:
+        raise HTTPException(status_code=503, detail=settings.maintenance_message)
+
+    action = (bulk_action or "").strip().lower()
+    if action not in {"stop", "delete"}:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    selected_ids = []
+    seen: set[str] = set()
+    for raw in job_ids:
+        value = (raw or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        selected_ids.append(value)
+    if not selected_ids:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    if action == "stop":
+        jobs = db.execute(
+            select(AnalysisJob).where(AnalysisJob.user_id == user.id, AnalysisJob.id.in_(selected_ids))
+        ).scalars().all()
+        for job in jobs:
+            changed = _cancel_job(job)
+            if not changed:
+                continue
+            db.add(job)
+            db.add(
+                AnalysisJobEvent(
+                    job_id=job.id,
+                    stage="canceled",
+                    message="Canceled by user.",
+                    progress=1.0,
+                )
+            )
+        db.commit()
+        return RedirectResponse("/dashboard", status_code=303)
+
+    rows = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.user_id == user.id, AnalysisJob.id.in_(selected_ids))
+    ).all()
+
+    storage_paths: set[str] = set()
+    for job, doc in rows:
+        if delete_job_and_document(db, job_id=job.id, document_id=doc.id):
+            storage_paths.add(doc.storage_path)
+    db.commit()
+
+    for path in storage_paths:
+        try:
+            Path(path).unlink()
+        except OSError:
+            continue
+
+    return RedirectResponse("/dashboard", status_code=303)
+
+
 @router.post("/api/jobs/{job_id}/cancel")
 def job_cancel_api(
     request: Request,
@@ -913,16 +1047,10 @@ def job_cancel_api(
     if not job:
         raise HTTPException(status_code=404)
 
-    if job.status in {
-        JobStatus.completed.value,
-        JobStatus.failed.value,
-        JobStatus.canceled.value,
-    }:
+    changed = _cancel_job(job)
+    if not changed:
         return {"status": job.status, "message": "Job already finished."}
 
-    job.status = JobStatus.canceled.value
-    job.error_message = "Canceled by user."
-    job.finished_at = dt.datetime.now(dt.UTC)
     db.add(job)
     db.add(
         AnalysisJobEvent(

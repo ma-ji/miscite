@@ -160,7 +160,7 @@ def check_inappropriate_citations(
                 [
                     {
                         "type": "needs_manual_review",
-                        "title": "Could not verify citation",
+                        "title": "Citation may be inappropriate",
                         "severity": "low",
                         "details": {
                             "citation": cit.__dict__,

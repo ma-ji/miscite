@@ -784,3 +784,24 @@ Goal: Expand report PDF export to include full report-page content, including re
 Prompt: Improve the PDF to include all contents on the report page, including suggested reviewers (with hyperlink), etc.
 Files touched: server/miscite/web/report_pdf.py, kb/promptbook.md.
 Decision/rationale: Rebuilt the PDF renderer to cover report-page sections beyond summary/flags: potential reviewers (with clickable search links), deep-analysis recommendations (subsection plans + suggestion bullets), complete deep-analysis reference list with DOI/OpenAlex/official/PDF links, richer issue metadata/signals, and full methodology/source sections when available.
+
+========
+Date: 2026-02-06
+Goal: Improve workspace usability and screen-space efficiency for day-to-day job management.
+Prompt: THINK HARD: Analyze Workspace space, improve UX for usability.
+Files touched: server/miscite/routes/dashboard.py, server/miscite/templates/dashboard.html, server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Added workspace-level job status counts and filtered-result metadata, then surfaced them in the dashboard via count-aware status pills, clearer result summaries, and contextual clear-filter controls. Improved upload ergonomics with client-side file type/size validation feedback and more informative file labels. Strengthened filter interactions with a keyboard shortcut (`/` for search focus), async loading state, and resilient fallback navigation. Implemented true mobile card rendering for the jobs table to eliminate horizontal-scroll dependency on smaller screens.
+
+========
+Date: 2026-02-06
+Goal: Expand dashboard job management controls for faster triage and cleanup.
+Prompt: 1) Move "Press / to focus search" inside the search box hint text; 2) Add a delete button to each job item; 3) Add bulk operations: Stop job and Delete report.
+Files touched: server/miscite/templates/dashboard.html, server/miscite/static/styles.css, server/miscite/routes/dashboard.py, kb/promptbook.md.
+Decision/rationale: Moved the keyboard hint into the search input placeholder while keeping `/` hotkey behavior. Added per-row delete forms in the dashboard actions column for direct cleanup. Introduced checkbox-based bulk selection with Select visible and two actions (Stop job, Delete report), backed by a new authenticated bulk-action route that reuses cancellation semantics and safely deletes uploaded files for owned jobs.
+
+========
+Date: 2026-02-06
+Goal: Simplify dashboard controls by removing clear-filter shortcuts and consolidating bulk actions.
+Prompt: 1. Remove the clear filter button. 2. Make the bulk functions drop list, with an apply button to apply selected bulk operation.
+Files touched: server/miscite/templates/dashboard.html, server/miscite/static/styles.css, server/miscite/routes/dashboard.py, kb/promptbook.md.
+Decision/rationale: Removed dashboard clear-filter CTA surfaces to reduce control noise and keep filtering interaction centered on direct search/radio/select inputs. Replaced multi-button bulk actions with a single bulk-action dropdown plus Apply button, with client-side state gating (requires selection + chosen action) and delete confirmation on submit.

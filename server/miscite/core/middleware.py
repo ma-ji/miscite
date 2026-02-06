@@ -22,17 +22,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         nonce = getattr(request.state, "csp_nonce", "")
         csp_parts = [
             "default-src 'self'",
-            f"script-src 'self' 'nonce-{nonce}' https://challenges.cloudflare.com",
+            f"script-src 'self' 'nonce-{nonce}' https://challenges.cloudflare.com https://sdk.51.la",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' https://fonts.gstatic.com",
-            "img-src 'self' data:",
-            "connect-src 'self' https://challenges.cloudflare.com",
+            "img-src 'self' data: https://*.51.la",
+            "connect-src 'self' https://challenges.cloudflare.com https://*.51.la",
             "frame-src https://challenges.cloudflare.com",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             # Stripe Checkout / Customer Portal is launched via redirects from same-origin POSTs.
             # Browsers enforce CSP `form-action` on redirect chains, so allow Stripe here.
-            "form-action 'self' https://checkout.stripe.com https://billing.stripe.com https://api.stripe.com https://sdk.51.la",
+            "form-action 'self' https://checkout.stripe.com https://billing.stripe.com https://api.stripe.com",
         ]
         if self._settings.cookie_secure:
             csp_parts.append("upgrade-insecure-requests")

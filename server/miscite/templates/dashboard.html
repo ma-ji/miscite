@@ -42,6 +42,7 @@
                 data-upload-form
                 data-billing-disabled="{{ 'true' if (billing_required and not billing_ready) else 'false' }}"
                 data-maintenance-disabled="{{ 'true' if maintenance_mode else 'false' }}"
+                data-max-upload-mb="{{ max_upload_mb }}"
               >
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <div class="form-field">
@@ -74,6 +75,7 @@
                     </div>
                   </div>
                 </div>
+                <p class="form-help ds-upload-error" data-upload-error hidden></p>
                 <div class="ds-upload-state" data-upload-state="{{ upload_state }}" aria-live="polite">
                   <div class="ds-upload-state-item" data-state="idle">
                     <i class="material-icons" aria-hidden="true">upload_file</i>
@@ -162,10 +164,18 @@
             <span class="ds-badge ds-badge--neutral">{{ balance_display }}</span>
           </div>
           <div class="ds-panel-body">
-            <div class="ds-stat-grid ds-stat-grid--compact">
+            <div class="ds-stat-grid ds-stat-grid--compact ds-stat-grid--workspace">
               <div class="ds-stat">
-                <div class="ds-stat-value">{{ jobs|length }}</div>
-                <div class="ds-stat-label">Recent jobs</div>
+                <div class="ds-stat-value">{{ total_jobs }}</div>
+                <div class="ds-stat-label">Total jobs</div>
+              </div>
+              <div class="ds-stat">
+                <div class="ds-stat-value">{{ processing_count }}</div>
+                <div class="ds-stat-label">Processing</div>
+              </div>
+              <div class="ds-stat">
+                <div class="ds-stat-value">{{ failed_count }}</div>
+                <div class="ds-stat-label">Needs attention</div>
               </div>
               <div class="ds-stat">
                 <div class="ds-stat-value ds-stat-value--label">
@@ -217,7 +227,7 @@
         <input
           type="search"
           name="q"
-          placeholder="Search by filename"
+          placeholder="Search by filename (press /)"
           value="{{ query }}"
           aria-label="Search by filename"
           data-search-input
@@ -226,7 +236,7 @@
       <div class="ds-filter-group" role="radiogroup" aria-label="Filter jobs by status">
         <label class="ds-filter-pill">
           <input type="radio" name="status" value="all" {{ "checked" if status_filter == "all" else "" }} />
-          <span>All</span>
+          <span>All <strong class="ds-filter-count">{{ total_jobs }}</strong></span>
         </label>
         <label class="ds-filter-pill">
           <input
@@ -235,11 +245,11 @@
             value="completed"
             {{ "checked" if status_filter == "completed" else "" }}
           />
-          <span>Completed</span>
+          <span>Completed <strong class="ds-filter-count">{{ completed_count }}</strong></span>
         </label>
         <label class="ds-filter-pill">
           <input type="radio" name="status" value="failed" {{ "checked" if status_filter == "failed" else "" }} />
-          <span>Failed</span>
+          <span>Failed <strong class="ds-filter-count">{{ failed_count }}</strong></span>
         </label>
         <label class="ds-filter-pill">
           <input
@@ -248,7 +258,7 @@
             value="processing"
             {{ "checked" if status_filter == "processing" else "" }}
           />
-          <span>Processing</span>
+          <span>Processing <strong class="ds-filter-count">{{ processing_count }}</strong></span>
         </label>
       </div>
       <div class="form-field ds-table-control">
@@ -261,12 +271,20 @@
       </div>
     </form>
     <div data-workspace-results>
+      <div class="ds-results-meta" role="status" aria-live="polite">
+        <p>
+          Showing <strong>{{ jobs|length }}</strong> of <strong>{{ matching_count }}</strong> matching
+          {{ "job" if matching_count == 1 else "jobs" }}.
+          {% if matching_count > display_limit %}
+            Refine filters to narrow results.
+          {% endif %}
+        </p>
+      </div>
       {% if jobs|length == 0 %}
         <div class="ds-empty">
           {% if query or status_filter != "all" %}
             <h4>No matching jobs</h4>
             <p class="miscite-muted">Try a different filename or reset your filters.</p>
-            <a class="ds-button ds-button--secondary" href="/dashboard">Clear filters</a>
           {% else %}
             <h4>No jobs yet</h4>
             <p class="miscite-muted">Upload a manuscript to generate your first report.</p>
@@ -274,12 +292,37 @@
           {% endif %}
         </div>
       {% else %}
+        <form id="bulk-job-form" class="ds-bulk-actions" method="post" action="/dashboard/bulk-action">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <div class="ds-bulk-select">
+            <label class="ds-bulk-select-label">
+              <input type="checkbox" data-bulk-select-all />
+              <span>Select visible</span>
+            </label>
+            <span class="miscite-muted ds-bulk-count" data-bulk-count>0 selected</span>
+          </div>
+          <div class="ds-bulk-buttons">
+            <label class="sr-only" for="bulk-action-select">Bulk action</label>
+            <select id="bulk-action-select" class="ds-bulk-action-select" name="bulk_action" data-bulk-action-select>
+              <option value="">Select bulk action</option>
+              <option value="stop">Stop job</option>
+              <option value="delete">Delete report</option>
+            </select>
+            <button class="ds-button ds-button--secondary ds-button--sm" type="submit" data-bulk-apply disabled>
+              Apply
+            </button>
+          </div>
+        </form>
         <div class="ds-card ds-card--plain">
           <div class="card-content">
             <div class="ds-table-wrap" role="region" aria-label="Recent jobs table" tabindex="0">
               <table class="ds-table ds-table--wide ds-table--mobile">
+                <caption class="sr-only">Recent analysis jobs and actions</caption>
                 <thead>
                   <tr>
+                    <th scope="col" class="ds-table-select-col">
+                      <span class="sr-only">Select</span>
+                    </th>
                     <th scope="col">Created</th>
                     <th scope="col">File</th>
                     <th scope="col">Status</th>
@@ -289,6 +332,12 @@
                 <tbody>
                   {% for job in jobs %}
                     <tr>
+                      <td data-label="Select" class="ds-table-select-cell">
+                        <label class="ds-row-check">
+                          <input type="checkbox" name="job_ids" value="{{ job.id }}" form="bulk-job-form" data-job-select />
+                          <span class="sr-only">Select {{ job.filename }}</span>
+                        </label>
+                      </td>
                       <td data-label="Created">
                         <div class="ds-job-date">
                           <time datetime="{{ job.created_at }}" title="{{ job.created_at }}">{{ job.created_at_human }}</time>
@@ -352,6 +401,15 @@
                               View status
                             </a>
                           {% endif %}
+                          <form
+                            method="post"
+                            action="/jobs/{{ job.id }}/delete"
+                            class="ds-inline-form"
+                            onsubmit="return confirm('Delete this report and uploaded file? This cannot be undone.');"
+                          >
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button class="ds-button ds-button--warning ds-button--sm" type="submit">Delete</button>
+                          </form>
                         </div>
                       </td>
                     </tr>
@@ -375,37 +433,146 @@
       var dropzone = form ? form.querySelector("[data-dropzone]") : null;
       var stateEl = form ? form.querySelector("[data-upload-state]") : null;
       var fileLabel = form ? form.querySelector("[data-dropzone-file]") : null;
+      var uploadError = form ? form.querySelector("[data-upload-error]") : null;
       var billingBlocked = form ? form.dataset.billingDisabled === "true" : true;
       var maintenanceBlocked = form ? form.dataset.maintenanceDisabled === "true" : true;
+      var maxUploadMb = form ? Number(form.dataset.maxUploadMb || "0") : 0;
+      if (!isFinite(maxUploadMb) || maxUploadMb < 0) {
+        maxUploadMb = 0;
+      }
+      var maxUploadBytes = maxUploadMb > 0 ? maxUploadMb * 1024 * 1024 : 0;
+
+      var setUploadError = function (message) {
+        if (!uploadError) return;
+        uploadError.textContent = message || "";
+        uploadError.hidden = !message;
+      };
 
       var setState = function (state) {
         if (!stateEl) return;
         stateEl.setAttribute("data-upload-state", state);
       };
 
+      var formatBytes = function (bytes) {
+        var numeric = Number(bytes);
+        if (!isFinite(numeric) || numeric <= 0) {
+          return "0 B";
+        }
+        var units = ["B", "KB", "MB", "GB"];
+        var size = numeric;
+        var unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+          size = size / 1024;
+          unitIndex += 1;
+        }
+        var precision = size >= 100 || unitIndex === 0 ? 0 : 1;
+        return size.toFixed(precision) + " " + units[unitIndex];
+      };
+
+      var hasSupportedExtension = function (filename) {
+        var value = String(filename || "").trim().toLowerCase();
+        return /\.(pdf|docx)$/.test(value);
+      };
+
+      var validateFileSelection = function () {
+        if (!fileInput) return false;
+        if (!fileInput.files || fileInput.files.length === 0) {
+          fileInput.setCustomValidity("");
+          setUploadError("");
+          if (fileLabel) {
+            fileLabel.textContent = "No file selected";
+          }
+          setState("idle");
+          return false;
+        }
+
+        var selected = fileInput.files[0];
+        var name = selected && selected.name ? selected.name : "Selected file";
+        var sizeLabel = selected && selected.size ? " (" + formatBytes(selected.size) + ")" : "";
+        if (fileLabel) {
+          fileLabel.textContent = name + sizeLabel;
+        }
+
+        if (!hasSupportedExtension(name)) {
+          fileInput.setCustomValidity("Choose a PDF or DOCX file.");
+          setUploadError("Unsupported file type. Choose a .pdf or .docx file.");
+          setState("idle");
+          return false;
+        }
+
+        if (maxUploadBytes > 0 && selected && selected.size > maxUploadBytes) {
+          fileInput.setCustomValidity("File exceeds the upload size limit.");
+          setUploadError(
+            "File is too large (" + formatBytes(selected.size) + "). Maximum size is " + maxUploadMb + " MB."
+          );
+          setState("idle");
+          return false;
+        }
+
+        fileInput.setCustomValidity("");
+        setUploadError("");
+        setState("selected");
+        return true;
+      };
+
       var updateSubmit = function () {
         if (!submitButton) return;
         var hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
-        submitButton.disabled = billingBlocked || maintenanceBlocked || !hasFile;
+        var hasCustomError = fileInput && fileInput.validity ? fileInput.validity.customError : false;
+        submitButton.disabled = billingBlocked || maintenanceBlocked || !hasFile || hasCustomError;
+      };
+
+      var workspaceResults = function () {
+        return document.querySelector("[data-workspace-results]");
+      };
+
+      var syncBulkActions = function () {
+        var container = workspaceResults();
+        if (!container) return;
+        var selected = container.querySelectorAll("[data-job-select]:checked").length;
+        var total = container.querySelectorAll("[data-job-select]").length;
+        var selectAll = container.querySelector("[data-bulk-select-all]");
+        var countLabel = container.querySelector("[data-bulk-count]");
+        var actionSelect = container.querySelector("[data-bulk-action-select]");
+        var applyButton = container.querySelector("[data-bulk-apply]");
+        var hasAction = false;
+        if (actionSelect) {
+          hasAction = String(actionSelect.value || "").trim().length > 0;
+        }
+
+        if (selectAll) {
+          selectAll.checked = total > 0 && selected === total;
+          selectAll.indeterminate = selected > 0 && selected < total;
+        }
+        if (countLabel) {
+          countLabel.textContent = selected + " selected";
+        }
+        if (actionSelect) {
+          actionSelect.disabled = total === 0;
+        }
+        if (applyButton) {
+          applyButton.disabled = selected === 0 || !hasAction;
+        }
       };
 
       if (fileInput) {
         fileInput.addEventListener("change", function () {
-          var name = fileInput.files && fileInput.files.length > 0 ? fileInput.files[0].name : "No file selected";
-          if (fileLabel) {
-            fileLabel.textContent = name;
-          }
-          if (fileInput.files && fileInput.files.length > 0) {
-            setState("selected");
-          } else {
-            setState("idle");
-          }
+          validateFileSelection();
           updateSubmit();
         });
       }
 
       if (form) {
-        form.addEventListener("submit", function () {
+        form.addEventListener("submit", function (event) {
+          var isValid = validateFileSelection();
+          updateSubmit();
+          if (!isValid) {
+            event.preventDefault();
+            if (fileInput) {
+              fileInput.reportValidity();
+            }
+            return;
+          }
           setState("uploading");
         });
       }
@@ -454,12 +621,70 @@
         if (uploadModule) {
           uploadModule.scrollIntoView({ behavior: "smooth", block: "center" });
         }
+        setUploadError("");
         if (fileInput && !billingBlocked && !maintenanceBlocked) {
           fileInput.focus();
         }
       });
 
+      document.addEventListener("change", function (event) {
+        var target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.matches("[data-bulk-select-all]")) {
+          var container = workspaceResults();
+          if (!container) return;
+          var checked = target instanceof HTMLInputElement ? target.checked : false;
+          var jobChecks = container.querySelectorAll("[data-job-select]");
+          jobChecks.forEach(function (checkbox) {
+            if (checkbox instanceof HTMLInputElement) {
+              checkbox.checked = checked;
+            }
+          });
+          syncBulkActions();
+          return;
+        }
+        if (target.matches("[data-job-select]")) {
+          syncBulkActions();
+          return;
+        }
+        if (target.matches("[data-bulk-action-select]")) {
+          syncBulkActions();
+        }
+      });
+
+      document.addEventListener("submit", function (event) {
+        var formTarget = event.target;
+        if (!(formTarget instanceof HTMLFormElement)) return;
+        if (formTarget.id !== "bulk-job-form") return;
+        var container = workspaceResults();
+        var selected = container ? container.querySelectorAll("[data-job-select]:checked").length : 0;
+        var actionSelect = formTarget.querySelector("[data-bulk-action-select]");
+        var action = actionSelect ? String(actionSelect.value || "").trim().toLowerCase() : "";
+
+        if (selected === 0) {
+          event.preventDefault();
+          syncBulkActions();
+          return;
+        }
+        if (!action) {
+          event.preventDefault();
+          syncBulkActions();
+          if (actionSelect) {
+            actionSelect.focus();
+          }
+          return;
+        }
+        if (action === "delete") {
+          var confirmed = window.confirm("Delete selected reports and uploaded files? This cannot be undone.");
+          if (!confirmed) {
+            event.preventDefault();
+            return;
+          }
+        }
+      });
+
       updateSubmit();
+      syncBulkActions();
 
       if (filterForm) {
         var searchInput = filterForm.querySelector("[data-search-input]");
@@ -467,18 +692,19 @@
         var resultsContainer = document.querySelector("[data-workspace-results]");
         var activeController = null;
         var submitNow = function () {
-          if (!resultsContainer) {
-            filterForm.submit();
-            return;
-          }
           var params = new URLSearchParams(new FormData(filterForm));
           var url = filterForm.action + (params.toString() ? "?" + params.toString() : "");
+          if (!resultsContainer) {
+            window.location.assign(url);
+            return;
+          }
 
           if (activeController) {
             activeController.abort();
           }
           activeController = new AbortController();
           resultsContainer.setAttribute("aria-busy", "true");
+          resultsContainer.classList.add("is-loading");
 
           try {
             window.history.replaceState(null, "", url);
@@ -502,17 +728,19 @@
               var next = doc.querySelector("[data-workspace-results]");
               if (next) {
                 resultsContainer.innerHTML = next.innerHTML;
+                syncBulkActions();
               }
             })
             .catch(function (err) {
               if (err && err.name === "AbortError") {
                 return;
               }
-              console.warn(err);
+              window.location.assign(url);
             })
             .finally(function () {
               if (resultsContainer) {
                 resultsContainer.removeAttribute("aria-busy");
+                resultsContainer.classList.remove("is-loading");
               }
             });
         };
@@ -527,6 +755,7 @@
             submitNow();
           });
         });
+
         if (searchInput) {
           var timer = null;
           searchInput.addEventListener("input", function () {
@@ -536,6 +765,21 @@
             timer = window.setTimeout(function () {
               submitNow();
             }, 350);
+          });
+
+          document.addEventListener("keydown", function (event) {
+            if (event.key !== "/") return;
+            var target = event.target;
+            if (target instanceof Element) {
+              var tag = target.tagName;
+              var inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+              if (inInput || target.isContentEditable) {
+                return;
+              }
+            }
+            event.preventDefault();
+            searchInput.focus();
+            searchInput.select();
           });
         }
       }
