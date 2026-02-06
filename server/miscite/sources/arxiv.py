@@ -8,6 +8,7 @@ import requests
 
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.shared.normalize import normalize_doi
+from server.miscite.sources.concurrency import acquire_api_slot
 from server.miscite.sources.http import backoff_sleep, record_http_request
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
@@ -83,6 +84,8 @@ class ArxivClient:
     timeout_seconds: float = 20.0
     user_agent: str = "miscite/0.1"
     cache: Cache | None = None
+    job_limiter: threading.Semaphore | None = None
+    source_global_limit: int = 3
     _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -110,6 +113,13 @@ class ArxivClient:
             return self._ttl_seconds(90)
         return self._ttl_seconds(7)
 
+    def _request_slot(self):
+        return acquire_api_slot(
+            source="arxiv",
+            job_limiter=self.job_limiter,
+            source_limit=self.source_global_limit,
+        )
+
     def _query(self, params: dict[str, str]) -> list[dict]:
         cache = self.cache
         cache_parts = [f"{k}={params[k]}" for k in sorted(params.keys())]
@@ -120,7 +130,13 @@ class ArxivClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "arxiv.query")
-                resp = self._client().get(_ARXIV_API, params=params, headers=self._headers(), timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(
+                        _ARXIV_API,
+                        params=params,
+                        headers=self._headers(),
+                        timeout=self.timeout_seconds,
+                    )
                 resp.raise_for_status()
                 entries = _parse_feed(resp.text)
                 if cache and cache.settings.cache_enabled:

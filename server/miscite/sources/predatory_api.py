@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+import threading
 
 import requests
 
 from server.miscite.core.cache import Cache
+from server.miscite.sources.concurrency import acquire_api_slot
 from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
@@ -53,14 +55,19 @@ class PredatoryApiClient:
     mode: str = "lookup"  # "lookup" | "list"
     timeout_seconds: float = 20.0
     cache: Cache | None = None
+    job_limiter: threading.Semaphore | None = None
+    source_global_limit: int = 2
 
     _list_cache: list[dict] | None = None
-    _session: requests.Session | None = field(default=None, init=False, repr=False)
+    _list_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
-        if self._session is None:
-            self._session = requests.Session()
-        return self._session
+        session = getattr(self._session_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._session_local.session = session
+        return session
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
@@ -74,6 +81,13 @@ class PredatoryApiClient:
             return 0.0
         days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
         return float(max(0, days)) * 86400.0
+
+    def _request_slot(self):
+        return acquire_api_slot(
+            source="predatory_api",
+            job_limiter=self.job_limiter,
+            source_limit=self.source_global_limit,
+        )
 
     def lookup(self, *, journal: str | None, publisher: str | None, issn: str | None) -> dict | None:
         if not self.url:
@@ -113,7 +127,13 @@ class PredatoryApiClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "predatory_api.lookup")
-                resp = self._client().get(self.url, params=params, headers=self._headers(), timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(
+                        self.url,
+                        params=params,
+                        headers=self._headers(),
+                        timeout=self.timeout_seconds,
+                    )
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled:
                         cache.set_json("predatory_api.lookup", cache_parts, None, ttl_seconds=self._ttl_seconds(1))
@@ -131,7 +151,9 @@ class PredatoryApiClient:
 
     def _lookup_from_list(self, *, journal: str | None, publisher: str | None, issn: str | None) -> dict | None:
         if self._list_cache is None:
-            self._list_cache = self._fetch_list() or []
+            with self._list_lock:
+                if self._list_cache is None:
+                    self._list_cache = self._fetch_list() or []
 
         journal_n = _norm_text(journal or "")
         publisher_n = _norm_text(publisher or "")
@@ -169,7 +191,12 @@ class PredatoryApiClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "predatory_api.list")
-                resp = self._client().get(self.url, headers=self._headers(), timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(
+                        self.url,
+                        headers=self._headers(),
+                        timeout=self.timeout_seconds,
+                    )
                 resp.raise_for_status()
                 data = resp.json()
                 records: list[dict] | None = None

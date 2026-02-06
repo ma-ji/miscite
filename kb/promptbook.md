@@ -763,3 +763,24 @@ Goal: Simplify reviewer scoring to popularity-only and tighten report-page align
 Prompt: Remove closeness/betweenness options and related calculations; default to popularity (degree). Double check report-page UI/UX and block alignment.
 Files touched: server/miscite/analysis/deep_analysis/reviewers.py, server/miscite/analysis/deep_analysis/test_reviewers.py, server/miscite/templates/job.html, server/miscite/static/styles.css, AGENTS.md, kb/promptbook.md.
 Decision/rationale: Removed reviewer-side closeness and betweenness centrality calculations and UI reordering controls, keeping a single deterministic popularity (degree) ranking with optional `popularity_score` display. Cleaned report reviewer block spacing/wrapping/list styling to improve visual alignment and consistency on the report page.
+
+========
+Date: 2026-02-06
+Goal: Streamline report access-token UX and add downloadable branded PDF exports.
+Prompt: "Optimize the UI/UX of the Access token block, remove redundant information. Provide a link to download report as a PDF file. Nicely format the PDF with branding and website information."
+Files touched: server/miscite/templates/job.html, server/miscite/routes/dashboard.py, server/miscite/web/report_pdf.py, requirements.txt, AGENTS.md, kb/promptbook.md.
+Decision/rationale: Simplified the owner token card by removing duplicate token/link messaging and redundant token-value controls, while keeping share-link generation, expiration controls, and rotation actions. Added owner/public report PDF routes (`/jobs/{id}/report.pdf`, `/reports/{token}/report.pdf`) backed by a new branded ReportLab renderer that includes report metadata, summary metrics, flagged issues, and site/report URLs.
+
+========
+Date: 2026-02-06
+Goal: Add bounded API parallelism controls and parallelize API-heavy checks without tripping source rate limits.
+Prompt: THINK HARD: analyze API calls that can run in parallel, and add two limits (per-job max parallel process + per-source global max parallel cap).
+Files touched: server/miscite/sources/concurrency.py, server/miscite/sources/openalex.py, server/miscite/sources/crossref.py, server/miscite/sources/pubmed.py, server/miscite/sources/arxiv.py, server/miscite/sources/retraction_api.py, server/miscite/sources/predatory_api.py, server/miscite/sources/test_concurrency.py, server/miscite/sources/test_list_api_cache.py, server/miscite/llm/openrouter.py, server/miscite/core/config.py, server/miscite/analysis/pipeline/__init__.py, server/miscite/analysis/checks/reference_flags.py, .env.example, docs/DEVELOPMENT.md, AGENTS.md, kb/promptbook.md.
+Decision/rationale: Introduced a shared API concurrency gate with one per-job limiter and per-source global limiters (shared across jobs in the same process), then wired all major source clients (including OpenRouter/custom APIs) through it. Added explicit env-configurable caps and propagated them through pipeline client construction. Also parallelized retraction/predatory flag checks across references while preserving deterministic issue order, improving throughput without increasing per-reference API call volume.
+
+========
+Date: 2026-02-06
+Goal: Expand report PDF export to include full report-page content, including reviewer suggestions with hyperlinks.
+Prompt: Improve the PDF to include all contents on the report page, including suggested reviewers (with hyperlink), etc.
+Files touched: server/miscite/web/report_pdf.py, kb/promptbook.md.
+Decision/rationale: Rebuilt the PDF renderer to cover report-page sections beyond summary/flags: potential reviewers (with clickable search links), deep-analysis recommendations (subsection plans + suggestion bullets), complete deep-analysis reference list with DOI/OpenAlex/official/PDF links, richer issue metadata/signals, and full methodology/source sections when available.

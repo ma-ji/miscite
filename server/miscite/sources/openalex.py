@@ -7,6 +7,7 @@ import requests
 
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.shared.normalize import normalize_doi
+from server.miscite.sources.concurrency import acquire_api_slot
 from server.miscite.sources.http import backoff_sleep
 
 
@@ -44,6 +45,8 @@ def _openalex_author_id_suffix(author_id: str) -> str | None:
 class OpenAlexClient:
     timeout_seconds: float = 20.0
     cache: Cache | None = None
+    job_limiter: threading.Semaphore | None = None
+    source_global_limit: int = 4
     _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -65,6 +68,13 @@ class OpenAlexClient:
         if cache and cache.settings.cache_enabled:
             cache.debug_stats.increment(namespace, metric)
 
+    def _request_slot(self):
+        return acquire_api_slot(
+            source="openalex",
+            job_limiter=self.job_limiter,
+            source_limit=self.source_global_limit,
+        )
+
     def get_work_by_doi(self, doi: str) -> dict | None:
         doi_norm = normalize_doi(doi)
         if not doi_norm:
@@ -78,7 +88,8 @@ class OpenAlexClient:
         for attempt in range(3):
             try:
                 self._debug_increment("openalex.work_by_doi", "http_request")
-                resp = self._client().get(url, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(url, timeout=self.timeout_seconds)
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled:
                         cache.set_json("openalex.work_by_doi", [doi_norm], None, ttl_seconds=self._ttl_seconds(1))
@@ -118,7 +129,8 @@ class OpenAlexClient:
         for attempt in range(3):
             try:
                 self._debug_increment("openalex.work_by_id", "http_request")
-                resp = self._client().get(url, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(url, timeout=self.timeout_seconds)
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled and suffix:
                         cache.set_json("openalex.work_by_id", [suffix], None, ttl_seconds=self._ttl_seconds(1))
@@ -143,7 +155,8 @@ class OpenAlexClient:
         for attempt in range(3):
             try:
                 self._debug_increment("openalex.search", "http_request")
-                resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 results = (resp.json() or {}).get("results") or []
                 if cache and cache.settings.cache_enabled and isinstance(results, list):
@@ -176,7 +189,8 @@ class OpenAlexClient:
         for attempt in range(3):
             try:
                 self._debug_increment("openalex.list_citing_works", "http_request")
-                resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 results = (resp.json() or {}).get("results") or []
                 if cache and cache.settings.cache_enabled and isinstance(results, list):
@@ -215,7 +229,8 @@ class OpenAlexClient:
         for attempt in range(3):
             try:
                 self._debug_increment("openalex.list_author_works", "http_request")
-                resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(url, params=params, timeout=self.timeout_seconds)
                 resp.raise_for_status()
                 results = (resp.json() or {}).get("results") or []
                 if cache and cache.settings.cache_enabled and isinstance(results, list):

@@ -51,12 +51,14 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/core/`: shared config, db, models, cache, security, storage, middleware, email, rate limiting.
 - `server/miscite/billing/`: OpenRouter pricing cache, LLM usage tracking, cost calculation, Stripe helpers, ledger updates.
 - `server/miscite/web/`: Jinja template helpers + filters.
+- `server/miscite/web/report_pdf.py`: branded PDF export renderer used by report download endpoints.
 - `server/miscite/analysis/`: pipeline steps (extract/parse/checks/deep_analysis/report/shared + pipeline/).
 - `server/miscite/analysis/match/`: citation↔bibliography matching (indexes + ambiguity/confidence).
 - `server/miscite/prompts/`: LLM prompts organized by stage (parsing/matching/checks/deep_analysis) with paired `system.txt` + `user.txt`.
 - `server/miscite/prompts/registry.yaml`: prompt catalog (purpose, inputs, schema).
 - `server/miscite/prompts/schemas/`: JSON Schemas for LLM prompt outputs.
 - `server/miscite/sources/`: OpenAlex, Crossref, PubMed, arXiv, datasets, optional APIs, sync helpers (`sources/predatory/` and `sources/retraction/` split data prep vs matching).
+- `server/miscite/sources/concurrency.py`: shared outbound API concurrency limiter (per-job cap + per-source global caps).
 - `server/miscite/routes/`: auth, dashboard, billing, health endpoints.
 - `server/miscite/routes/seo.py`: robots.txt + sitemap.xml + favicon redirect endpoints.
 - `server/miscite/core/email.py`: Mailgun email delivery helpers.
@@ -82,7 +84,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
    - Optional deep analysis: expands citation neighborhood via OpenAlex and suggests additions/removals plus subsection-by-subsection revision plans (`analysis/deep_analysis/deep_analysis.py`).
    - Report assembled + methodology markdown.
    - On completion, the worker issues the access token, deducts LLM usage cost from balance, and emails the access token.
-4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can manage access tokens + delete reports here).
+4) **UI + API**: `server/miscite/routes/dashboard.py` serves `/jobs/{id}` report page and `/api/jobs/{id}` JSON (owners can manage access tokens + delete reports here), plus report PDF exports at `/jobs/{id}/report.pdf` and `/reports/{token}/report.pdf`.
 
 ## Report schema contract
 
@@ -122,6 +124,7 @@ Settings live in `server/miscite/core/config.py` and `.env.example`. Critical en
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate, deep analysis).
 - Matching/verification: `MISCITE_PREPRINT_YEAR_GAP_MAX` controls year-gap tolerance for preprint/working-paper → published matches.
+- API concurrency controls: `MISCITE_JOB_API_MAX_PARALLEL`, plus per-source caps (`MISCITE_SOURCE_GLOBAL_MAX_OPENROUTER`, `..._OPENALEX`, `..._CROSSREF`, `..._PUBMED`, `..._ARXIV`, `..._RETRACTION_API`, `..._PREDATORY_API`) to bound concurrent outbound requests.
 - Auth email: `MISCITE_MAILGUN_API_KEY`, `MISCITE_MAILGUN_DOMAIN`, `MISCITE_MAILGUN_SENDER`, `MISCITE_LOGIN_CODE_TTL_MINUTES`.
 - Public URLs: `MISCITE_PUBLIC_ORIGIN` for absolute links in emails, `MISCITE_SAMPLE_REPORT_URL` for the sample report CTA.
 - Bot protection: `MISCITE_TURNSTILE_SITE_KEY`, `MISCITE_TURNSTILE_SECRET_KEY`.

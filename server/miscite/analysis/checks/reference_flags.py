@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from server.miscite.analysis.match.types import CitationMatch
 from server.miscite.analysis.parse.citation_parsing import ReferenceEntry
@@ -97,14 +98,19 @@ def check_retractions_and_predatory_venues(
 
     pred_csv_enabled = settings.predatory_csv.exists()
 
-    for idx, ref in enumerate(references, start=1):
+    def _check_one(ref: ReferenceEntry) -> tuple[list[dict], int, int, int]:
+        local_issues: list[dict] = []
+        unresolved_local = 0
+        retracted_local = 0
+        predatory_local = 0
+
         work = resolved_by_ref_id.get(ref.ref_id)
         if not work:
-            continue
+            return local_issues, unresolved_local, retracted_local, predatory_local
 
         if (not work.source) or work.confidence < 0.55:
-            unresolved_refs += 1
-            issues.append(
+            unresolved_local += 1
+            local_issues.append(
                 {
                     "type": "unresolved_reference",
                     "title": f"Bibliography item could not be confidently resolved: {ref.ref_id}",
@@ -135,7 +141,7 @@ def check_retractions_and_predatory_venues(
                 retraction_hits.append({"source": "retractionwatch_csv", "detail": record.__dict__})
 
         if retraction_hits:
-            retracted_refs += 1
+            retracted_local += 1
             strong_sources = {
                 hit["source"]
                 for hit in retraction_hits
@@ -147,7 +153,7 @@ def check_retractions_and_predatory_venues(
                 if hit["source"] in {"openalex", "crossref", "pubmed", "arxiv"}
             }
             high_conf = bool(strong_sources) or len(db_sources) >= 2
-            issues.append(
+            local_issues.append(
                 {
                     "type": "retracted_article",
                     "title": f"Retracted work cited: {work.doi}",
@@ -173,7 +179,7 @@ def check_retractions_and_predatory_venues(
                 predatory_hits.append({"source": "predatory_csv", "detail": match.as_dict()})
 
         if predatory_hits:
-            predatory_matches += 1
+            predatory_local += 1
             sources = {hit["source"] for hit in predatory_hits}
             csv_conf = 0.0
             for hit in predatory_hits:
@@ -184,7 +190,7 @@ def check_retractions_and_predatory_venues(
                     except Exception:
                         pass
             high_conf = len(sources) >= 2 or csv_conf >= 0.8
-            issues.append(
+            local_issues.append(
                 {
                     "type": "predatory_venue_match",
                     "title": f"Predatory venue match for {ref.ref_id}",
@@ -198,7 +204,55 @@ def check_retractions_and_predatory_venues(
                 }
             )
 
-        if progress and total and (idx == 1 or idx % step == 0 or idx == total):
-            progress(f"Checked {idx}/{total} references", idx / total)
+        return local_issues, unresolved_local, retracted_local, predatory_local
+
+    check_workers = max(
+        1,
+        min(
+            int(settings.resolve_max_workers),
+            int(settings.job_api_max_parallel),
+        ),
+    )
+
+    if check_workers == 1 or total <= 1:
+        for idx, ref in enumerate(references, start=1):
+            local_issues, unresolved_local, retracted_local, predatory_local = _check_one(ref)
+            issues.extend(local_issues)
+            unresolved_refs += unresolved_local
+            retracted_refs += retracted_local
+            predatory_matches += predatory_local
+            if progress and total and (idx == 1 or idx % step == 0 or idx == total):
+                progress(f"Checked {idx}/{total} references", idx / total)
+    else:
+        ordered_results: dict[int, tuple[list[dict], int, int, int]] = {}
+        with ThreadPoolExecutor(max_workers=check_workers) as ex:
+            futures = {
+                ex.submit(_check_one, ref): idx
+                for idx, ref in enumerate(references, start=1)
+            }
+            completed = 0
+            try:
+                for fut in as_completed(futures):
+                    idx = futures[fut]
+                    ordered_results[idx] = fut.result()
+                    completed += 1
+                    if progress and total and (
+                        completed == 1 or completed % step == 0 or completed == total
+                    ):
+                        progress(f"Checked {completed}/{total} references", completed / total)
+            except Exception:
+                for fut in futures:
+                    fut.cancel()
+                raise
+
+        for idx in range(1, total + 1):
+            item = ordered_results.get(idx)
+            if not item:
+                continue
+            local_issues, unresolved_local, retracted_local, predatory_local = item
+            issues.extend(local_issues)
+            unresolved_refs += unresolved_local
+            retracted_refs += retracted_local
+            predatory_matches += predatory_local
 
     return issues, unresolved_refs, retracted_refs, predatory_matches

@@ -10,6 +10,7 @@ import requests
 
 from server.miscite.billing.usage import UsageTracker
 from server.miscite.core.cache import Cache
+from server.miscite.sources.concurrency import acquire_api_slot
 from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
@@ -20,6 +21,8 @@ class OpenRouterClient:
     timeout_seconds: float = 45.0
     cache: Cache | None = None
     usage_tracker: UsageTracker | None = None
+    job_limiter: threading.Semaphore | None = None
+    source_global_limit: int = 4
     _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -28,6 +31,13 @@ class OpenRouterClient:
             session = requests.Session()
             self._session_local.session = session
         return session
+
+    def _request_slot(self):
+        return acquire_api_slot(
+            source="openrouter",
+            job_limiter=self.job_limiter,
+            source_limit=self.source_global_limit,
+        )
 
     def chat_json(self, *, system: str, user: str) -> dict:
         if not self.api_key:
@@ -73,7 +83,13 @@ class OpenRouterClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "openrouter.chat_json")
-                resp = self._client().post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().post(
+                        url,
+                        headers=headers,
+                        json=payload,
+                        timeout=self.timeout_seconds,
+                    )
                 resp.raise_for_status()
                 data = resp.json() or {}
                 self._record_usage(data)

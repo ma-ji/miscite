@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,8 @@ from server.miscite.core.models import AnalysisJob, AnalysisJobEvent, BillingAcc
 from server.miscite.core.rate_limit import acquire_stream_slot, enforce_rate_limit, release_stream_slot
 from server.miscite.core.security import access_token_hint, generate_access_token, hash_token, require_csrf, require_user
 from server.miscite.core.storage import save_upload
-from server.miscite.web import template_context, templates
+from server.miscite.web import public_origin, template_context, templates
+from server.miscite.web.report_pdf import build_report_pdf
 
 router = APIRouter()
 
@@ -212,6 +213,7 @@ def _resolve_access_token(
 
 _PATH_HINT_RE = re.compile(r"(^/|[A-Za-z]:\\|\\.\\./|/data/|/home/)")
 _URL_HINT_RE = re.compile(r"^https?://", re.IGNORECASE)
+_FILENAME_SAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _looks_sensitive(detail: str) -> bool:
@@ -259,6 +261,59 @@ def _redact_methodology(md: str | None) -> str | None:
             continue
         out.append(line)
     return "\n".join(out).strip() or None
+
+
+def _report_download_name(original_filename: str) -> str:
+    stem = Path(original_filename or "report").stem.strip()
+    safe = _FILENAME_SAFE_RE.sub("-", stem).strip("._-")
+    if not safe:
+        safe = "citation-report"
+    return f"{safe}-miscite-report.pdf"
+
+
+def _report_pdf_response(
+    request: Request,
+    *,
+    settings: Settings,
+    job: AnalysisJob,
+    doc: Document,
+    report_url_path: str,
+    include_context_sections: bool = True,
+) -> Response:
+    report = _load_report(job)
+    if report is None:
+        raise HTTPException(status_code=409, detail="Report is not ready yet.")
+
+    if include_context_sections:
+        data_sources = json.loads(job.sources_json) if job.sources_json else None
+        methodology_md = job.methodology_md or ""
+        if not settings.expose_sensitive_report_fields:
+            data_sources = _redact_sources(data_sources)
+            methodology_md = _redact_methodology(methodology_md)
+    else:
+        data_sources = None
+        methodology_md = None
+
+    origin = public_origin(request) or "https://miscite.review"
+    report_url = f"{origin}{report_url_path}"
+    try:
+        pdf_bytes = build_report_pdf(
+            site_url=origin,
+            report_url=report_url,
+            generated_at_utc=dt.datetime.now(dt.UTC),
+            document_name=doc.original_filename,
+            job_id=job.id,
+            status=job.status,
+            report=report,
+            data_sources=data_sources,
+            methodology_md=methodology_md,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    filename = _report_download_name(doc.original_filename)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
 
 
 @router.get("/")
@@ -362,10 +417,38 @@ def report_access_token(request: Request, token: str, db: Session = Depends(db_s
             },
             report=report,
             report_token=token_value,
+            report_pdf_url=f"/reports/{token_value}/report.pdf" if report else None,
             methodology_md="",
             public_view=True,
             hide_report_access=True,
         ),
+    )
+
+
+@router.get("/reports/{token}/report.pdf")
+def report_access_pdf(request: Request, token: str, db: Session = Depends(db_session)):
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="report-access",
+        limit=settings.rate_limit_report_access,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    token_value = token.strip()
+    resolved, error = _resolve_access_token(db, token_value)
+    if error:
+        status_code = 403 if "expired" in error.lower() else 404
+        raise HTTPException(status_code=status_code, detail=error)
+
+    job, doc = resolved
+    return _report_pdf_response(
+        request,
+        settings=settings,
+        job=job,
+        doc=doc,
+        report_url_path=f"/reports/{token_value}",
+        include_context_sections=False,
     )
 
 
@@ -579,9 +662,45 @@ def job_page(
             data_sources=data_sources,
             methodology_md=methodology_md,
             access_token=job.access_token_value,
+            report_pdf_url=f"/jobs/{job.id}/report.pdf" if report else None,
             public_view=False,
             hide_report_access=True,
         ),
+    )
+
+
+@router.get("/jobs/{job_id}/report.pdf")
+def job_pdf(
+    request: Request,
+    job_id: str,
+    user: User = Depends(require_user),
+    db: Session = Depends(db_session),
+):
+    request.state.user = user
+    settings: Settings = request.app.state.settings
+    enforce_rate_limit(
+        request,
+        settings=settings,
+        key="job-report-pdf",
+        limit=settings.rate_limit_api,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+
+    row = db.execute(
+        select(AnalysisJob, Document)
+        .join(Document, Document.id == AnalysisJob.document_id)
+        .where(AnalysisJob.id == job_id, AnalysisJob.user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404)
+
+    job, doc = row
+    return _report_pdf_response(
+        request,
+        settings=settings,
+        job=job,
+        doc=doc,
+        report_url_path=f"/jobs/{job.id}",
     )
 
 
@@ -670,6 +789,7 @@ def job_access_token(
                 methodology_md=methodology_md,
                 access_token=job.access_token_value,
                 access_token_error=error,
+                report_pdf_url=f"/jobs/{job.id}/report.pdf" if report else None,
                 public_view=False,
                 hide_report_access=True,
             ),
@@ -716,6 +836,7 @@ def job_access_token(
             data_sources=data_sources,
             methodology_md=methodology_md,
             access_token=token_value or job.access_token_value,
+            report_pdf_url=f"/jobs/{job.id}/report.pdf" if report else None,
             public_view=False,
             hide_report_access=True,
         ),

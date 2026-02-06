@@ -54,6 +54,16 @@ make check
 
 - `MISCITE_LLM_MATCH_MAX_CALLS` limits LLM disambiguation calls used for citation↔bibliography matching and metadata resolution.
 - `MISCITE_PREPRINT_YEAR_GAP_MAX` (default `5`) controls how many years of gap are treated as plausible for preprint/working-paper → published matches during metadata resolution.
+- API concurrency controls (rate-limit safety + throughput):
+  - `MISCITE_JOB_API_MAX_PARALLEL`: per-job cap across all outbound API calls.
+  - `MISCITE_SOURCE_GLOBAL_MAX_OPENROUTER`
+  - `MISCITE_SOURCE_GLOBAL_MAX_OPENALEX`
+  - `MISCITE_SOURCE_GLOBAL_MAX_CROSSREF`
+  - `MISCITE_SOURCE_GLOBAL_MAX_PUBMED`
+  - `MISCITE_SOURCE_GLOBAL_MAX_ARXIV`
+  - `MISCITE_SOURCE_GLOBAL_MAX_RETRACTION_API`
+  - `MISCITE_SOURCE_GLOBAL_MAX_PREDATORY_API`
+  - Note: source caps are per-process and shared by all jobs running in that worker process.
 - PubMed (NCBI E-utilities) request identity / rate tuning:
   - `MISCITE_NCBI_TOOL` (default `miscite`)
   - `MISCITE_NCBI_EMAIL` (defaults to `MISCITE_CROSSREF_MAILTO`)

@@ -154,6 +154,14 @@ class Settings:
     predatory_journals_url: str
 
     api_timeout_seconds: float
+    job_api_max_parallel: int
+    source_global_max_openrouter: int
+    source_global_max_openalex: int
+    source_global_max_crossref: int
+    source_global_max_pubmed: int
+    source_global_max_arxiv: int
+    source_global_max_retraction_api: int
+    source_global_max_predatory_api: int
 
     cache_enabled: bool
     cache_dir: Path
@@ -351,6 +359,24 @@ class Settings:
         )
 
         api_timeout_seconds = _env_float("MISCITE_API_TIMEOUT_SECONDS", 20.0, min_value=2.0, max_value=120.0)
+        job_api_max_parallel = _env_int("MISCITE_JOB_API_MAX_PARALLEL", 8, min_value=1, max_value=128)
+        source_global_max_openrouter = _env_int("MISCITE_SOURCE_GLOBAL_MAX_OPENROUTER", 4, min_value=1, max_value=128)
+        source_global_max_openalex = _env_int("MISCITE_SOURCE_GLOBAL_MAX_OPENALEX", 4, min_value=1, max_value=128)
+        source_global_max_crossref = _env_int("MISCITE_SOURCE_GLOBAL_MAX_CROSSREF", 4, min_value=1, max_value=128)
+        source_global_max_pubmed = _env_int("MISCITE_SOURCE_GLOBAL_MAX_PUBMED", 3, min_value=1, max_value=128)
+        source_global_max_arxiv = _env_int("MISCITE_SOURCE_GLOBAL_MAX_ARXIV", 3, min_value=1, max_value=128)
+        source_global_max_retraction_api = _env_int(
+            "MISCITE_SOURCE_GLOBAL_MAX_RETRACTION_API",
+            2,
+            min_value=1,
+            max_value=128,
+        )
+        source_global_max_predatory_api = _env_int(
+            "MISCITE_SOURCE_GLOBAL_MAX_PREDATORY_API",
+            2,
+            min_value=1,
+            max_value=128,
+        )
 
         cache_enabled = _env_bool("MISCITE_CACHE_ENABLED", True)
         cache_dir = Path(_env_str("MISCITE_CACHE_DIR", "./data/cache"))
@@ -506,6 +532,14 @@ class Settings:
             llm_match_max_calls = min(llm_match_max_calls, 10)
             resolve_max_workers = min(resolve_max_workers, 2)
             inappropriate_max_workers = min(inappropriate_max_workers, 2)
+            job_api_max_parallel = min(job_api_max_parallel, 2)
+            source_global_max_openrouter = min(source_global_max_openrouter, 2)
+            source_global_max_openalex = min(source_global_max_openalex, 2)
+            source_global_max_crossref = min(source_global_max_crossref, 2)
+            source_global_max_pubmed = min(source_global_max_pubmed, 2)
+            source_global_max_arxiv = min(source_global_max_arxiv, 2)
+            source_global_max_retraction_api = min(source_global_max_retraction_api, 1)
+            source_global_max_predatory_api = min(source_global_max_predatory_api, 1)
 
         return cls(
             db_url=db_url,
@@ -557,6 +591,14 @@ class Settings:
             predatory_publishers_url=predatory_publishers_url,
             predatory_journals_url=predatory_journals_url,
             api_timeout_seconds=api_timeout_seconds,
+            job_api_max_parallel=job_api_max_parallel,
+            source_global_max_openrouter=source_global_max_openrouter,
+            source_global_max_openalex=source_global_max_openalex,
+            source_global_max_crossref=source_global_max_crossref,
+            source_global_max_pubmed=source_global_max_pubmed,
+            source_global_max_arxiv=source_global_max_arxiv,
+            source_global_max_retraction_api=source_global_max_retraction_api,
+            source_global_max_predatory_api=source_global_max_predatory_api,
             cache_enabled=cache_enabled,
             cache_dir=cache_dir,
             cache_llm_ttl_days=cache_llm_ttl_days,

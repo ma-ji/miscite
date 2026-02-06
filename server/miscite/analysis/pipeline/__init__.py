@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -138,6 +139,7 @@ def analyze_document(
     doc_sha = (document_sha256 or "").strip() or None
     doc_scope = f"doc:{doc_sha}" if doc_sha else f"path:{path.name}"
     doc_cache = cache.scoped(doc_scope)
+    job_api_limiter = threading.BoundedSemaphore(max(1, int(settings.job_api_max_parallel)))
 
     parser_backend_used = settings.text_extract_backend
     _progress("extract", f"Extracting text from {path.name}", 0.03)
@@ -171,12 +173,16 @@ def analyze_document(
         model=settings.llm_parse_model,
         cache=doc_cache,
         usage_tracker=usage_tracker,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_openrouter,
     )
     llm_match_client = OpenRouterClient(
         api_key=settings.openrouter_api_key,
         model=settings.llm_match_model,
         cache=doc_cache,
         usage_tracker=usage_tracker,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_openrouter,
     )
     llm_parsing_used = True
     llm_bib_used = True
@@ -301,8 +307,15 @@ def analyze_document(
         mailto=settings.crossref_mailto,
         timeout_seconds=settings.api_timeout_seconds,
         cache=cache,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_crossref,
     )
-    openalex = OpenAlexClient(timeout_seconds=settings.api_timeout_seconds, cache=cache)
+    openalex = OpenAlexClient(
+        timeout_seconds=settings.api_timeout_seconds,
+        cache=cache,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_openalex,
+    )
     pubmed = PubMedClient(
         tool=settings.ncbi_tool,
         email=settings.ncbi_email,
@@ -310,11 +323,15 @@ def analyze_document(
         user_agent=settings.crossref_user_agent,
         timeout_seconds=settings.api_timeout_seconds,
         cache=cache,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_pubmed,
     )
     arxiv = ArxivClient(
         timeout_seconds=settings.api_timeout_seconds,
         user_agent=settings.crossref_user_agent,
         cache=cache,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_arxiv,
     )
     retraction_data = load_retraction_data(settings.retractionwatch_csv)
     retraction_matcher = RetractionMatcher(retraction_data)
@@ -384,6 +401,8 @@ def analyze_document(
             mode=settings.retraction_api_mode,
             timeout_seconds=settings.api_timeout_seconds,
             cache=cache,
+            job_limiter=job_api_limiter,
+            source_global_limit=settings.source_global_max_retraction_api,
         )
         used_sources.append(
             {
@@ -404,6 +423,8 @@ def analyze_document(
             mode=settings.predatory_api_mode,
             timeout_seconds=settings.api_timeout_seconds,
             cache=cache,
+            job_limiter=job_api_limiter,
+            source_global_limit=settings.source_global_max_predatory_api,
         )
         used_sources.append(
             {
@@ -421,12 +442,16 @@ def analyze_document(
         model=settings.llm_model,
         cache=doc_cache,
         usage_tracker=usage_tracker,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_openrouter,
     )
     llm_deep_client = OpenRouterClient(
         api_key=settings.openrouter_api_key,
         model=settings.llm_deep_analysis_model,
         cache=doc_cache,
         usage_tracker=usage_tracker,
+        job_limiter=job_api_limiter,
+        source_global_limit=settings.source_global_max_openrouter,
     )
     llm_used = False
     used_sources.append(

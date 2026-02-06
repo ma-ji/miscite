@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+import threading
 
 import requests
 
 from server.miscite.core.cache import Cache
 from server.miscite.analysis.shared.normalize import normalize_doi
+from server.miscite.sources.concurrency import acquire_api_slot
 from server.miscite.sources.http import backoff_sleep, record_http_request
 
 
@@ -29,14 +31,19 @@ class RetractionApiClient:
     mode: str = "lookup"  # "lookup" | "list"
     timeout_seconds: float = 20.0
     cache: Cache | None = None
+    job_limiter: threading.Semaphore | None = None
+    source_global_limit: int = 2
 
     _list_cache: list[dict] | None = None
-    _session: requests.Session | None = field(default=None, init=False, repr=False)
+    _list_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
-        if self._session is None:
-            self._session = requests.Session()
-        return self._session
+        session = getattr(self._session_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._session_local.session = session
+        return session
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
@@ -50,6 +57,13 @@ class RetractionApiClient:
             return 0.0
         days = min(int(suggested_days), int(cache.settings.cache_http_ttl_days))
         return float(max(0, days)) * 86400.0
+
+    def _request_slot(self):
+        return acquire_api_slot(
+            source="retraction_api",
+            job_limiter=self.job_limiter,
+            source_limit=self.source_global_limit,
+        )
 
     def lookup_by_doi(self, doi: str) -> dict | None:
         doi_norm = normalize_doi(doi)
@@ -70,12 +84,13 @@ class RetractionApiClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "retraction_api.lookup_by_doi")
-                resp = self._client().get(
-                    self.url,
-                    params={"doi": doi_norm},
-                    headers=self._headers(),
-                    timeout=self.timeout_seconds,
-                )
+                with self._request_slot():
+                    resp = self._client().get(
+                        self.url,
+                        params={"doi": doi_norm},
+                        headers=self._headers(),
+                        timeout=self.timeout_seconds,
+                    )
                 if resp.status_code == 404:
                     if cache and cache.settings.cache_enabled:
                         cache.set_json(
@@ -103,7 +118,9 @@ class RetractionApiClient:
 
     def _lookup_from_list(self, doi_norm: str) -> dict | None:
         if self._list_cache is None:
-            self._list_cache = self._fetch_list() or []
+            with self._list_lock:
+                if self._list_cache is None:
+                    self._list_cache = self._fetch_list() or []
         for rec in self._list_cache:
             rec_doi = normalize_doi(str(rec.get("doi") or ""))
             if rec_doi and rec_doi == doi_norm:
@@ -127,7 +144,12 @@ class RetractionApiClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "retraction_api.list")
-                resp = self._client().get(self.url, headers=self._headers(), timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(
+                        self.url,
+                        headers=self._headers(),
+                        timeout=self.timeout_seconds,
+                    )
                 resp.raise_for_status()
                 data = resp.json()
                 records: list[dict] | None = None

@@ -10,6 +10,10 @@ from server.miscite.sources.predatory_api import PredatoryApiClient
 from server.miscite.sources.retraction_api import RetractionApiClient
 
 
+def _set_session(client, session) -> None:  # type: ignore[no-untyped-def]
+    client._session_local.session = session  # type: ignore[attr-defined]
+
+
 class _RaisingSession:
     def get(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("HTTP should not be called when cache is populated.")
@@ -47,7 +51,7 @@ class TestListApiCache(unittest.TestCase):
             records = [{"journal": "A"}, {"publisher": "B"}]
             cache.set_text_file("predatory_api.list", [client.mode, client.url, client.token or ""], json.dumps(records))
 
-            client._session = _RaisingSession()  # type: ignore[assignment]
+            _set_session(client, _RaisingSession())
             self.assertEqual(client._fetch_list(), records)
 
     def test_predatory_list_written_then_reused(self) -> None:
@@ -58,12 +62,12 @@ class TestListApiCache(unittest.TestCase):
 
             first = PredatoryApiClient(url="https://example.test/predatory", token="tok", mode="list", cache=cache)
             session = _CountingSession(payload)
-            first._session = session  # type: ignore[assignment]
+            _set_session(first, session)
             self.assertEqual(first._fetch_list(), payload)
             self.assertEqual(session.calls, 1)
 
             second = PredatoryApiClient(url="https://example.test/predatory", token="tok", mode="list", cache=cache)
-            second._session = _RaisingSession()  # type: ignore[assignment]
+            _set_session(second, _RaisingSession())
             self.assertEqual(second._fetch_list(), payload)
 
     def test_retraction_list_reads_from_file_cache(self) -> None:
@@ -75,7 +79,7 @@ class TestListApiCache(unittest.TestCase):
             records = [{"doi": "10.1234/abc", "is_retracted": True}]
             cache.set_text_file("retraction_api.list", [client.mode, client.url, client.token or ""], json.dumps(records))
 
-            client._session = _RaisingSession()  # type: ignore[assignment]
+            _set_session(client, _RaisingSession())
             self.assertEqual(client._fetch_list(), records)
 
     def test_retraction_list_written_then_reused(self) -> None:
@@ -86,15 +90,14 @@ class TestListApiCache(unittest.TestCase):
 
             first = RetractionApiClient(url="https://example.test/retractions", token="tok", mode="list", cache=cache)
             session = _CountingSession(payload)
-            first._session = session  # type: ignore[assignment]
+            _set_session(first, session)
             self.assertEqual(first._fetch_list(), payload)
             self.assertEqual(session.calls, 1)
 
             second = RetractionApiClient(url="https://example.test/retractions", token="tok", mode="list", cache=cache)
-            second._session = _RaisingSession()  # type: ignore[assignment]
+            _set_session(second, _RaisingSession())
             self.assertEqual(second._fetch_list(), payload)
 
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -9,6 +9,7 @@ import requests
 
 from server.miscite.analysis.shared.normalize import normalize_doi
 from server.miscite.core.cache import Cache
+from server.miscite.sources.concurrency import acquire_api_slot
 from server.miscite.sources.http import backoff_sleep, record_http_request
 
 _EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -168,6 +169,8 @@ class PubMedClient:
     user_agent: str = "miscite/0.1"
     timeout_seconds: float = 20.0
     cache: Cache | None = None
+    job_limiter: threading.Semaphore | None = None
+    source_global_limit: int = 3
     _session_local: threading.local = field(default_factory=threading.local, init=False, repr=False)
 
     def _client(self) -> requests.Session:
@@ -200,11 +203,24 @@ class PubMedClient:
             params["api_key"] = api_key
         return params
 
+    def _request_slot(self):
+        return acquire_api_slot(
+            source="pubmed",
+            job_limiter=self.job_limiter,
+            source_limit=self.source_global_limit,
+        )
+
     def _get_json(self, url: str, *, params: dict[str, str], namespace: str) -> dict | None:
         for attempt in range(3):
             try:
                 record_http_request(self.cache, namespace)
-                resp = self._client().get(url, headers=self._headers(), params=params, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(
+                        url,
+                        headers=self._headers(),
+                        params=params,
+                        timeout=self.timeout_seconds,
+                    )
                 resp.raise_for_status()
                 data = resp.json()
                 return data if isinstance(data, dict) else None
@@ -255,7 +271,13 @@ class PubMedClient:
         for attempt in range(3):
             try:
                 record_http_request(cache, "pubmed.abstract_by_pmid")
-                resp = self._client().get(_EFETCH_URL, headers=self._headers(), params=params, timeout=self.timeout_seconds)
+                with self._request_slot():
+                    resp = self._client().get(
+                        _EFETCH_URL,
+                        headers=self._headers(),
+                        params=params,
+                        timeout=self.timeout_seconds,
+                    )
                 resp.raise_for_status()
                 abstract = _extract_abstract_from_pubmed_xml(resp.text or "")
                 if cache and cache.settings.cache_enabled:
