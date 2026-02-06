@@ -73,21 +73,20 @@
                 This report was generated before reviewer suggestions were computed. Generate a new report to include potential reviewers.
               </p>
             {% else %}
-              <p class="miscite-muted">
-                Suggested from recent citation-coupled works related to your reference set.
-              </p>
               {% if potential_reviewers and potential_reviewers|length > 0 %}
                 <div class="report-reviewers-scroll">
-                  <ul class="ds-list">
+                  <ul class="ds-list report-reviewers-list">
                     {% for reviewer in potential_reviewers %}
                       {% set safe_search_url = reviewer.google_search_url|safe_url %}
-                      <li>
-                        {% if safe_search_url %}
-                          <a class="ds-link" href="{{ safe_search_url }}" target="_blank" rel="noopener noreferrer">{{ reviewer.name }}</a>
-                        {% else %}
-                          <span class="ds-source-name">{{ reviewer.name }}</span>
-                        {% endif %}
-                        <span class="miscite-muted">— {{ reviewer.affiliation or "Affiliation unavailable" }}</span>
+                      <li class="report-reviewer-item">
+                        <div class="report-reviewer-line">
+                          {% if safe_search_url %}
+                            <a class="ds-link" href="{{ safe_search_url }}" target="_blank" rel="noopener noreferrer">{{ reviewer.name }}</a>
+                          {% else %}
+                            <span class="ds-source-name">{{ reviewer.name }}</span>
+                          {% endif %}
+                          <span class="miscite-muted report-reviewer-affiliation">— {{ reviewer.affiliation or "Affiliation unavailable" }}</span>
+                        </div>
                       </li>
                     {% endfor %}
                   </ul>

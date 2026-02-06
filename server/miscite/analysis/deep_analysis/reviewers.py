@@ -159,68 +159,6 @@ def _degree_centrality(adj: dict[str, set[str]]) -> dict[str, float]:
     return {node: float(len(neigh)) for node, neigh in adj.items()}
 
 
-def _closeness_centrality(adj: dict[str, set[str]]) -> dict[str, float]:
-    from collections import deque
-
-    closeness: dict[str, float] = {}
-    n = len(adj)
-    for s in adj:
-        dist: dict[str, int] = {s: 0}
-        q: deque[str] = deque([s])
-        while q:
-            v = q.popleft()
-            for w in adj.get(v, ()):
-                if w in dist:
-                    continue
-                dist[w] = dist[v] + 1
-                q.append(w)
-        reachable = len(dist)
-        if reachable <= 1:
-            closeness[s] = 0.0
-            continue
-        total_dist = sum(dist.values())
-        if total_dist <= 0:
-            closeness[s] = 0.0
-            continue
-        base = (reachable - 1) / total_dist
-        closeness[s] = base * ((reachable - 1) / max(1, n - 1))
-    return closeness
-
-
-def _betweenness_centrality(adj: dict[str, set[str]]) -> dict[str, float]:
-    from collections import defaultdict, deque
-
-    betw: dict[str, float] = {v: 0.0 for v in adj}
-    for s in adj:
-        stack: list[str] = []
-        pred: dict[str, list[str]] = defaultdict(list)
-        sigma: dict[str, float] = defaultdict(float)
-        sigma[s] = 1.0
-        dist: dict[str, int] = {s: 0}
-
-        q: deque[str] = deque([s])
-        while q:
-            v = q.popleft()
-            stack.append(v)
-            for w in adj.get(v, ()):
-                if w not in dist:
-                    q.append(w)
-                    dist[w] = dist[v] + 1
-                if dist.get(w) == dist[v] + 1:
-                    sigma[w] += sigma[v]
-                    pred[w].append(v)
-
-        delta: dict[str, float] = defaultdict(float)
-        while stack:
-            w = stack.pop()
-            for v in pred.get(w, ()):
-                if sigma[w]:
-                    delta[v] += (sigma[v] / sigma[w]) * (1.0 + delta[w])
-            if w != s:
-                betw[w] += delta[w]
-    return betw
-
-
 def _select_top_coupling_rids(
     *,
     coupling_rids: list[str],
@@ -291,19 +229,13 @@ def build_potential_reviewers_from_coupling(
     openalex: OpenAlexClient | None = None,
     author_works_max: int = 100,
     cited_sources_override: set[str] | None = None,
-    order_rule: str = "degree",
     debug: dict[str, Any] | None = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if not coupling_rids or not references_by_rid:
         return []
 
-    order_rule = (order_rule or "degree").strip().lower()
-    if order_rule not in {"degree", "closeness", "betweenness"}:
-        order_rule = "degree"
-
     if isinstance(debug, dict):
         debug["coupling_rids_total"] = len([rid for rid in coupling_rids if isinstance(rid, str) and rid.strip()])
-        debug["order_rule"] = order_rule
 
     top_coupling_rids = _select_top_coupling_rids(
         coupling_rids=coupling_rids,
@@ -424,14 +356,6 @@ def build_potential_reviewers_from_coupling(
                 coauthor_adj.setdefault(b, set()).add(a)
 
     degree_scores = _degree_centrality(coauthor_adj)
-    closeness_scores = _closeness_centrality(coauthor_adj)
-    betweenness_scores = _betweenness_centrality(coauthor_adj)
-    score_map = {
-        "degree": degree_scores,
-        "closeness": closeness_scores,
-        "betweenness": betweenness_scores,
-    }
-    selected_scores = score_map.get(order_rule, degree_scores)
 
     for rid in recent_rids:
         if not isinstance(rid, str):
@@ -487,7 +411,7 @@ def build_potential_reviewers_from_coupling(
             if year and int(entry.get("latest_year") or 0) < year:
                 entry["latest_year"] = year
 
-    sortable: list[tuple[float, int, str, str, dict[str, str]]] = []
+    sortable: list[tuple[float, int, str, str, dict[str, Any]]] = []
     authors_with_cited_source = 0
     author_work_lookups = 0
     author_work_results = 0
@@ -527,16 +451,18 @@ def build_potential_reviewers_from_coupling(
         year = int(entry.get("latest_year") or 0)
         q = f"{name} {affiliation}".strip() if affiliation else name
         author_key = str(entry.get("author_key") or "")
-        score = float(selected_scores.get(author_key, 0.0))
+        degree = float(degree_scores.get(author_key, 0.0))
         sortable.append(
             (
-                score,
+                degree,
                 year,
                 name.lower(),
                 affiliation.lower(),
                 {
                     "name": name,
                     "affiliation": affiliation,
+                    "latest_year": year,
+                    "popularity_score": degree,
                     "google_search_url": f"https://www.google.com/search?q={quote_plus(q)}",
                 },
             )

@@ -317,6 +317,19 @@ textarea {
   align-items: start;
 }
 
+.report-body {
+  min-width: 0;
+}
+
+#report-top .span-5 {
+  display: flex;
+  flex-direction: column;
+}
+
+#report-top .span-5 > .ds-card {
+  margin-top: auto;
+}
+
 .report-nav {
   position: sticky;
   top: 96px;
@@ -357,6 +370,50 @@ textarea {
   max-height: 260px;
   overflow: auto;
   padding-right: var(--space-2);
+}
+
+#report-reviewers .card-content {
+  display: grid;
+  gap: var(--space-3);
+}
+
+#report-reviewers .card-content > p {
+  margin: 0;
+}
+
+.report-reviewers-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.report-reviewer-item {
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0 0 var(--space-2);
+}
+
+.report-reviewer-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.report-reviewer-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.report-reviewer-affiliation {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-reviewer-score {
+  margin-top: 2px;
+  font-size: var(--text-12);
 }
 
 #report-reference-list .ds-input-row .form-field {

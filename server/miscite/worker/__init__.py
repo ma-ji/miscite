@@ -134,9 +134,6 @@ def _reviewer_debug_summary(deep_analysis: object) -> str | None:
     reviewers = _int("reviewers")
     if reviewers is not None:
         parts.append(f"reviewers={reviewers}")
-    order_rule = debug.get("order_rule")
-    if isinstance(order_rule, str) and order_rule:
-        parts.append(f"order_rule={order_rule}")
     coupling_total = _int("coupling_rids_total")
     if coupling_total is not None:
         parts.append(f"coupling_total={coupling_total}")

@@ -749,3 +749,17 @@ Goal: Improve site-wide SEO coverage and metadata quality for public pages.
 Prompt: Improve SEO of the whole site.
 Files touched: server/miscite/web/__init__.py, server/miscite/routes/seo.py, server/miscite/routes/dashboard.py, server/miscite/templates/base.html, server/miscite/templates/home.html, server/miscite/static/og-image.svg, kb/promptbook.md.
 Decision/rationale: Added path-aware SEO defaults (descriptions, keywords, robots, card types), stabilized canonical/public-origin handling, expanded Open Graph/Twitter metadata globally, enriched homepage JSON-LD with FAQ/WebSite/Organization schemas, introduced a dedicated social preview image, and expanded robots/sitemap coverage to include indexable public routes while keeping private/authenticated surfaces disallowed.
+
+========
+Date: 2026-02-06
+Goal: Expose all reviewer centralities and allow user-side reviewer reordering.
+Prompt: THINK HARD. For potential reviewers block, calculate all three centralities, and provide a filter for user to reorder. degree -> popularity; closeness -> ?? (an intuitive name); betweenness -> interdisciplinarity. Remove the option from env files.
+Files touched: server/miscite/analysis/deep_analysis/reviewers.py, server/miscite/analysis/deep_analysis/deep_analysis.py, server/miscite/templates/job.html, server/miscite/core/config.py, server/miscite/worker/__init__.py, server/miscite/analysis/deep_analysis/test_reviewers.py, server/miscite/worker/test_reviewer_debug_summary.py, .env.example, .env, docs/DEVELOPMENT.md, AGENTS.md, kb/promptbook.md.
+Decision/rationale: Reviewer candidates now always include all three coauthor-network centralities (`degree`, `closeness`, `betweenness`) in the report payload and default backend ordering remains degree-first. The report UI now lets users reorder candidates by intuitive labels (Popularity, Reach, Interdisciplinarity) client-side, and the environment-level ordering toggle was removed to keep ranking behavior deterministic and UI-driven.
+
+========
+Date: 2026-02-06
+Goal: Simplify reviewer scoring to popularity-only and tighten report-page alignment.
+Prompt: Remove closeness/betweenness options and related calculations; default to popularity (degree). Double check report-page UI/UX and block alignment.
+Files touched: server/miscite/analysis/deep_analysis/reviewers.py, server/miscite/analysis/deep_analysis/test_reviewers.py, server/miscite/templates/job.html, server/miscite/static/styles.css, AGENTS.md, kb/promptbook.md.
+Decision/rationale: Removed reviewer-side closeness and betweenness centrality calculations and UI reordering controls, keeping a single deterministic popularity (degree) ranking with optional `popularity_score` display. Cleaned report reviewer block spacing/wrapping/list styling to improve visual alignment and consistency on the report page.

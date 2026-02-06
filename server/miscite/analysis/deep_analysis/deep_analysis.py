@@ -707,7 +707,6 @@ def run_deep_analysis(
         recent_years=settings.deep_analysis_reviewer_recent_years,
         openalex=openalex,
         author_works_max=settings.deep_analysis_reviewer_author_works_max,
-        order_rule=settings.deep_analysis_reviewer_order,
         cited_sources_override=cited_sources_override or None,
         debug=reviewer_debug,
     )

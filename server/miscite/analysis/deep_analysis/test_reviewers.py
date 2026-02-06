@@ -200,6 +200,9 @@ class TestReviewers(unittest.TestCase):
         )
 
         self.assertEqual(reviewers[0]["name"], "Alice")
+        for reviewer in reviewers:
+            self.assertIn("popularity_score", reviewer)
+            self.assertIsInstance(reviewer["popularity_score"], float)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,6 @@ class TestReviewerDebugSummary(unittest.TestCase):
             "status": "completed",
             "reviewer_debug": {
                 "reviewers": 3,
-                "order_rule": "degree",
                 "coupling_rids_total": 80,
                 "coupling_rids_top": 50,
                 "recent_years": 10,
@@ -34,7 +33,6 @@ class TestReviewerDebugSummary(unittest.TestCase):
         self.assertIsInstance(summary, str)
         assert summary is not None
         self.assertIn("reviewers=3", summary)
-        self.assertIn("order_rule=degree", summary)
         self.assertIn("coupling_total=80", summary)
         self.assertIn("coupling_top=50", summary)
         self.assertIn("recent_years=10", summary)

@@ -97,7 +97,7 @@ Recent additions to the report shape:
 - New summary fields: `total_intext_citations`, `ambiguous_bibliography_refs`.
 - `report.deep_analysis.subsection_recommendations` adds subsection-specific citation subnetworks + prioritized revision plans.
 - `report.deep_analysis.manuscript_structure` records the (LLM or heuristic) subsection structure used for deep-analysis recommendations.
-- `report.deep_analysis.potential_reviewers` lists reviewer candidates (name + affiliation + Google search link) derived from bibliographic coupling works.
+- `report.deep_analysis.potential_reviewers` lists reviewer candidates (name + affiliation + Google search link) with popularity ordering metadata (`popularity_score` from degree centrality), derived from bibliographic coupling works.
 
 ## Data model (SQLAlchemy)
 
