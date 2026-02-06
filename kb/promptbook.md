@@ -924,3 +924,10 @@ Goal: Preserve publication source names while hiding database/provider names in 
 Prompt: THINK HARD. Not to remove publication source names, remove database source names.
 Files touched: server/miscite/templates/job.html, server/miscite/web/__init__.py, server/miscite/web/report_pdf.py, server/miscite/web/test_filters.py, kb/promptbook.md.
 Decision/rationale: Restored publication-source labeling (`source`/`venue`/`publisher`) in the deep-analysis reference list and restored Journal/Publisher fields in PDF Flags output. Removed database/provider labeling by dropping OpenAlex render paths in report UI and PDF, and added a source-label filter that excludes known database names (`OpenAlex`, `Crossref`, `PubMed`/`NCBI`) while retaining publication names.
+
+========
+Date: 2026-02-06
+Goal: Simplify and tidy the workspace "Recent analyses" controls based on screenshot feedback.
+Prompt: THINK HARD: Improve the UI/UX based on Screenshot 2026-02-06 163634.png. It's too complicated and not neat.
+Files touched: server/miscite/templates/dashboard.html, server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Reworked the workspace control hierarchy to reduce cognitive load: search + sort now anchor the top control row, status filters moved into a labeled compact cluster, typography scale was reduced for section title/subtitle, and bulk actions were redesigned into a tighter two-column control bar with clearer idle/active selection states. This keeps the same workflow while reducing visual noise and misaligned control emphasis.

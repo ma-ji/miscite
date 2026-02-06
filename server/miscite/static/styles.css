@@ -1310,14 +1310,14 @@ p {
 
 .section-header--workspace h2 {
   margin-bottom: var(--space-2);
-  font-size: clamp(40px, 4vw, 54px);
+  font-size: clamp(34px, 3.2vw, 46px);
   letter-spacing: -0.02em;
 }
 
 .section-header--workspace .lead {
   margin: 0;
-  color: var(--text);
-  font-size: clamp(24px, 2.1vw, 32px);
+  color: var(--muted);
+  font-size: clamp(18px, 1.6vw, 24px);
 }
 
 .landing-hero-grid {
@@ -1900,9 +1900,30 @@ p {
 }
 
 .ds-table-controls--workspace {
-  grid-template-columns: minmax(280px, 1.5fr) minmax(320px, auto) minmax(160px, 200px);
-  gap: var(--space-3);
+  grid-template-columns: minmax(280px, 1fr) minmax(160px, 220px);
+  gap: var(--space-3) var(--space-4);
+  align-items: center;
   margin-bottom: var(--space-3);
+}
+
+.ds-filter-cluster {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ds-filter-label {
+  margin: 0;
+  font-size: var(--text-12);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ds-table-controls--workspace .ds-input-with-icon {
+  grid-column: 1;
+  min-width: 0;
 }
 
 .ds-table-controls--workspace .ds-input-with-icon input {
@@ -1915,32 +1936,54 @@ p {
 }
 
 .ds-table-controls--workspace .ds-filter-group {
-  flex-wrap: nowrap;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  overflow: visible;
+  padding: 0;
 }
 
 .ds-table-controls--workspace .ds-filter-pill span {
-  padding: 8px 16px;
-  border-color: rgb(7 35 50 / 0.26);
+  gap: 6px;
+  padding: 7px 12px;
+  border-color: rgb(7 35 50 / 0.22);
   background: var(--surface);
   color: var(--text);
-  font-size: var(--text-14);
+  font-size: var(--text-13);
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.ds-table-controls--workspace .ds-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0 6px;
+  border: 1px solid rgb(7 35 50 / 0.22);
+  border-radius: 999px;
+  background: var(--control-bg, var(--bg));
+  font-size: var(--text-12);
 }
 
 .ds-table-controls--workspace .ds-filter-pill input:checked + span {
   background: rgb(153 0 0 / 0.1);
-  border-color: rgb(153 0 0 / 0.38);
+  border-color: rgb(153 0 0 / 0.34);
 }
 
-.ds-table-controls--workspace .ds-table-control {
+.ds-table-controls--workspace .ds-filter-pill input:checked + span .ds-filter-count {
+  border-color: rgb(153 0 0 / 0.3);
+  background: rgb(153 0 0 / 0.08);
+}
+
+.ds-table-controls--workspace .ds-table-control--sort {
+  grid-column: 2;
   justify-self: end;
   min-width: 0;
   width: 100%;
-  max-width: 200px;
+  max-width: 220px;
 }
 
 .ds-table-controls--workspace .form-label {
@@ -1954,17 +1997,23 @@ p {
 
 .ds-section--workspace .ds-results-meta p {
   color: var(--text);
-  font-size: var(--text-16);
+  font-size: var(--text-15);
 }
 
 .ds-bulk-actions--workspace {
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border-color: rgb(7 35 50 / 0.14);
+  border-radius: 14px;
 }
 
 .ds-bulk-actions--workspace .ds-bulk-select-label {
-  font-size: var(--text-16);
-  font-weight: 700;
+  font-size: var(--text-14);
+  font-weight: 600;
 }
 
 .ds-bulk-actions--workspace .ds-bulk-select input {
@@ -1972,26 +2021,31 @@ p {
 }
 
 .ds-bulk-actions--workspace .ds-bulk-count {
-  font-size: var(--text-14);
-  color: var(--text);
+  font-size: var(--text-13);
+  color: var(--muted);
 }
 
 .ds-bulk-actions--workspace .ds-bulk-buttons {
-  margin-left: auto;
-  display: grid;
+  margin-left: 0;
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  justify-items: start;
-  min-width: 270px;
+  min-width: 0;
 }
 
 .ds-bulk-actions--workspace .ds-bulk-action-select {
-  min-width: 270px;
-  min-height: 46px;
-  border-radius: 14px;
+  min-width: 220px;
+  min-height: 40px;
+  border-radius: 12px;
 }
 
 .ds-bulk-actions--workspace .ds-bulk-apply {
-  min-width: 74px;
+  min-width: 72px;
+  min-height: 40px;
+}
+
+.ds-bulk-actions--workspace[data-selection-state="idle"] .ds-bulk-buttons {
+  opacity: 0.74;
 }
 
 [data-workspace-results] {
@@ -3057,19 +3111,30 @@ input[readonly] {
   }
 
   .section-header--workspace h2 {
-    font-size: clamp(36px, 8vw, 46px);
+    font-size: clamp(32px, 7vw, 40px);
   }
 
   .section-header--workspace .lead {
-    font-size: clamp(22px, 5vw, 28px);
+    font-size: clamp(18px, 4.5vw, 22px);
   }
 
   .ds-table-controls--workspace .ds-filter-group {
     flex-wrap: wrap;
-    overflow-x: visible;
+    overflow: visible;
   }
 
-  .ds-table-controls--workspace .ds-table-control {
+  .ds-table-controls--workspace {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .ds-table-controls--workspace .ds-input-with-icon,
+  .ds-filter-cluster,
+  .ds-table-controls--workspace .ds-table-control--sort {
+    grid-column: 1;
+  }
+
+  .ds-table-controls--workspace .ds-table-control--sort {
     justify-self: start;
     max-width: 240px;
   }
@@ -3089,9 +3154,12 @@ input[readonly] {
   }
 
   .ds-bulk-actions--workspace .ds-bulk-buttons {
-    margin-left: 0;
-    min-width: 0;
+    justify-content: flex-start;
     width: 100%;
+  }
+
+  .ds-bulk-actions--workspace {
+    grid-template-columns: 1fr;
   }
 
   .ds-bulk-actions--workspace .ds-bulk-action-select {

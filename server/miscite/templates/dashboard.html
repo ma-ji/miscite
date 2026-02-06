@@ -233,35 +233,38 @@
           data-search-input
         />
       </div>
-      <div class="ds-filter-group" role="radiogroup" aria-label="Filter jobs by status">
-        <label class="ds-filter-pill">
-          <input type="radio" name="status" value="all" {{ "checked" if status_filter == "all" else "" }} />
-          <span>All <span class="ds-filter-count">{{ total_jobs }}</span></span>
-        </label>
-        <label class="ds-filter-pill">
-          <input
-            type="radio"
-            name="status"
-            value="completed"
-            {{ "checked" if status_filter == "completed" else "" }}
-          />
-          <span>Completed <span class="ds-filter-count">{{ completed_count }}</span></span>
-        </label>
-        <label class="ds-filter-pill">
-          <input type="radio" name="status" value="failed" {{ "checked" if status_filter == "failed" else "" }} />
-          <span>Failed <span class="ds-filter-count">{{ failed_count }}</span></span>
-        </label>
-        <label class="ds-filter-pill">
-          <input
-            type="radio"
-            name="status"
-            value="processing"
-            {{ "checked" if status_filter == "processing" else "" }}
-          />
-          <span>Processing <span class="ds-filter-count">{{ processing_count }}</span></span>
-        </label>
+      <div class="ds-filter-cluster">
+        <p class="ds-filter-label">Status</p>
+        <div class="ds-filter-group" role="radiogroup" aria-label="Filter jobs by status">
+          <label class="ds-filter-pill">
+            <input type="radio" name="status" value="all" {{ "checked" if status_filter == "all" else "" }} />
+            <span>All <span class="ds-filter-count">{{ total_jobs }}</span></span>
+          </label>
+          <label class="ds-filter-pill">
+            <input
+              type="radio"
+              name="status"
+              value="completed"
+              {{ "checked" if status_filter == "completed" else "" }}
+            />
+            <span>Completed <span class="ds-filter-count">{{ completed_count }}</span></span>
+          </label>
+          <label class="ds-filter-pill">
+            <input type="radio" name="status" value="failed" {{ "checked" if status_filter == "failed" else "" }} />
+            <span>Failed <span class="ds-filter-count">{{ failed_count }}</span></span>
+          </label>
+          <label class="ds-filter-pill">
+            <input
+              type="radio"
+              name="status"
+              value="processing"
+              {{ "checked" if status_filter == "processing" else "" }}
+            />
+            <span>Processing <span class="ds-filter-count">{{ processing_count }}</span></span>
+          </label>
+        </div>
       </div>
-      <div class="form-field ds-table-control">
+      <div class="form-field ds-table-control ds-table-control--sort">
         <label class="form-label" for="sort">Sort</label>
         <select id="sort" name="sort">
           <option value="newest" {{ "selected" if sort_choice == "newest" else "" }}>Newest</option>
@@ -292,7 +295,13 @@
           {% endif %}
         </div>
       {% else %}
-        <form id="bulk-job-form" class="ds-bulk-actions ds-bulk-actions--workspace" method="post" action="/dashboard/bulk-action">
+        <form
+          id="bulk-job-form"
+          class="ds-bulk-actions ds-bulk-actions--workspace"
+          method="post"
+          action="/dashboard/bulk-action"
+          data-selection-state="idle"
+        >
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
           <div class="ds-bulk-select">
             <label class="ds-bulk-select-label">
@@ -304,7 +313,7 @@
           <div class="ds-bulk-buttons">
             <label class="sr-only" for="bulk-action-select">Select bulk action</label>
             <select id="bulk-action-select" class="ds-bulk-action-select" name="bulk_action" data-bulk-action-select>
-              <option value="">Select bulk action</option>
+              <option value="">Bulk action</option>
               <option value="stop">Stop job</option>
               <option value="delete">Delete report</option>
             </select>
@@ -529,6 +538,7 @@
       var syncBulkActions = function () {
         var container = workspaceResults();
         if (!container) return;
+        var bulkForm = container.querySelector("#bulk-job-form");
         var selected = container.querySelectorAll("[data-job-select]:checked").length;
         var total = container.querySelectorAll("[data-job-select]").length;
         var selectAll = container.querySelector("[data-bulk-select-all]");
@@ -546,6 +556,9 @@
         }
         if (countLabel) {
           countLabel.textContent = selected + " selected";
+        }
+        if (bulkForm) {
+          bulkForm.dataset.selectionState = selected > 0 ? "active" : "idle";
         }
         if (actionSelect) {
           actionSelect.disabled = total === 0;
