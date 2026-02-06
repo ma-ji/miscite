@@ -1488,6 +1488,46 @@ p {
   background: var(--primary);
 }
 
+.ds-priority-list {
+  gap: var(--space-3);
+}
+
+.ds-priority-list li::before {
+  display: none;
+}
+
+.ds-priority-item {
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  color: var(--text);
+}
+
+.ds-priority-title {
+  margin: 0;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.ds-priority-chip-row {
+  margin-top: var(--space-2);
+}
+
+.ds-priority-body {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}
+
+.ds-priority-anchor {
+  margin-top: var(--space-2);
+}
+
+.ds-priority-supporting {
+  margin-top: var(--space-2);
+}
+
 .ds-prose {
   display: grid;
   gap: var(--space-2);
@@ -1527,6 +1567,10 @@ p {
 @media (max-width: 640px) {
   .ds-stat-grid--cols {
     grid-template-columns: 1fr;
+  }
+
+  .ds-priority-item {
+    padding: var(--space-2) var(--space-3);
   }
 }
 

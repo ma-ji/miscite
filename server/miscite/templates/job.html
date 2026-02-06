@@ -138,25 +138,36 @@
         {% else %}
           {% set token_value = access_token or job.access_token_value %}
           {% set share_link = token_value and (public_origin ~ "/reports/" ~ token_value) %}
+          {% set has_token = token_value or job.access_token_hint %}
+          {% set sharing_enabled = has_token and (not job.access_token_expired) %}
+          {% set share_link_ready = sharing_enabled and share_link %}
+          {% set share_link_display = share_link if share_link_ready else "" %}
+          {% set share_link_placeholder = "Generate or renew a token to enable sharing" %}
+          {% if job.access_token_expired %}
+            {% set share_link_placeholder = "Token expired. Renew token to enable sharing" %}
+          {% elif sharing_enabled and not share_link %}
+            {% set share_link_placeholder = "Rotate token to reveal a new share link" %}
+          {% endif %}
           {% set token_status = "Not generated" %}
-          {% if token_value %}
+          {% if has_token %}
             {% if job.access_token_expired %}
               {% set token_status = "Expired" %}
-            {% else %}
+            {% elif token_value %}
               {% set token_status = "Active" %}
+            {% else %}
+              {% set token_status = "Active (hidden)" %}
             {% endif %}
-          {% elif job.access_token_hint %}
-            {% set token_status = "Active (hidden)" %}
           {% endif %}
           <div class="ds-card ds-card--subtle">
             <div class="card-content">
               <h3>Share access</h3>
               <p class="miscite-muted">
-                Create a share link, set expiration, and rotate the token when needed.
+                Report sharing is enabled only while an access token is active. Otherwise the report remains protected.
               </p>
               <div class="ds-panel ds-panel--compact ds-mt-4">
                 <div class="ds-panel-body ds-stack ds-stack--tight">
                   <div class="hero-meta">
+                    <span class="ds-pill">Sharing: {% if sharing_enabled %}Enabled{% else %}Protected{% endif %}</span>
                     <span class="ds-pill">Token: {{ token_status }}</span>
                     {% if token_value %}
                       {% if job.access_token_expires_at_human %}
@@ -174,37 +185,39 @@
                         class="miscite-mono"
                         type="text"
                         readonly
-                        placeholder="Generate a token to create a share link"
-                        value="{{ share_link or '' }}"
+                        placeholder="{{ share_link_placeholder }}"
+                        value="{{ share_link_display }}"
                       />
                     </div>
                     <button
                       class="ds-button ds-button--secondary ds-button--sm"
                       type="button"
                       data-copy-target="access-link-value"
-                      {% if not token_value %}disabled{% endif %}
+                      {% if not share_link_ready %}disabled{% endif %}
                     >
                       Copy link
                     </button>
                     <a
                       class="ds-button ds-button--secondary ds-button--sm"
-                      href="{{ share_link or '#' }}"
+                      href="{{ share_link if share_link_ready else '#' }}"
                       target="_blank"
                       rel="noopener"
-                      aria-disabled="{% if not token_value %}true{% else %}false{% endif %}"
-                      {% if not token_value %}tabindex="-1"{% endif %}
+                      aria-disabled="{% if not share_link_ready %}true{% else %}false{% endif %}"
+                      {% if not share_link_ready %}tabindex="-1"{% endif %}
                     >
                       Open
                     </a>
                   </div>
-                  {% if token_value %}
-                    <p class="form-help">Anyone with this link can view the report while the token is active.</p>
-                  {% elif job.access_token_hint %}
+                  {% if share_link_ready %}
+                    <p class="form-help">Anyone with this link can view the report while sharing is enabled.</p>
+                  {% elif job.access_token_expired %}
+                    <p class="form-help">This report is protected because the token expired. Renew token to re-enable sharing.</p>
+                  {% elif job.access_token_hint and not token_value %}
                     <p class="form-help">
-                      A token already exists and ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>. Rotate to reveal a new one.
+                      Sharing is enabled, but the current token is hidden and ends in <span class="miscite-mono">{{ job.access_token_hint }}</span>. Rotate to reveal a new one.
                     </p>
                   {% else %}
-                    <p class="form-help">Generate a token to enable secure report sharing.</p>
+                    <p class="form-help">This report is protected. Generate a token to enable sharing.</p>
                   {% endif %}
                   {% if access_token_error %}
                     <div class="ds-alert ds-alert--error ds-mt-3">{{ access_token_error }}</div>
@@ -255,7 +268,7 @@
                         name="action"
                         value="rotate"
                       >
-                        {% if token_value %}
+                        {% if has_token %}
                           {% if job.access_token_expired %}
                             Renew token
                           {% else %}
@@ -689,57 +702,60 @@
             {% if report.deep_analysis.status == "completed" %}
               {% set da = report.deep_analysis %}
               {% set rec = da.recommendations if da is mapping else None %}
+              {% set da_ref_tooltips = da.references if da.references is mapping else {} %}
 
               {% if rec and rec.status == "completed" %}
                 {% if rec.overview %}
-                  <p class="miscite-muted">{{ rec.overview|da_cite }}</p>
+                  <p class="miscite-muted">{{ rec.overview|da_cite(da_ref_tooltips) }}</p>
                 {% endif %}
                 {% if rec.note %}
                   <p class="miscite-muted">{{ rec.note }}</p>
                 {% endif %}
 
-                {% set global_actions = rec.global_actions|default([]) %}
-                {% if global_actions %}
-                  <h4 class="ds-mt-4">Top priorities</h4>
-                  <ol class="ds-list ds-mt-3">
-	                    {% for action in global_actions %}
-	                      {% set action_rids = action.rids|default([]) %}
-                        {% set action_type = action.action_type|default("")|lower %}
-                        {% set action_type_label = action_type|replace("_", " ")|title %}
+	                {% set global_actions = rec.global_actions|default([]) %}
+	                {% if global_actions %}
+	                  <h4 class="ds-mt-4">Top priorities</h4>
+	                  <ol class="ds-list ds-mt-3 ds-priority-list">
+			                    {% for action in global_actions %}
+			                      {% set action_rids = action.rids|default([]) %}
+		                        {% set action_type = action.action_type|default("")|lower %}
+		                        {% set action_type_label = action_type|replace("_", " ")|title %}
                         {% set action_chip_class = "ds-chip--action-strengthen" %}
                         {% if action_type == "add" %}
                           {% set action_chip_class = "ds-chip--action-add" %}
                         {% elif action_type == "justify" %}
                           {% set action_chip_class = "ds-chip--action-justify" %}
-                        {% elif action_type == "reconsider" %}
-                          {% set action_chip_class = "ds-chip--action-reconsider" %}
-                        {% endif %}
-	                      <li>
-	                        <div>
-	                          <span class="ds-source-name">Priority {{ loop.index }}</span>
-	                          {% if action.section_title %}
-	                            <span class="miscite-muted"> · {{ action.section_title }}</span>
-	                          {% endif %}
+		                        {% elif action_type == "reconsider" %}
+		                          {% set action_chip_class = "ds-chip--action-reconsider" %}
+		                        {% endif %}
+			                      <li class="ds-priority-item">
+	                        {% set topic_action = action.action|default("") %}
+	                        {% set location_text = action.where|default("", true) %}
+	                        {% if not location_text %}
+	                          {% set location_text = action.section_title|default("", true) %}
+	                        {% endif %}
+		                        <p class="ds-priority-title">
+	                          <strong>Priority {{ loop.index }}: {{ topic_action }}{% if location_text %} - {{ location_text }}{% endif %}</strong>
+		                        </p>
                           {% if action_type_label %}
-                            <span class="ds-chip {{ action_chip_class }}">{{ action_type_label }}</span>
+                            <div class="ds-chip-row ds-priority-chip-row">
+                              <span class="ds-chip {{ action_chip_class }}">{{ action_type_label }}</span>
+                            </div>
                           {% endif %}
-	                        </div>
-	                        <p class="ds-mt-3">{{ action.action|default("")|da_cite }}</p>
-                        {% if action.why %}
-                          <p class="miscite-muted ds-mt-3">{{ action.why|da_cite }}</p>
-                        {% endif %}
-                        {% if action.where %}
-                          <p class="miscite-muted ds-mt-3"><span class="ds-source-name">Where:</span> {{ action.where }}</p>
-                        {% endif %}
-                        {% if action.anchor_quote %}
-                          <p class="ds-quote ds-mt-3">{{ action.anchor_quote }}</p>
-                        {% endif %}
-                        {% if action_rids %}
-                          <div class="ds-mt-3">
-                            <span class="miscite-muted">Supporting refs:</span>
-                            {% for raw_rid in action_rids %}
-                              {% set rid = raw_rid|replace("[", "")|replace("]", "")|trim %}
-                              <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+		                        {% if action.why %}
+		                          <p class="miscite-muted ds-priority-body">{{ action.why|da_cite(da_ref_tooltips) }}</p>
+		                        {% endif %}
+	                        {% if action.anchor_quote %}
+	                          <p class="ds-quote ds-priority-anchor">{{ action.anchor_quote }}</p>
+	                        {% endif %}
+	                        {% if action_rids %}
+	                          <div class="ds-priority-supporting">
+	                            <span class="miscite-muted">Supporting refs:</span>
+	                            {% for raw_rid in action_rids %}
+	                              {% set rid = raw_rid|replace("[", "")|replace("]", "")|trim %}
+                              {% set ref_entry = da_ref_tooltips.get(rid) if da_ref_tooltips else None %}
+                              {% set ref_tooltip = ref_entry|reference_hover_text if ref_entry is mapping else "" %}
+                              <a class="miscite-mono" href="#da-ref-{{ rid }}"{% if ref_tooltip %} title="{{ ref_tooltip|replace('\n', ' ')|truncate(320, True)|e }}" aria-label="{{ ref_tooltip|replace('\n', ' ')|truncate(320, True)|e }}"{% endif %}>[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
                             {% endfor %}
                           </div>
                         {% endif %}
@@ -750,7 +766,7 @@
 
                 {% set section_recs = rec.sections|default([]) %}
                 {% if section_recs %}
-                  <h4 class="ds-mt-4">By section</h4>
+                  <h4 class="ds-mt-4">Other changes by section</h4>
                   <div class="ds-disclosure-list ds-mt-4">
                     {% for section in section_recs %}
                       {% set section_actions = section.actions|default([]) %}
@@ -765,28 +781,28 @@
                         <div class="ds-disclosure-body">
                           {% if section_actions %}
                             <ol class="ds-list">
-	                              {% for action in section_actions %}
-	                                {% set action_rids = action.rids|default([]) %}
-                                  {% set action_type = action.action_type|default("")|lower %}
+		                              {% for action in section_actions %}
+		                                {% set action_rids = action.rids|default([]) %}
+	                                  {% set action_type = action.action_type|default("")|lower %}
                                   {% set action_type_label = action_type|replace("_", " ")|title %}
                                   {% set action_chip_class = "ds-chip--action-strengthen" %}
                                   {% if action_type == "add" %}
                                     {% set action_chip_class = "ds-chip--action-add" %}
                                   {% elif action_type == "justify" %}
                                     {% set action_chip_class = "ds-chip--action-justify" %}
-                                  {% elif action_type == "reconsider" %}
-                                    {% set action_chip_class = "ds-chip--action-reconsider" %}
-                                  {% endif %}
-	                                <li>
+	                                  {% elif action_type == "reconsider" %}
+	                                    {% set action_chip_class = "ds-chip--action-reconsider" %}
+	                                  {% endif %}
+		                                <li>
+	                                  <p><strong>{{ action.action|default("")|da_cite(da_ref_tooltips) }}</strong></p>
                                       {% if action_type_label %}
                                         <div class="ds-chip-row ds-mt-3">
                                           <span class="ds-chip {{ action_chip_class }}">{{ action_type_label }}</span>
                                         </div>
                                       {% endif %}
-	                                  <p>{{ action.action|default("")|da_cite }}</p>
-                                  {% if action.why %}
-                                    <p class="miscite-muted ds-mt-3">{{ action.why|da_cite }}</p>
-                                  {% endif %}
+	                                  {% if action.why %}
+	                                    <p class="miscite-muted ds-mt-3">{{ action.why|da_cite(da_ref_tooltips) }}</p>
+	                                  {% endif %}
                                   {% if action.where %}
                                     <p class="miscite-muted ds-mt-3"><span class="ds-source-name">Where:</span> {{ action.where }}</p>
                                   {% endif %}
@@ -798,7 +814,9 @@
                                       <span class="miscite-muted">Supporting refs:</span>
                                       {% for raw_rid in action_rids %}
                                         {% set rid = raw_rid|replace("[", "")|replace("]", "")|trim %}
-                                        <a class="miscite-mono" href="#da-ref-{{ rid }}">[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
+                                        {% set ref_entry = da_ref_tooltips.get(rid) if da_ref_tooltips else None %}
+                                        {% set ref_tooltip = ref_entry|reference_hover_text if ref_entry is mapping else "" %}
+                                        <a class="miscite-mono" href="#da-ref-{{ rid }}"{% if ref_tooltip %} title="{{ ref_tooltip|replace('\n', ' ')|truncate(320, True)|e }}" aria-label="{{ ref_tooltip|replace('\n', ' ')|truncate(320, True)|e }}"{% endif %}>[{{ rid }}]</a>{% if not loop.last %}, {% endif %}
                                       {% endfor %}
                                     </div>
                                   {% endif %}
@@ -863,11 +881,17 @@
 	            <ol class="ds-list ds-mt-3">
 	              {% for ref in all_refs %}
 	                <li id="da-ref-{{ ref.rid }}" data-da-rid="{{ ref.rid }}">
-	                  <div>
-	                    <span class="miscite-mono">[{{ ref.rid }}]</span>
-	                    {{ ref.apa_base }}
-	                  </div>
-	                  <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
+                      <div>
+                        <span class="miscite-mono">[{{ ref.rid }}]</span>
+                        {{ ref.apa_base }}
+                      </div>
+                      {% set ref_sources = ref|reference_sources %}
+                      {% if ref_sources %}
+                        <div class="miscite-muted ds-mt-3">
+                          Source{% if ref_sources|length > 1 %}s{% endif %}: {{ ref_sources|join(" · ") }}
+                        </div>
+                      {% endif %}
+                      <div class="ds-chip-row ds-mt-3" aria-label="Reference links">
 	                    {% if ref.doi %}
 	                      <a class="ds-chip miscite-mono" href="https://doi.org/{{ ref.doi }}" target="_blank" rel="noopener noreferrer">
 	                        DOI: {{ ref.doi }}

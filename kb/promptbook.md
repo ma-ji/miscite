@@ -812,3 +812,38 @@ Goal: Simplify dashboard controls by removing clear-filter shortcuts and consoli
 Prompt: 1. Remove the clear filter button. 2. Make the bulk functions drop list, with an apply button to apply selected bulk operation.
 Files touched: server/miscite/templates/dashboard.html, server/miscite/static/styles.css, server/miscite/routes/dashboard.py, kb/promptbook.md.
 Decision/rationale: Removed dashboard clear-filter CTA surfaces to reduce control noise and keep filtering interaction centered on direct search/radio/select inputs. Replaced multi-button bulk actions with a single bulk-action dropdown plus Apply button, with client-side state gating (requires selection + chosen action) and delete confirmation on submit.
+
+========
+Date: 2026-02-06
+Goal: Remove low-value redundancy from report Recommendations and make actions cleaner for users.
+Prompt: THINK HARD: Have a plan to improve and optimize the contents for users. Remove redundancies that do not have to much added value. (Dev-only path; no need to support old reports.)
+Files touched: server/miscite/analysis/deep_analysis/recommendations.py, server/miscite/analysis/deep_analysis/test_recommendations.py, kb/promptbook.md.
+Decision/rationale: Reworked recommendation aggregation to canonicalize section titles, merge near-duplicate actions within sections (same-claim overlaps by anchor/RID/similarity), and apply explicit action-type precedence (`reconsider > justify > add > strengthen`) during merges. Updated rendering payload generation so Top priorities are excluded from By section to avoid repeated content in new reports. Added focused tests for no global/section overlap, duplicate-merge behavior, and precedence handling.
+
+========
+Date: 2026-02-06
+Goal: Improve recommendation usability with hoverable reference context and cleaner recommendation phrasing.
+Prompt: THINK HARD: 1) show text tooltip on reference hover, 2) remove opening section, 3) rename By section, 4) start bullets with topic sentences.
+Files touched: server/miscite/web/__init__.py, server/miscite/templates/job.html, server/miscite/web/report_pdf.py, server/miscite/analysis/deep_analysis/recommendations.py, server/miscite/analysis/deep_analysis/test_recommendations.py, server/miscite/web/test_filters.py, kb/promptbook.md.
+Decision/rationale: Added tooltip-aware citation link rendering so recommendation reference links expose inline citation text on hover. Filtered synthetic `opening` recommendations at aggregation time. Updated recommendation headings/labels (`Other changes by section`) and rewrote bullet lead lines to start with concise action-first topic sentences (top priorities include section/location context). Added tests for opening-section suppression and tooltip link rendering.
+
+========
+Date: 2026-02-06
+Goal: Surface source names in the deep-analysis reference list and align recommendation-link tooltips with list content.
+Prompt: For the reference in ref list, show source names. (tooltip mirror contents in list)
+Files touched: server/miscite/web/__init__.py, server/miscite/templates/job.html, server/miscite/analysis/deep_analysis/references.py, server/miscite/web/test_filters.py, kb/promptbook.md.
+Decision/rationale: Added shared reference-format helpers to derive source labels (`source`, `venue`, `publisher`) and reused them for recommendation-link hover tooltips so hover text matches the reference-list presentation. Updated the reference list UI to show source names per entry and expanded deep-analysis reference payloads to include `source`/`publisher`/`openalex_id` consistently for new reports.
+
+========
+Date: 2026-02-06
+Goal: Improve readability and visual hierarchy of the report Top priorities block based on screenshot feedback.
+Prompt: See the screenshot under build. Optimize the layout.
+Files touched: server/miscite/templates/job.html, server/miscite/static/styles.css, kb/promptbook.md.
+Decision/rationale: Refined Top priorities into compact card-like items with a single lead title line (`• Priority N: short action - location`) and reduced visual clutter by removing duplicate list-dot markers from that block. Tightened spacing around chips/body/anchor/supporting refs to make scanning easier while preserving action semantics.
+
+========
+Date: 2026-02-06
+Goal: Add PDF navigation aids with a beginning TOC and per-page return control.
+Prompt: Build a TOC for the PDF at the beginning. Also add button on each page (except the first) to go back to the TOC.
+Files touched: server/miscite/web/report_pdf.py, kb/promptbook.md.
+Decision/rationale: Added a clickable Table of Contents block near the start of the PDF and anchored all major sections (`Summary`, `Potential Reviewers`, `Flags`, `Recommendations`, plus conditional sections). Updated footer rendering to draw a visible "Back to TOC" button on pages after page 1 using internal PDF link rectangles targeting the TOC anchor.

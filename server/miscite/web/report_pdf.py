@@ -356,6 +356,16 @@ def build_report_pdf(
             spaceBefore=5,
             spaceAfter=3,
         ),
+        "TocEntry": ParagraphStyle(
+            "PdfTocEntry",
+            parent=base_styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9.6,
+            leading=12.5,
+            textColor=colors.HexColor(_TEXT),
+            leftIndent=10,
+            spaceAfter=2,
+        ),
     }
 
     story: list = []
@@ -415,7 +425,31 @@ def build_report_pdf(
     )
     story.append(meta_table)
 
-    story.append(Paragraph("Summary", styles["Section"]))
+    da_status_for_toc = _clean_text(deep_analysis.get("status") or "", max_chars=40).lower()
+    da_refs_for_toc = deep_analysis.get("references") if isinstance(deep_analysis, Mapping) else None
+    has_reference_list = da_status_for_toc == "completed" and isinstance(da_refs_for_toc, Mapping) and bool(da_refs_for_toc)
+    has_sources_used = bool(source_rows)
+    has_methodology = bool(methodology_lines)
+
+    toc_entries: list[tuple[str, str]] = [
+        ("summary", "Summary"),
+        ("potential-reviewers", "Potential Reviewers"),
+        ("flags", "Flags"),
+        ("recommendations", "Recommendations"),
+    ]
+    if has_reference_list:
+        toc_entries.append(("complete-reference-list", "Complete Reference List"))
+    if has_sources_used:
+        toc_entries.append(("sources-used", "Sources Used"))
+    if has_methodology:
+        toc_entries.append(("methodology-notes", "Methodology Notes"))
+
+    story.append(Paragraph('<a name="toc"/>Table of Contents', styles["Section"]))
+    for anchor, label in toc_entries:
+        story.append(Paragraph(f'&#8226; <a href="#{anchor}">{escape(label)}</a>', styles["TocEntry"]))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph('<a name="summary"/>Summary', styles["Section"]))
     if summary_rows:
         summary_table = Table(summary_rows, colWidths=[4.7 * inch, 1.9 * inch], hAlign="LEFT")
         summary_table.setStyle(
@@ -440,7 +474,7 @@ def build_report_pdf(
     else:
         story.append(Paragraph("Summary metrics are not available yet for this job.", styles["Body"]))
 
-    story.append(Paragraph("Potential Reviewers", styles["Section"]))
+    story.append(Paragraph('<a name="potential-reviewers"/>Potential Reviewers', styles["Section"]))
     if reviewer_entries:
         reviewer_rows: list[list[object]] = [
             [
@@ -493,7 +527,7 @@ def build_report_pdf(
             message = "Reviewer suggestions will appear when deep analysis completes."
         story.append(Paragraph(message, styles["Body"]))
 
-    story.append(Paragraph("Flags", styles["Section"]))
+    story.append(Paragraph('<a name="flags"/>Flags', styles["Section"]))
     if not issue_entries:
         story.append(Paragraph("No flagged issues were included in this report.", styles["Body"]))
     else:
@@ -619,7 +653,7 @@ def build_report_pdf(
 
             story.append(Spacer(1, 4))
 
-    story.append(Paragraph("Recommendations", styles["Section"]))
+    story.append(Paragraph('<a name="recommendations"/>Recommendations', styles["Section"]))
     if not deep_analysis:
         story.append(Paragraph("This report does not include deep-analysis recommendations.", styles["Body"]))
     else:
@@ -642,23 +676,22 @@ def build_report_pdf(
                         for idx, action in enumerate(global_actions, 1):
                             if not isinstance(action, Mapping):
                                 continue
-                            section_title = _clean_text(action.get("section_title") or "", max_chars=180)
-                            action_text = _clean_text(action.get("action") or "", max_chars=900)
+                            section_title = _clean_text(action.get("section_title") or "", max_chars=None)
+                            action_text = _clean_text(action.get("action") or "", max_chars=None)
                             if not action_text:
                                 continue
-                            action_type = _clean_text(action.get("action_type") or "", max_chars=30).lower()
-                            action_label = action_type.title() if action_type else "Action"
-                            heading = f"{idx}. [{action_label}] {action_text}"
+                            where = _clean_text(action.get("where") or "", max_chars=None)
+                            heading = f"Priority {idx}"
                             if section_title:
-                                heading += f" ({section_title})"
+                                heading += f" · {section_title}"
+                            heading += f": {action_text}"
+                            if where:
+                                heading += f" ({where})"
                             story.append(Paragraph(escape(heading), styles["IssueTitle"]))
 
                             why = _clean_text(action.get("why") or "", max_chars=900)
                             if why:
                                 story.append(Paragraph(f"Why: {escape(why)}", styles["Body"]))
-                            where = _clean_text(action.get("where") or "", max_chars=700)
-                            if where:
-                                story.append(Paragraph(f"Where: {escape(where)}", styles["Body"]))
                             anchor = _clean_text(action.get("anchor_quote") or "", max_chars=500)
                             if anchor:
                                 story.append(Paragraph(f"Anchor quote: \"{escape(anchor)}\"", styles["Body"]))
@@ -675,7 +708,7 @@ def build_report_pdf(
 
                     sections = recommendations.get("sections")
                     if isinstance(sections, list) and sections:
-                        story.append(Paragraph("By section", styles["Subsection"]))
+                        story.append(Paragraph("Other changes by section", styles["Subsection"]))
                         for idx, section in enumerate(sections, 1):
                             if not isinstance(section, Mapping):
                                 continue
@@ -691,9 +724,7 @@ def build_report_pdf(
                                 action_text = _clean_text(action.get("action") or "", max_chars=900)
                                 if not action_text:
                                     continue
-                                action_type = _clean_text(action.get("action_type") or "", max_chars=30).lower()
-                                action_label = action_type.title() if action_type else "Action"
-                                story.append(Paragraph(f"- [{escape(action_label)}] {escape(action_text)}", styles["Body"]))
+                                story.append(Paragraph(f"- {escape(action_text)}", styles["Body"]))
                                 why = _clean_text(action.get("why") or "", max_chars=900)
                                 if why:
                                     story.append(Paragraph(f"Why: {escape(why)}", styles["Body"]))
@@ -733,7 +764,7 @@ def build_report_pdf(
     da_status = _clean_text(deep_analysis.get("status") or "", max_chars=40).lower() if deep_analysis else ""
     da_references = deep_analysis.get("references") if isinstance(deep_analysis, Mapping) else None
     if da_status == "completed" and isinstance(da_references, Mapping) and da_references:
-        story.append(Paragraph("Complete Reference List", styles["Section"]))
+        story.append(Paragraph('<a name="complete-reference-list"/>Complete Reference List', styles["Section"]))
 
         citation_groups = deep_analysis.get("citation_groups")
         if isinstance(citation_groups, list) and citation_groups:
@@ -817,7 +848,7 @@ def build_report_pdf(
             story.append(Spacer(1, 3))
 
     if source_rows:
-        story.append(Paragraph("Sources Used", styles["Section"]))
+        story.append(Paragraph('<a name="sources-used"/>Sources Used', styles["Section"]))
         source_table = Table(source_rows, colWidths=[2.1 * inch, 4.5 * inch], hAlign="LEFT")
         source_table.setStyle(
             TableStyle(
@@ -840,7 +871,7 @@ def build_report_pdf(
         story.append(source_table)
 
     if methodology_lines:
-        story.append(Paragraph("Methodology Notes", styles["Section"]))
+        story.append(Paragraph('<a name="methodology-notes"/>Methodology Notes', styles["Section"]))
         for line in methodology_lines:
             story.append(Paragraph(escape(line), styles["Body"]))
 
@@ -857,6 +888,24 @@ def build_report_pdf(
         canvas.setStrokeColor(colors.HexColor("#D9DDE0"))
         canvas.setLineWidth(0.5)
         canvas.line(40, 38, LETTER[0] - 40, 38)
+        if canvas.getPageNumber() > 1:
+            label = "Back to TOC"
+            label_font = "Helvetica-Bold"
+            label_size = 7.2
+            text_width = canvas.stringWidth(label, label_font, label_size)
+            pad_x = 6
+            pad_y = 3
+            button_w = text_width + (pad_x * 2)
+            button_h = 12
+            x = LETTER[0] - 40 - button_w - 66
+            y = 20
+            canvas.setFillColor(colors.HexColor(_SURFACE_ALT))
+            canvas.setStrokeColor(colors.HexColor(_BRAND))
+            canvas.roundRect(x, y, button_w, button_h, 3, stroke=1, fill=1)
+            canvas.setFont(label_font, label_size)
+            canvas.setFillColor(colors.HexColor(_BRAND))
+            canvas.drawString(x + pad_x, y + pad_y, label)
+            canvas.linkRect("", "toc", (x, y, x + button_w, y + button_h), relative=0, thickness=0)
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor(_MUTED))
         canvas.drawString(40, 25, f"miscite | {safe_site_url}")

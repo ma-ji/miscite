@@ -711,6 +711,8 @@ def build_reference_master_list(
             "title": meta.get("title"),
             "year": meta.get("year"),
             "venue": meta.get("venue"),
+            "publisher": meta.get("publisher"),
+            "source": meta.get("source"),
             "authors": meta.get("authors"),
             "authors_detailed": meta.get("authors_detailed"),
             "volume": meta.get("volume"),
@@ -718,6 +720,7 @@ def build_reference_master_list(
             "pages": meta.get("pages"),
             "abstract": meta.get("abstract"),
             "doi": meta.get("doi"),
+            "openalex_id": meta.get("openalex_id"),
             "official_url": official_url,
             "oa_pdf_url": meta.get("oa_pdf_url"),
         }

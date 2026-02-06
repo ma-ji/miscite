@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from urllib.parse import urlsplit
 from urllib.parse import urlparse
 
@@ -68,7 +69,62 @@ _SEO_PATH_DEFAULTS: dict[str, dict[str, str]] = {
 }
 
 
-def deep_cite_links(text: str | None) -> Markup:
+def _reference_source_names(reference_payload: Mapping[str, object] | None) -> list[str]:
+    if not isinstance(reference_payload, Mapping):
+        return []
+    names: list[str] = []
+    seen: set[str] = set()
+    for key in ("source", "venue", "publisher"):
+        value = reference_payload.get(key)
+        if not isinstance(value, str):
+            continue
+        name = " ".join(value.split()).strip()
+        if not name:
+            continue
+        norm = name.casefold()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        names.append(name)
+    return names
+
+
+def _reference_summary_text(reference_payload: Mapping[str, object] | None) -> str:
+    if not isinstance(reference_payload, Mapping):
+        return ""
+    for key in ("apa", "apa_base", "title"):
+        candidate = reference_payload.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return " ".join(candidate.split())[:320]
+    return ""
+
+
+def _reference_hover_text(reference_payload: Mapping[str, object] | None) -> str:
+    summary = _reference_summary_text(reference_payload)
+    sources = _reference_source_names(reference_payload)
+    if summary and sources:
+        return f"{summary} | Source: {' · '.join(sources)}"[:420]
+    if summary:
+        return summary
+    if sources:
+        return f"Source: {' · '.join(sources)}"[:420]
+    return ""
+
+
+def _reference_tooltip(reference_tooltips: Mapping[str, object] | None, rid: str) -> str:
+    if not isinstance(reference_tooltips, Mapping):
+        return ""
+    payload = reference_tooltips.get(rid)
+    if isinstance(payload, Mapping):
+        text = _reference_hover_text(payload)
+        if text:
+            return text
+    if isinstance(payload, str) and payload.strip():
+        return " ".join(payload.split())[:320]
+    return ""
+
+
+def deep_cite_links(text: str | None, reference_tooltips: Mapping[str, object] | None = None) -> Markup:
     if not text:
         return Markup("")
     out: list[Markup] = []
@@ -77,13 +133,36 @@ def deep_cite_links(text: str | None) -> Markup:
         out.append(escape(text[last : m.start()]))
         num = m.group("num")
         rid = f"R{num}"
-        out.append(Markup(f'<a href="#da-ref-{rid}" class="miscite-mono">[{rid}]</a>'))
+        tooltip = _reference_tooltip(reference_tooltips, rid)
+        if tooltip:
+            tip = escape(tooltip)
+            out.append(
+                Markup(
+                    f'<a href="#da-ref-{rid}" class="miscite-mono" title="{tip}" aria-label="{tip}">[{rid}]</a>'
+                )
+            )
+        else:
+            out.append(Markup(f'<a href="#da-ref-{rid}" class="miscite-mono">[{rid}]</a>'))
         last = m.end()
     out.append(escape(text[last:]))
     return Markup("").join(out)
 
 
 templates.env.filters["da_cite"] = deep_cite_links
+
+
+def reference_sources(value: Mapping[str, object] | None) -> list[str]:
+    return _reference_source_names(value)
+
+
+templates.env.filters["reference_sources"] = reference_sources
+
+
+def reference_hover_text(value: Mapping[str, object] | None) -> str:
+    return _reference_hover_text(value)
+
+
+templates.env.filters["reference_hover_text"] = reference_hover_text
 
 
 def safe_url(value: str | None) -> str:
