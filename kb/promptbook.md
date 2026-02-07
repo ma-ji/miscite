@@ -938,3 +938,10 @@ Goal: Make workspace filters/search more compact and align bulk controls on one 
 Prompt: THINK HARD: For the Recent analyses, make the filer and search box smaller, in one row if possible. For the bulk action area, line dropdown menu and apply button on the same row ("apply" on right of dropdown, both right aligned).
 Files touched: server/miscite/static/styles.css, kb/promptbook.md.
 Decision/rationale: Tightened control sizing (search input, status chips, sort select) and switched desktop workspace controls to a compact three-column row so search + status filters + sort stay aligned on one line when space allows. Updated bulk-action controls to force a no-wrap, right-aligned inline arrangement with `Apply` immediately to the right of the dropdown.
+
+========
+Date: 2026-02-07
+Goal: Expand handwritten red-stroke brand treatment to every major public brand surface.
+Prompt: THINK HARD: Make it every major brand surface.
+Files touched: server/miscite/templates/home.html, kb/promptbook.md.
+Decision/rationale: Applied `miscite-wordmark` to all prominent visible `miscite` mentions on the landing page (hero lead, trust/governance messaging, and FAQ answers) while avoiding low-signal body overuse and non-visual metadata/JSON-LD strings. This keeps the branded signature consistent across high-impact marketing surfaces without reducing readability in dense prose.
