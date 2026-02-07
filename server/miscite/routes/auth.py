@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import secrets
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -38,9 +39,15 @@ _SESSION_CHOICES = {
     "30": {"label": "30 days", "days": 30},
 }
 
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
 
 def _normalize_email(value: str) -> str:
     return value.strip().lower()
+
+
+def _is_valid_email(value: str) -> bool:
+    return bool(_EMAIL_RE.fullmatch(value))
 
 
 def _session_choice(raw: str | None, settings: Settings) -> tuple[str, int, bool]:
@@ -113,7 +120,7 @@ def login_request(
     )
     normalized_email = _normalize_email(email)
     session_choice, _, _ = _session_choice(session_length, settings)
-    if not normalized_email:
+    if not _is_valid_email(normalized_email):
         return templates.TemplateResponse(
             "login.html",
             template_context(
@@ -261,7 +268,7 @@ def login_verify(
     normalized_email = _normalize_email(email)
     code_value = "".join(code.split())
     session_choice, session_days, persistent = _session_choice(session_length, settings)
-    if not normalized_email:
+    if not _is_valid_email(normalized_email):
         return templates.TemplateResponse(
             "login.html",
             template_context(
@@ -274,7 +281,7 @@ def login_verify(
                 login_code_length=settings.login_code_length,
                 login_code_ttl_minutes=settings.login_code_ttl_minutes,
                 turnstile_site_key=settings.turnstile_site_key,
-                flash={"level": "red", "message": "Enter your email first."},
+                flash={"level": "red", "message": "Enter a valid email address."},
             ),
             status_code=400,
         )

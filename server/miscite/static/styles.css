@@ -772,12 +772,18 @@ a.miscite-wordmark:hover {
 .ds-button--primary:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
+  color: var(--primary-contrast);
   --btn-shadow: var(--shadow-2);
 }
 
 .ds-button--primary:active {
   background: var(--primary-active);
   border-color: var(--primary-active);
+  color: var(--primary-contrast);
+}
+
+.ds-button--primary:focus-visible {
+  color: var(--primary-contrast);
 }
 
 .ds-button--secondary {
