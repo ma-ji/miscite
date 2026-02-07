@@ -599,38 +599,37 @@ textarea {
   position: relative;
   display: inline-block;
   isolation: isolate;
-  --miscite-wordmark-stroke-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20140%2044%27%20preserveAspectRatio%3D%27none%27%3E%3Cpath%20d%3D%27M3%2025%20C18%2014%2031%2034%2046%2022%20C60%2011%2074%2031%2088%2021%20C102%2013%20114%2026%20127%2018%20C132%2015%20136%2013%20138%2012%27%20fill%3D%27none%27%20stroke%3D%27%23fff%27%20stroke-width%3D%2719%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3Cpath%20d%3D%27M4%2030%20C19%2018%2033%2037%2047%2025%20C61%2014%2075%2034%2089%2024%20C103%2016%20115%2029%20128%2021%20C133%2018%20137%2016%20139%2015%27%20fill%3D%27none%27%20stroke%3D%27%23fff%27%20stroke-width%3D%2710%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%2F%3E%3C%2Fsvg%3E");
 }
 
 .miscite-wordmark::before,
 .miscite-wordmark::after {
   content: "";
   position: absolute;
-  left: -0.12em;
-  right: -0.12em;
-  top: 44%;
-  height: 0.38em;
-  transform: rotate(-9deg);
-  transform-origin: center;
   pointer-events: none;
-  -webkit-mask-image: var(--miscite-wordmark-stroke-mask);
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-size: 100% 100%;
-  mask-image: var(--miscite-wordmark-stroke-mask);
-  mask-repeat: no-repeat;
-  mask-size: 100% 100%;
+  z-index: 1;
+  border-radius: 999px;
+  transform-origin: center;
 }
 
 .miscite-wordmark::before {
-  background: #ff6262;
-  opacity: 0.44;
-  filter: blur(0.015em);
+  left: -0.1em;
+  right: -0.04em;
+  top: 50%;
+  height: 0.18em;
+  background: linear-gradient(90deg, #8b0000 0%, #c40808 38%, #a30202 100%);
+  transform: rotate(-11deg);
+  opacity: 0.96;
 }
 
 .miscite-wordmark::after {
-  background: linear-gradient(90deg, #930000 0%, #c40808 28%, #eb2a2a 52%, #b50303 76%, #890000 100%);
-  opacity: 0.97;
-  filter: drop-shadow(0 1px 0 rgba(109, 8, 8, 0.24));
+  left: -0.08em;
+  right: -0.02em;
+  top: 54%;
+  height: 0.11em;
+  background: #ef2e2e;
+  transform: rotate(-9deg);
+  opacity: 0.72;
+  filter: blur(0.01em);
 }
 
 a.miscite-wordmark:hover {
