@@ -4,9 +4,38 @@ from server.miscite.analysis.match.index import build_reference_index
 from server.miscite.analysis.match.match import match_citations_to_references
 from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
 from server.miscite.analysis.parse.llm_parsing import parse_references_with_llm
+from server.miscite.analysis.shared.normalize import normalize_author_name
 
 
 class TestCitationBibliographyMatching(unittest.TestCase):
+    def test_normalize_author_name_collapses_dotless_i(self) -> None:
+        self.assertEqual(normalize_author_name("Çorbacıo˘ glu"), "corbacioglu")
+
+    def test_matches_unicode_author_with_ocr_split(self) -> None:
+        citations = [
+            CitationInstance(
+                kind="author_year",
+                raw="(Çorbacıo˘ glu & Aksel, 2023)",
+                locator="çorbacıo˘ glu & aksel, 2023",
+                context="x",
+            )
+        ]
+        references = [
+            ReferenceEntry(
+                ref_id="ref-1",
+                raw="Corbacioglu, A., & Aksel, M. (2023). Example title.",
+                ref_number=None,
+                doi=None,
+                year=2023,
+                first_author="corbacioglu",
+            )
+        ]
+        matches = match_citations_to_references(citations, references, reference_records={})
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].status, "matched")
+        self.assertIsNotNone(matches[0].ref)
+        self.assertEqual(matches[0].ref.ref_id, "ref-1")
+
     def test_matches_when_locator_includes_multiple_authors(self) -> None:
         citations = [
             CitationInstance(

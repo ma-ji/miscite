@@ -7,7 +7,9 @@ from server.miscite.analysis.match.types import CitationMatch, CitationMatchCand
 from server.miscite.analysis.parse.citation_parsing import CitationInstance, ReferenceEntry
 from server.miscite.analysis.shared.normalize import normalize_author_name, normalize_author_year_locator, normalize_year_token
 
-_SURNAME_RE = re.compile(r"[A-Z][A-Za-z'’\\-]+")
+_CITATION_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}[a-z]?\b", re.IGNORECASE)
+_CITATION_AUTHOR_SPLIT_RE = re.compile(r"\s*(?:,|&|;|\band\b|\bet\s+al\.?)\s*", re.IGNORECASE)
+_CITATION_LEADING_RE = re.compile(r"^(?:see|see also|cf\.|cf|e\.g\.|eg)\s+", re.IGNORECASE)
 
 _CITATION_NAME_STOPWORDS = {
     "see",
@@ -31,31 +33,46 @@ def _parse_author_year_locator(locator: str | None) -> tuple[str | None, str | N
     return normalize_author_name(norm), None
 
 
-def _extract_surnames_from_citation(raw: str) -> set[str]:
+def _citation_author_chunks(raw: str) -> list[str]:
     if not raw:
-        return set()
-    hits = _SURNAME_RE.findall(raw)
+        return []
+    text = str(raw).strip()
+    if not text:
+        return []
+    if text.startswith("(") and text.endswith(")"):
+        text = text[1:-1]
+    text = _CITATION_LEADING_RE.sub("", text).strip()
+    if not text:
+        return []
+    year_match = _CITATION_YEAR_RE.search(text)
+    if year_match:
+        text = text[: year_match.start()]
+    text = text.strip(" ,;:.()[]{}")
+    if not text:
+        return []
+    return [
+        part
+        for part in [p.strip(" ,;:.()[]{}") for p in _CITATION_AUTHOR_SPLIT_RE.split(text)]
+        if part
+    ]
+
+
+def _extract_surnames_from_citation(raw: str) -> set[str]:
     out: set[str] = set()
-    for hit in hits:
-        token = hit.strip().lower()
-        if not token or token in _CITATION_NAME_STOPWORDS:
+    for chunk in _citation_author_chunks(raw):
+        norm = normalize_author_name(chunk)
+        if not norm or norm in _CITATION_NAME_STOPWORDS:
             continue
-        norm = normalize_author_name(token)
-        if norm:
-            out.add(norm)
+        out.add(norm)
     return out
 
 
 def _extract_primary_surname_from_citation(raw: str) -> str | None:
-    if not raw:
-        return None
-    for hit in _SURNAME_RE.finditer(raw):
-        token = hit.group(0).strip().lower()
-        if not token or token in _CITATION_NAME_STOPWORDS:
+    for chunk in _citation_author_chunks(raw):
+        norm = normalize_author_name(chunk)
+        if not norm or norm in _CITATION_NAME_STOPWORDS:
             continue
-        norm = normalize_author_name(token)
-        if norm:
-            return norm
+        return norm
     return None
 
 

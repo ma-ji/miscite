@@ -945,3 +945,10 @@ Goal: Expand handwritten red-stroke brand treatment to every major public brand 
 Prompt: THINK HARD: Make it every major brand surface.
 Files touched: server/miscite/templates/home.html, kb/promptbook.md.
 Decision/rationale: Applied `miscite-wordmark` to all prominent visible `miscite` mentions on the landing page (hero lead, trust/governance messaging, and FAQ answers) while avoiding low-signal body overuse and non-visual metadata/JSON-LD strings. This keeps the branded signature consistent across high-impact marketing surfaces without reducing readability in dense prose.
+
+========
+Date: 2026-02-07
+Goal: Fix false `missing_bibliography_ref` for Unicode/OCR-degraded author-year citations (e.g., `Çorbacıo˘ glu & Aksel, 2023`).
+Prompt: THINK HARD: In-text citation not found in bibliography for records like below: all comfortably surpassing the 0.80 benchmark for acceptable classification (Çorbacıo˘ glu & Aksel, 2023) and well above random chance (i.e., 0.5).
+Files touched: server/miscite/analysis/shared/normalize.py, server/miscite/analysis/match/match.py, server/miscite/analysis/match/test_match.py, kb/promptbook.md.
+Decision/rationale: Strengthened author normalization for locale-specific letters (including Turkish dotless `ı`) and changed author-year locator parsing to preserve full first-author chunks before separators instead of ASCII-token truncation. Updated raw citation fallback extraction to normalize author chunks from citation text, then added regression tests for the exact OCR/Unicode pattern to prevent recurrent false unmatched flags.
