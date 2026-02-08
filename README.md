@@ -14,6 +14,7 @@ Citation-check platform for academic manuscripts (PDF/DOCX) with traceable, tran
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
+python -m server.migrate upgrade
 python -m server.main
 python -m server.worker
 ```

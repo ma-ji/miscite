@@ -1,0 +1,11 @@
+[Unit]
+Description=miscite backup archive
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/miscite
+Environment="OUT_DIR=./backups"
+Environment="KEEP_DAYS=14"
+ExecStart=/usr/bin/env bash scripts/backup-data.sh

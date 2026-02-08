@@ -1,0 +1,61 @@
+name: db-migrations
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  migration-checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: miscite_ci
+          POSTGRES_USER: miscite
+          POSTGRES_PASSWORD: miscite
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U miscite -d miscite_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      MISCITE_DB_URL: postgresql+psycopg://miscite:miscite@127.0.0.1:5432/miscite_ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install migration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "fastapi>=0.110" "sqlalchemy>=2.0" "alembic>=1.13" "psycopg[binary]>=3.1" "python-dotenv>=1.0"
+
+      - name: Upgrade DB to head
+        run: python -m server.migrate upgrade
+
+      - name: Verify DB is at head
+        run: python -m server.migrate check
+
+      - name: Verify single migration head
+        run: |
+          heads="$(python -m server.migrate heads)"
+          head_count="$(printf '%s' "$heads" | tr ',' '\n' | grep -c . || true)"
+          if [ "$head_count" -ne 1 ]; then
+            echo "Expected exactly one migration head, got: ${heads}" >&2
+            exit 1
+          fi
+
+      - name: Check model/migration drift
+        run: alembic check
+
+      - name: Compile server modules
+        run: make check

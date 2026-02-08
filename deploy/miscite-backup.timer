@@ -1,0 +1,11 @@
+[Unit]
+Description=Run miscite backups on schedule
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=900
+Persistent=true
+Unit=miscite-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
-from server.miscite.core.db import init_db
+from server.miscite.core.migrations import upgrade_to_head
 from server.miscite.llm.openrouter import OpenRouterClient
 
 
@@ -41,7 +41,7 @@ class TestOpenRouterCacheDebug(unittest.TestCase):
                 cache_dir=root / "cache",
                 cache_llm_ttl_days=30,
             )
-            init_db(settings)
+            upgrade_to_head(settings)
             cache = Cache(settings=settings)
             client = OpenRouterClient(api_key="test-key", model="test/model", cache=cache)
 

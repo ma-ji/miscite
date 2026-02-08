@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <backup.tar.gz> [--force]" >&2
+  echo "Usage: $0 <backup.tar.gz> --force" >&2
   exit 2
 }
 
@@ -15,7 +15,7 @@ if [ ! -f "$ARCHIVE" ]; then
   echo "Backup archive not found: $ARCHIVE" >&2
   exit 1
 fi
-if [ -n "$FORCE" ] && [ "$FORCE" != "--force" ]; then
+if [ "$FORCE" != "--force" ]; then
   usage
 fi
 
@@ -31,25 +31,73 @@ else
   exit 1
 fi
 
-if [ -d "./data" ] && [ -n "$(ls -A ./data 2>/dev/null || true)" ] && [ "$FORCE" != "--force" ]; then
-  echo "Refusing to restore: ./data is non-empty. Re-run with --force." >&2
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/miscite-restore-${STAMP}-XXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "Extracting backup archive..."
+tar -xzf "$ARCHIVE" -C "$TMP_DIR"
+
+if [ ! -f "$TMP_DIR/postgres.dump" ]; then
+  echo "Backup archive missing postgres.dump; cannot restore." >&2
   exit 1
 fi
 
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-
-echo "Stopping services..."
+echo "Stopping app services..."
 "${COMPOSE[@]}" stop web worker
 
-if [ -d "./data" ] && [ -n "$(ls -A ./data 2>/dev/null || true)" ]; then
-  echo "Moving existing data to ./data.bak.${STAMP}"
-  mv ./data "./data.bak.${STAMP}"
+echo "Ensuring database service is running..."
+"${COMPOSE[@]}" up -d db >/dev/null
+
+DB_USER="$("${COMPOSE[@]}" exec -T db sh -lc 'printf "%s" "$POSTGRES_USER"')"
+DB_NAME="$("${COMPOSE[@]}" exec -T db sh -lc 'printf "%s" "$POSTGRES_DB"')"
+
+if [ -z "$DB_USER" ] || [ -z "$DB_NAME" ]; then
+  echo "Unable to resolve POSTGRES_USER/POSTGRES_DB from running db service." >&2
+  exit 1
 fi
 
-echo "Restoring from: ${ARCHIVE}"
-tar -xzf "$ARCHIVE" -C "$ROOT_DIR"
+mkdir -p ./data
+PAYLOAD_BACKUP="./data.payload.bak.${STAMP}"
+mkdir -p "$PAYLOAD_BACKUP"
+shopt -s nullglob dotglob
+for entry in ./data/*; do
+  base="$(basename "$entry")"
+  if [ "$base" = "postgres" ]; then
+    continue
+  fi
+  mv "$entry" "$PAYLOAD_BACKUP"/
+done
+shopt -u nullglob dotglob
+
+if [ -d "$TMP_DIR/data" ]; then
+  shopt -s nullglob dotglob
+  for entry in "$TMP_DIR/data"/*; do
+    base="$(basename "$entry")"
+    if [ "$base" = "postgres" ]; then
+      continue
+    fi
+    cp -a "$entry" ./data/
+  done
+  shopt -u nullglob dotglob
+fi
+
+echo "Restoring PostgreSQL database (${DB_NAME})..."
+if ! "${COMPOSE[@]}" exec -T db pg_restore \
+  -U "$DB_USER" \
+  -d "$DB_NAME" \
+  --clean \
+  --if-exists \
+  --no-owner \
+  --no-privileges < "$TMP_DIR/postgres.dump"; then
+  echo "Database restore failed. Previous non-postgres payload moved to ${PAYLOAD_BACKUP}." >&2
+  exit 1
+fi
+
+echo "Re-applying migrations (if needed)..."
+"${COMPOSE[@]}" run --rm migrate
 
 echo "Starting services..."
-"${COMPOSE[@]}" start web worker
+"${COMPOSE[@]}" up -d web worker
 
 echo "Restore complete."

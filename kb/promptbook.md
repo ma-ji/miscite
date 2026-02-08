@@ -260,6 +260,13 @@ THINK HARD: Add a Deep Analysis pipeline after the flagging process:
 10. For the user report and suggestions, use user-friendly format and language, no need to mention the background methodology and technical terms. Focus on how to help users improve their paper.
 
 ========
+Date: 2026-02-08
+Goal: Replace ad-hoc DB initialization with versioned migrations and automate PostgreSQL-first Docker deployment safety.
+Prompt: "THINK HARD: implement PostgreSQL DB and all recommended actions; automate as much as possible."
+Files touched: requirements.txt, alembic.ini, migrations/env.py, migrations/script.py.mako, migrations/versions/20260208_0001_baseline.py, server/miscite/core/db.py, server/miscite/core/migrations.py, server/migrate.py, Dockerfile, docker-compose.yml, docker-compose.dev.yml, scripts/docker-migrate.sh, scripts/backup-data.sh, scripts/restore-data.sh, scripts/install-backup-timer.sh, scripts/bootstrap-vps-ubuntu.sh, deploy/miscite-backup.service, deploy/miscite-backup.timer, Makefile, scripts/dev.sh, .env.example, .gitignore, README.md, docs/DEVELOPMENT.md, docs/DEPLOYMENT.md, docs/ARCHITECTURE.md, AGENTS.md, .github/workflows/db-migrations.yml, server/miscite/core/test_cache_debug.py, server/miscite/llm/test_openrouter_cache_debug.py.
+Decision/rationale: Adopted Alembic as schema source of truth, enforced "DB at head" startup checks, introduced one-shot migration service gated before app start, switched Docker default runtime to PostgreSQL, added automated pre-migration pg_dump + scheduled backup timer, and added CI guards for upgradeability/head/drift so schema evolution is recorded and deploy-safe by default.
+
+========
 Date: 2026-02-06
 Goal: Redesign report Recommendations to be concretely actionable for both researchers and editors.
 Prompt: "Analyze Recommendations block in the report, propose a plan to improve it... Implement all proposed changes by phases." with decisions: keep "reconsider/justify" language, hide technical metadata, emit top 5 global + up to 3 per section, allow report schema changes, require specific quoted text anchors.

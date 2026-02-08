@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+python -m server.migrate "$@" upgrade
+
 python -m server.main "$@" &
 web_pid=$!
 

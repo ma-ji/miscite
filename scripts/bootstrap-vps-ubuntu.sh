@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-shot bootstrap for Ubuntu 22.04+ (Docker + Caddy + systemd).
+# One-shot bootstrap for Ubuntu 22.04+ (Docker + Caddy + PostgreSQL + systemd).
 #
 # Usage:
 #   DOMAIN=miscite.review APP_DIR=/opt/miscite REPO_URL=https://github.com/ma-ji/miscite bash scripts/bootstrap-vps-ubuntu.sh
@@ -33,6 +33,71 @@ prompt_choice() {
     read -r -p "${prompt} " choice
   fi
   echo "${choice:-$default}"
+}
+
+escape_sed() {
+  printf '%s' "$1" | sed -e 's/[\\/&]/\\&/g'
+}
+
+env_get() {
+  local key="$1"
+  grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true
+}
+
+env_set() {
+  local key="$1"
+  local value="$2"
+  local escaped
+  escaped="$(escape_sed "$value")"
+  if grep -qE "^${key}=" .env; then
+    sed -i "s/^${key}=.*/${key}=${escaped}/" .env
+  else
+    printf '%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+generate_password() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 24
+    return 0
+  fi
+  date -u +%s%N | sha256sum | cut -c1-48
+}
+
+ensure_postgres_env() {
+  local db_name db_user db_password db_host db_port db_url
+
+  db_name="$(env_get POSTGRES_DB)"
+  db_user="$(env_get POSTGRES_USER)"
+  db_password="$(env_get POSTGRES_PASSWORD)"
+  db_host="$(env_get POSTGRES_HOST)"
+  db_port="$(env_get POSTGRES_PORT)"
+
+  if [ -z "$db_name" ]; then
+    db_name="miscite"
+  fi
+  if [ -z "$db_user" ]; then
+    db_user="miscite"
+  fi
+  if [ -z "$db_password" ]; then
+    db_password="$(generate_password)"
+    echo "Generated POSTGRES_PASSWORD in .env"
+  fi
+  if [ -z "$db_host" ]; then
+    db_host="db"
+  fi
+  if [ -z "$db_port" ]; then
+    db_port="5432"
+  fi
+
+  env_set POSTGRES_DB "$db_name"
+  env_set POSTGRES_USER "$db_user"
+  env_set POSTGRES_PASSWORD "$db_password"
+  env_set POSTGRES_HOST "$db_host"
+  env_set POSTGRES_PORT "$db_port"
+
+  db_url="postgresql+psycopg://${db_user}:${db_password}@${db_host}:${db_port}/${db_name}"
+  env_set MISCITE_DB_URL "$db_url"
 }
 
 check_missing_env() {
@@ -68,10 +133,10 @@ wait_for_env_ready() {
 
 wait_for_existing_data() {
   while true; do
-    if [ -f "$DB_PATH" ] && [ -d "$UPLOAD_DIR" ]; then
+    if [ -d "$PGDATA_DIR" ] && [ -d "$UPLOAD_DIR" ]; then
       return 0
     fi
-    echo "Place your existing DB at: ${DB_PATH}"
+    echo "Place your PostgreSQL data dir at: ${PGDATA_DIR}"
     echo "Place your uploads at:   ${UPLOAD_DIR}"
     if is_tty; then
       read -r -p "Press Enter to re-check (or type 'q' to quit): " reply
@@ -79,53 +144,7 @@ wait_for_existing_data() {
         exit 1
       fi
     else
-      echo "Missing ${DB_PATH} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
-      exit 1
-    fi
-  done
-}
-
-can_write_as_uid() {
-  local uid="$1"
-  local path="$2"
-  if command -v sudo >/dev/null 2>&1; then
-    sudo -u "#$uid" test -w "$path" 2>/dev/null
-    return $?
-  fi
-  return 1
-}
-
-data_permissions_ok() {
-  if [ -f "$DB_PATH" ]; then
-    can_write_as_uid 1000 "$DB_PATH" || return 1
-  else
-    can_write_as_uid 1000 "$DATA_DIR" || return 1
-  fi
-  can_write_as_uid 1000 "$UPLOAD_DIR" || return 1
-  return 0
-}
-
-wait_for_data_permissions() {
-  # Auto-fix perms for container UID (1000) before prompting.
-  if ! data_permissions_ok; then
-    $SUDO chown -R 1000:1000 "$DATA_DIR" || true
-    $SUDO chmod -R u+rwX "$DATA_DIR" || true
-  fi
-  while true; do
-    if data_permissions_ok; then
-      return 0
-    fi
-    echo "Ensure UID 1000 can write to ${DATA_DIR} (SQLite + uploads)."
-    echo "Auto-fix attempted but permissions are still not writable."
-    if is_tty; then
-      read -r -p "Press Enter to re-check (or type 'q' to quit): " reply
-      if [ "${reply:-}" = "q" ]; then
-        exit 1
-      fi
-      $SUDO chown -R 1000:1000 "$DATA_DIR" || true
-      $SUDO chmod -R u+rwX "$DATA_DIR" || true
-    else
-      echo "Data directory not writable by UID 1000." >&2
+      echo "Missing ${PGDATA_DIR} or ${UPLOAD_DIR}. Move files into place and re-run." >&2
       exit 1
     fi
   done
@@ -133,7 +152,7 @@ wait_for_data_permissions() {
 
 echo "==> Installing base packages..."
 $SUDO apt-get update -y
-$SUDO apt-get install -y git curl ufw
+$SUDO apt-get install -y git curl ufw openssl
 
 if [ ! -d "$APP_DIR/.git" ]; then
   echo "==> Cloning repo to $APP_DIR"
@@ -160,6 +179,8 @@ echo "==> Ensuring .env exists..."
 if [ ! -f .env ]; then
   "${RUN_AS[@]}" cp .env.example .env
 fi
+ensure_postgres_env
+$SUDO chown "$RUN_USER":"$RUN_GROUP" .env
 wait_for_env_ready
 
 echo "==> Applying domain to Caddyfile..."
@@ -169,11 +190,12 @@ fi
 
 echo "==> Data setup..."
 DATA_DIR="$APP_DIR/data"
-DB_PATH="$DATA_DIR/miscite.db"
 UPLOAD_DIR="$DATA_DIR/uploads"
+PGDATA_DIR="$DATA_DIR/postgres"
+BACKUP_DIR="$APP_DIR/backups"
 
 choice="fresh"
-if [ -e "$DB_PATH" ] || [ -d "$UPLOAD_DIR" ]; then
+if [ -d "$PGDATA_DIR" ] && [ -n "$(ls -A "$PGDATA_DIR" 2>/dev/null || true)" ]; then
   choice="existing"
 fi
 default_choice="$choice"
@@ -205,11 +227,11 @@ else
   fi
 fi
 
-echo "==> Creating data dir..."
-"${RUN_AS[@]}" mkdir -p data data/uploads
-# Ensure container user (uid 1000) can write SQLite DB + uploads.
-$SUDO chown -R 1000:1000 data
-wait_for_data_permissions
+echo "==> Creating storage dirs..."
+"${RUN_AS[@]}" mkdir -p data/uploads data/postgres backups
+$SUDO chown -R 1000:1000 "$DATA_DIR" "$BACKUP_DIR"
+$SUDO chmod -R u+rwX "$DATA_DIR" "$BACKUP_DIR"
+$SUDO chmod 700 "$PGDATA_DIR" || true
 
 echo "==> Configuring firewall (UFW)..."
 $SUDO ufw allow OpenSSH
@@ -217,7 +239,7 @@ $SUDO ufw allow 80/tcp
 $SUDO ufw allow 443/tcp
 $SUDO ufw --force enable
 
-echo "==> Starting services (web + worker + caddy)..."
+echo "==> Starting services (db + migrate + web + worker + caddy)..."
 "${DOCKER[@]}" compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
 
 echo "==> Installing systemd unit..."
@@ -229,6 +251,13 @@ sed -e "s|^WorkingDirectory=.*|WorkingDirectory=${APP_DIR}|" \
 $SUDO mv "$SERVICE_TMP" /etc/systemd/system/miscite.service
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now miscite
+
+echo "==> Installing backup timer..."
+APP_DIR="$APP_DIR" \
+  BACKUP_ON_CALENDAR="${BACKUP_ON_CALENDAR:-daily}" \
+  BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}" \
+  BACKUP_RANDOM_DELAY_SEC="${BACKUP_RANDOM_DELAY_SEC:-900}" \
+  bash scripts/install-backup-timer.sh
 
 echo "==> Done."
 echo "Check readiness: curl -fsS https://${DOMAIN}/readyz"

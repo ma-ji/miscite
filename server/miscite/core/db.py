@@ -43,10 +43,10 @@ def _sessionmaker_for(db_url: str):
 
 def init_db(settings: Settings) -> None:
     from server.miscite.core import models  # noqa: F401
+    from server.miscite.core.migrations import assert_db_current
 
     _ensure_db_parent_dir(settings.db_url)
-    engine = get_engine(settings)
-    Base.metadata.create_all(engine)
+    assert_db_current(settings)
 
 
 def _ensure_db_parent_dir(db_url: str) -> None:

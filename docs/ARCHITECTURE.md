@@ -9,6 +9,7 @@ analysis pipeline over uploaded PDF/DOCX documents.
 - Worker launcher: `server/worker.py`
 - Job loop: `server/miscite/worker/`
 - Core infrastructure (config/db/models/security/storage/etc): `server/miscite/core/`
+- DB migrations: `migrations/` + `server/migrate.py`
 - Analysis pipeline (extract/parse/resolve/checks/deep_analysis/report): `server/miscite/analysis/`
 - External metadata + datasets (OpenAlex/Crossref/PubMed/arXiv + local CSVs): `server/miscite/sources/`
 - Prompts + JSON Schemas for LLM stages: `server/miscite/prompts/`
@@ -49,6 +50,13 @@ Prompt files live under `server/miscite/prompts/`:
 3) The worker runs the analysis pipeline and persists report JSON + methodology markdown.
 4) On completion, the worker seeds token material in a protected/disabled state; owners enable sharing from the report page when needed.
 5) The UI renders the report; `/api/jobs/{id}` returns the report JSON.
+
+## Database lifecycle
+
+- Schema changes are versioned with Alembic under `migrations/versions/`.
+- Runtime startup (`server.main`, `server.worker`) validates DB revision is at current head.
+- Docker uses a dedicated one-shot `migrate` service to apply pending migrations before app
+  services start.
 
 ## Analysis pipeline
 

@@ -7,11 +7,13 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 # - curl: healthcheck
 # - git: optional Retraction Watch dataset sync method (MISCITE_RW_SYNC_METHOD=git)
 # - sqlite3: optional inspection/backup tooling
+# - postgresql-client: migration backup (`pg_dump`) support
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     curl \
     git \
     sqlite3 \
+    postgresql-client \
     libgl1 \
     libglib2.0-0 \
   && rm -rf /var/lib/apt/lists/*
@@ -21,8 +23,11 @@ WORKDIR /app
 COPY requirements.txt requirements-optional.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY alembic.ini ./alembic.ini
+COPY migrations ./migrations
 COPY server ./server
 COPY docs ./docs
+COPY scripts ./scripts
 
 RUN useradd -m -u 1000 app \
   && chown -R app:app /app

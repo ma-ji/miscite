@@ -5,7 +5,7 @@ from pathlib import Path
 
 from server.miscite.core.cache import Cache
 from server.miscite.core.config import Settings
-from server.miscite.core.db import init_db
+from server.miscite.core.migrations import upgrade_to_head
 
 
 class TestCacheDebug(unittest.TestCase):
@@ -18,7 +18,7 @@ class TestCacheDebug(unittest.TestCase):
                 cache_enabled=True,
                 cache_dir=root / "cache",
             )
-            init_db(settings)
+            upgrade_to_head(settings)
             cache = Cache(settings=settings)
 
             self.assertEqual(cache.get_json("demo.json", ["k1"]), (False, None))
@@ -47,7 +47,7 @@ class TestCacheDebug(unittest.TestCase):
                 cache_enabled=True,
                 cache_dir=root / "cache",
             )
-            init_db(settings)
+            upgrade_to_head(settings)
             cache = Cache(settings=settings)
             scoped = cache.scoped("doc:abc123")
 
@@ -61,4 +61,3 @@ class TestCacheDebug(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -7,6 +7,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+python -m server.migrate upgrade
 ```
 
 Run the web app:
@@ -30,6 +31,8 @@ make dev
 make worker
 bash scripts/dev.sh
 make check
+make db-upgrade
+make db-check
 ```
 
 ### Combined runner flags
@@ -44,6 +47,9 @@ make check
 ## Required configuration
 
 - `OPENROUTER_API_KEY` is required for core parsing/matching/checks.
+- Default `.env.example` is Docker/PostgreSQL-oriented (`db:5432`). For non-Docker local runs,
+  point `MISCITE_DB_URL` to a reachable PostgreSQL instance (or set a temporary SQLite URL for
+  isolated testing).
 - `MISCITE_PUBLIC_ORIGIN` should be set in production so email links include the correct domain.
 - `MISCITE_SAMPLE_REPORT_URL` controls the sample report CTA link (token, `/reports/<token>`, or full URL).
 - Dataset paths are required unless you enable an API-based source:
@@ -116,13 +122,29 @@ Usage billing is disabled by default. To enable Stripe balance top-ups and auto-
 
 - Local NLI checks: `pip install -r requirements-optional.txt`
 
+## Database migrations
+
+- Apply pending migrations: `python -m server.migrate upgrade` (or `make db-upgrade`).
+- Verify DB is at code head: `python -m server.migrate check` (or `make db-check`).
+- Show DB-applied revisions: `python -m server.migrate current`.
+- Show expected migration heads: `python -m server.migrate heads`.
+- Create a new migration from model changes:
+  `python -m server.migrate revision -m "describe change"` (or `make db-revision msg="..."`).
+
+Runtime behavior:
+
+- Web and worker startup now require DB revision at head and fail fast on mismatch.
+- `bash scripts/dev.sh` and Docker `migrate` service automatically run migrations before app startup.
+- For near zero-downtime deployments, prefer expand/contract migrations (additive change first,
+  contract/drop in a later deploy after code has switched over).
+
 ## Caching
 
 miscite caches expensive LLM + metadata lookups by default (can be disabled).
 
 Cache layers:
 
-- **SQLite cache table** (`CacheEntry`): structured JSON results (most metadata + small payloads).
+- **DB cache table** (`CacheEntry`): structured JSON results (most metadata + small payloads).
 - **File cache dir** (`MISCITE_CACHE_DIR`, default `./data/cache`): large text payloads (text extraction, some list-mode APIs).
 
 Key settings:

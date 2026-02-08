@@ -6,6 +6,7 @@ Repository guide for future assistants working on **miscite**.
 
 - Keep this AGENTS.md up to date; update it whenever the codebase structure, workflows, or contracts change.
 - This project is in active development; do not preserve backward compatibility or add fallbacks unless explicitly requested.
+- For DB schema changes in deployed environments, prefer expand/contract migration sequencing to minimize downtime and rollback risk.
 - When adding or refactoring steps, split data prep from matching/analysis into separate modules or folders when appropriate (e.g., `sources/*/data.py` + `sources/*/match.py`, and thin orchestrators under `analysis/pipeline/` / `analysis/deep_analysis/`).
 - Keep documentation centralized under `docs/` (avoid adding many small per-folder `README.md` files unless there's a strong reason).
 - **Record major agent interactions in `kb/promptbook.md`:** when an agent prompt leads to non-trivial code/architecture changes, new workflows, or changed assumptions, append an entry with **date**, **goal**, **prompt (or summary)**, **files touched**, and **decision/rationale**. Skip trivial Q&A and typo fixes.
@@ -18,6 +19,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 
 - Install deps: `pip install -r requirements.txt` (optional NLI: `pip install -r requirements-optional.txt`).
 - Configure env: copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
+- Apply DB migrations: `python -m server.migrate upgrade`.
 - Run web app: `python -m server.main` (or `make dev`).
 - Run worker: `python -m server.worker` (or `make worker`).
 - Combined: `bash scripts/dev.sh`.
@@ -25,28 +27,32 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 
 ## Quickstart (docker)
 
-- Build + run (web + worker): `docker compose up -d --build`
+- Build + run (`db` + `migrate` + web + worker): `docker compose up -d --build`
 - Dev override (bind mount + reload): `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 
 ## High-level architecture
 
 - **Web app**: `server/main.py` creates FastAPI app, mounts routes and static assets.
 - **Worker**: `server/worker.py` spawns one or more worker processes; `server/miscite/worker/` runs the job loop.
-- **DB**: SQLAlchemy models in `server/miscite/core/models.py`, SQLite by default.
+- **DB**: PostgreSQL in Docker by default; SQLAlchemy models in `server/miscite/core/models.py`; schema managed by Alembic.
 - **Storage**: uploads saved to `MISCITE_STORAGE_DIR` (default `./data/uploads`).
 - **Analysis pipeline**: `server/miscite/analysis/pipeline/` is the main orchestration.
 
 ## Repository map
 
-- `Dockerfile`: single image for web + worker.
-- `docker-compose.yml`: production-ish Compose stack (web + worker + `./data` bind mount).
+- `Dockerfile`: single image for web + worker + migrate.
+- `docker-compose.yml`: production-ish Compose stack (`db` + `migrate` + web + worker + `./data` bind mount).
 - `docker-compose.dev.yml`: dev override (bind mount code + reload/log level).
 - `docker-compose.caddy.yml`: optional Caddy reverse proxy (automatic TLS).
+- `.github/workflows/db-migrations.yml`: CI checks for migration head, drift, and upgradeability.
+- `migrations/`: Alembic migration env + versioned schema revisions.
+- `alembic.ini`: Alembic config.
 - `docs/`: centralized documentation (start at `docs/README.md`).
 - `docs/excluded_sources.txt`: source/venue names excluded from analysis (one per line).
 - `deploy/`: deployment assets (`Caddyfile`, `miscite.service` with `COMPOSE_FILES` for compose overrides, `monitoring.md`).
 - `server/main.py`: FastAPI entrypoint.
 - `server/worker.py`: worker process launcher.
+- `server/migrate.py`: migration CLI (`upgrade`, `check`, `revision`, etc.).
 - `server/miscite/worker/`: job loop, progress events, dataset auto-sync.
 - `server/miscite/core/`: shared config, db, models, cache, security, storage, middleware, email, rate limiting.
 - `server/miscite/billing/`: OpenRouter pricing cache, LLM usage tracking, cost calculation, Stripe helpers, ledger updates.
@@ -70,7 +76,7 @@ miscite is a citation-check platform for academic manuscripts (PDF/DOCX). It par
 - `server/miscite/static/favicon.svg`: brand favicon (referenced in `base.html`).
 - `kb/`: research and promptbook material (not wired into the runtime app). Don't delete contents in `promptbook.md`.
 - `deploy/monitoring.md`: deployment monitoring options.
-- `scripts/`: helper scripts (dev runner, nginx install, Docker install, VPS bootstrap, backups, Zotero helper).
+- `scripts/`: helper scripts (dev runner, nginx install, Docker install, VPS bootstrap, migrations, backups, timer install, Zotero helper).
 
 ## Runtime data flow
 
@@ -115,15 +121,15 @@ Defined in `server/miscite/core/models.py`:
 - `AnalysisJobEvent`: streaming progress events for SSE.
 - `BillingAccount`: Stripe customer + balance + auto-charge settings.
 - `BillingTransaction`: balance ledger entries (top-ups, usage charges, auto-charge).
-
-No migrations are present; schema changes require manual DB resets or a future migration plan.
+- Schema changes are versioned via Alembic under `migrations/versions/`.
 
 ## Configuration and env
 
 Settings live in `server/miscite/core/config.py` and `.env.example`. Critical env keys:
 
 - Required: `OPENROUTER_API_KEY`.
-- Storage/DB: `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
+- Storage/DB: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `MISCITE_DB_URL`, `MISCITE_STORAGE_DIR`, upload limits.
+- Migration backups (Docker): `MISCITE_MIGRATE_BACKUP_ENABLED`, `MISCITE_MIGRATE_BACKUP_DIR`, `MISCITE_MIGRATE_BACKUP_RETENTION_DAYS`.
 - Text extraction/accelerator: `MISCITE_TEXT_EXTRACT_BACKEND`, `MISCITE_TEXT_EXTRACT_PROCESS_CONTEXT`, `MISCITE_ACCELERATOR`.
 - LLM: model names and call limits (parse, match, inappropriate, deep analysis).
 - Matching/verification: `MISCITE_PREPRINT_YEAR_GAP_MAX` controls year-gap tolerance for preprint/working-paper → published matches.
@@ -175,15 +181,19 @@ If you add new env vars:
 
 - `make dev` / `python -m server.main`: run web app.
 - `make worker` / `python -m server.worker`: run worker.
+- `make db-upgrade` / `python -m server.migrate upgrade`: apply DB migrations.
+- `make db-check` / `python -m server.migrate check`: verify DB is at migration head.
+- `make db-revision msg="..."` / `python -m server.migrate revision -m "..."`: create migration revision.
 - `make sync-rw` / `python -m server.sync_retractionwatch`: sync retraction dataset.
 - `make sync-predatory` / `python -m server.sync_predatory`: sync predatory lists.
 - `bash scripts/install-nginx.sh`: install nginx and enable service.
-- `docker compose up -d --build`: run web + worker in Docker.
+- `docker compose up -d --build`: run `db` + `migrate` + web + worker in Docker.
 - `docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build`: run with Caddy reverse proxy.
-- `bash scripts/backup-data.sh`: stop services and backup `./data` (excludes `./data/cache`).
-- `bash scripts/restore-data.sh ./backups/<file>.tar.gz --force`: restore `./data` from a backup archive.
+- `bash scripts/backup-data.sh`: backup PostgreSQL (`pg_dump`) + `./data` payload (excludes `./data/cache` + `./data/postgres`).
+- `bash scripts/restore-data.sh ./backups/<file>.tar.gz --force`: restore PostgreSQL + payload from a backup archive.
 - `bash scripts/install-docker-ubuntu.sh`: install Docker Engine + Compose plugin on Ubuntu.
-- `DOMAIN=miscite.review bash scripts/bootstrap-vps-ubuntu.sh`: one-shot VPS bootstrap (Docker + Caddy + systemd).
+- `APP_DIR=/opt/miscite bash scripts/install-backup-timer.sh`: install scheduled backup systemd timer.
+- `DOMAIN=miscite.review bash scripts/bootstrap-vps-ubuntu.sh`: one-shot VPS bootstrap (Docker + PostgreSQL + migrations + Caddy + systemd + backup timer).
 - `make check`: compile server modules.
 
 ## Extending the system
